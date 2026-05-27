@@ -1,4 +1,4 @@
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sql_server_backup_options.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
@@ -24,21 +24,12 @@ class ExecuteSqlServerBackup {
     VerifyPolicy verifyPolicy = VerifyPolicy.bestEffort,
     SqlServerBackupOptions? sqlServerBackupOptions,
   }) async {
-    if (config.server.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Servidor não pode ser vazio'),
-      );
-    }
-    if (config.databaseValue.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Nome do banco não pode ser vazio'),
-      );
-    }
-    if (outputDirectory.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Diretório de saída não pode ser vazio'),
-      );
-    }
+    final validation = StringFieldValidator.requireAllNonBlank({
+      'Servidor': config.server,
+      'Nome do banco': config.databaseValue,
+      'Diretório de saída': outputDirectory,
+    });
+    if (validation != null) return rd.Failure(validation);
 
     return _backupService.executeBackup(
       config: config,

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/repositories/i_backup_destination_repository.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -79,25 +78,17 @@ class DestinationProvider extends ChangeNotifier with AsyncStateMixin {
 
   Future<bool> deleteDestination(String id) async {
     // Pre-checagens sincronas (não precisam do contador de loading).
-    final schedulesResult = await _scheduleRepository.getByDestinationId(id);
-    if (schedulesResult.isError()) {
-      final failure = schedulesResult.exceptionOrNull();
-      setErrorManual(
-        failure is Failure
-            ? 'Nao foi possivel validar dependencias: ${failure.message}'
-            : 'Nao foi possivel validar dependencias antes da exclusao.',
-      );
-      return false;
-    }
-
-    final hasLinked = (schedulesResult.getOrNull() ?? []).isNotEmpty;
-    if (hasLinked) {
-      setErrorManual(
-        'Ha agendamentos vinculados a este destino. '
-        'Remova-os antes de excluir.',
-      );
-      return false;
-    }
+    // Delega para `AsyncStateMixin.checkNoLinkedDependencies` que
+    // consolida o pattern de validação de dependências também usado
+    // em `DatabaseConfigProviderBase.deleteConfig`.
+    final canDelete = await checkNoLinkedDependencies(
+      dependencyCheck: () => _scheduleRepository.getByDestinationId(id),
+      dependencyErrorMessage:
+          'Ha agendamentos vinculados a este destino. '
+          'Remova-os antes de excluir.',
+      validationErrorPrefix: 'Nao foi possivel validar dependencias',
+    );
+    if (!canDelete) return false;
 
     final ok = await runAsync<bool>(
       genericErrorMessage: 'Erro ao deletar destino',

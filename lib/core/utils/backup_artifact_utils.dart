@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 
 class BackupArtifactUtils {
@@ -11,6 +12,35 @@ class BackupArtifactUtils {
     milliseconds: 200,
   );
   static const Duration defaultFileMaxWait = Duration(seconds: 12);
+
+  /// Verifica se o arquivo de origem do upload existe no disco. Retorna
+  /// `null` quando o arquivo existe (caminho feliz) ou um
+  /// [FileSystemFailure] já formatado com a mensagem canônica
+  /// `'Arquivo de origem não encontrado: <path>'` quando não existe.
+  ///
+  /// **Por que retorna `null` em vez de um `Result`**: cada destination
+  /// service tem seu próprio tipo de retorno (`Result<FtpUploadResult>`,
+  /// `Result<DropboxUploadResult>`, etc.). Devolver apenas o failure
+  /// (ou ausência dele) permite que o chamador embrulhe com
+  /// `rd.Failure(...)` do tipo certo sem o helper precisar conhecer
+  /// genéricos.
+  ///
+  /// Antes desta extração, a sequência de 6 linhas
+  /// (`File(...).exists()` + `FileSystemFailure(message: 'Arquivo de
+  /// origem não encontrado: ...')`) estava duplicada em
+  /// `FtpDestinationService`, `DropboxDestinationService`,
+  /// `GoogleDriveDestinationService`, `NextcloudDestinationService` e
+  /// `LocalDestinationService`.
+  static Future<FileSystemFailure?> missingSourceFileFailure(
+    String sourceFilePath,
+  ) async {
+    if (!await File(sourceFilePath).exists()) {
+      return FileSystemFailure(
+        message: 'Arquivo de origem não encontrado: $sourceFilePath',
+      );
+    }
+    return null;
+  }
 
   static Future<void> safeDeletePartial(String artifactPath) async {
     try {

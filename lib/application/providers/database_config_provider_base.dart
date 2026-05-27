@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/providers/database_connection_test_snapshot.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/database_connection_config.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_database_config_repository.dart';
@@ -121,22 +120,14 @@ abstract class DatabaseConfigProviderBase<T extends DatabaseConnectionConfig>
   }
 
   Future<bool> deleteConfig(String id) async {
-    final schedulesResult = await _scheduleRepository.getByDatabaseConfig(id);
-    if (schedulesResult.isError()) {
-      final failure = schedulesResult.exceptionOrNull();
-      setErrorManual(
-        failure is Failure
-            ? 'Não foi possível validar dependências: ${failure.message}'
-            : 'Não foi possível validar dependências antes da exclusão.',
-      );
-      return false;
-    }
-
-    final linkedSchedules = schedulesResult.getOrNull() ?? <Schedule>[];
-    if (linkedSchedules.isNotEmpty) {
-      setErrorManual(linkedSchedulesDeleteError);
-      return false;
-    }
+    // Delega para `AsyncStateMixin.checkNoLinkedDependencies` que
+    // consolida o pattern de validação de dependências também usado
+    // em `DestinationProvider.deleteDestination`.
+    final canDelete = await checkNoLinkedDependencies<Schedule>(
+      dependencyCheck: () => _scheduleRepository.getByDatabaseConfig(id),
+      dependencyErrorMessage: linkedSchedulesDeleteError,
+    );
+    if (!canDelete) return false;
 
     final ok = await runAsync<bool>(
       genericErrorMessage: 'Erro ao deletar configuração',

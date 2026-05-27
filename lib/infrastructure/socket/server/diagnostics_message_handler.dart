@@ -9,6 +9,7 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/diagnostics_provider.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_payload_validators.dart';
 
 /// Handler de endpoints de diagnostico operacional (PR-3 commit final).
 ///
@@ -45,8 +46,26 @@ class DiagnosticsMessageHandler {
     }
   }
 
-  String _runId(Message m) =>
-      m.payload['runId'] is String ? m.payload['runId'] as String : '';
+  /// Lê e valida `runId` do payload em **um único passo** delegando para
+  /// [SocketPayloadValidators.requireStringField] — quando ausente/vazio
+  /// envia `invalidRequest` ao cliente e retorna `null`. Substituiu o
+  /// pattern duplicado 4× (`final runId = _runId(message); if (runId.isEmpty)
+  /// { await _err(...); return; }`).
+  Future<String?> _requireRunId(
+    String clientId,
+    int requestId,
+    Message message,
+    SendToClient sendToClient,
+  ) {
+    return SocketPayloadValidators.requireStringField(
+      message.payload,
+      'runId',
+      clientId: clientId,
+      requestId: requestId,
+      sendToClient: sendToClient,
+      customErrorMessage: 'runId vazio',
+    );
+  }
 
   Future<void> _handleGetLogs(
     String clientId,
@@ -54,11 +73,13 @@ class DiagnosticsMessageHandler {
     SendToClient sendToClient,
   ) async {
     final requestId = message.header.requestId;
-    final runId = _runId(message);
-    if (runId.isEmpty) {
-      await _err(clientId, requestId, 'runId vazio', sendToClient);
-      return;
-    }
+    final runId = await _requireRunId(
+      clientId,
+      requestId,
+      message,
+      sendToClient,
+    );
+    if (runId == null) return;
     final maxLines = message.payload['maxLines'] is int
         ? message.payload['maxLines'] as int
         : null;
@@ -94,11 +115,13 @@ class DiagnosticsMessageHandler {
     SendToClient sendToClient,
   ) async {
     final requestId = message.header.requestId;
-    final runId = _runId(message);
-    if (runId.isEmpty) {
-      await _err(clientId, requestId, 'runId vazio', sendToClient);
-      return;
-    }
+    final runId = await _requireRunId(
+      clientId,
+      requestId,
+      message,
+      sendToClient,
+    );
+    if (runId == null) return;
     final outcome = await _safeCall(
       () => _provider.getRunErrorDetails(runId),
     );
@@ -148,11 +171,13 @@ class DiagnosticsMessageHandler {
     SendToClient sendToClient,
   ) async {
     final requestId = message.header.requestId;
-    final runId = _runId(message);
-    if (runId.isEmpty) {
-      await _err(clientId, requestId, 'runId vazio', sendToClient);
-      return;
-    }
+    final runId = await _requireRunId(
+      clientId,
+      requestId,
+      message,
+      sendToClient,
+    );
+    if (runId == null) return;
     final outcome = await _safeCall(
       () => _provider.getArtifactMetadata(runId),
     );
@@ -211,11 +236,13 @@ class DiagnosticsMessageHandler {
     SendToClient sendToClient,
   ) async {
     final requestId = message.header.requestId;
-    final runId = _runId(message);
-    if (runId.isEmpty) {
-      await _err(clientId, requestId, 'runId vazio', sendToClient);
-      return;
-    }
+    final runId = await _requireRunId(
+      clientId,
+      requestId,
+      message,
+      sendToClient,
+    );
+    if (runId == null) return;
     final idempotencyKey = getIdempotencyKey(message);
     try {
       final response = await _idempotencyRegistry.runIdempotent<Message>(

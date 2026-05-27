@@ -26,6 +26,7 @@ import 'package:backup_database/infrastructure/socket/server/execution_queue_ser
 import 'package:backup_database/infrastructure/socket/server/queue_event_bus.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_payload_validators.dart';
 import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 /// Handler para `startBackup` nao-bloqueante (M2.2/PR-2) e
@@ -135,19 +136,14 @@ class ExecutionMessageHandler {
   ) async {
     final requestId = message.header.requestId;
     final payload = message.payload;
-    final scheduleId = payload['scheduleId'] is String
-        ? payload['scheduleId'] as String
-        : '';
-    if (scheduleId.isEmpty) {
-      await SocketErrorSender.sendProtocolError(
-        clientId: clientId,
-        requestId: requestId,
-        errorMessage: '`scheduleId` ausente ou vazio',
-        sendToClient: sendToClient,
-        errorCode: ErrorCode.invalidRequest,
-      );
-      return;
-    }
+    final scheduleId = await SocketPayloadValidators.requireStringField(
+      payload,
+      'scheduleId',
+      clientId: clientId,
+      requestId: requestId,
+      sendToClient: sendToClient,
+    );
+    if (scheduleId == null) return;
     final queueIfBusy = payload['queueIfBusy'] == true;
 
     final keyError = IdempotencyPolicy.missingKeyErrorMessage(
@@ -300,15 +296,12 @@ class ExecutionMessageHandler {
       // Publica `backupQueued` event (fire-and-forget). Cliente
       // pode usar para mostrar "Aguardando na fila (posicao N)" em
       // tempo real, em vez de fazer polling do `getExecutionQueue`.
-      unawaited(
-        eventBus?.publishQueued(
-              clientId: clientId,
-              runId: item.runId,
-              scheduleId: scheduleId,
-              queuePosition: queuePosition,
-              requestedBy: clientId,
-            ) ??
-            Future<void>.value(),
+      eventBus.fireAndForgetQueued(
+        clientId: clientId,
+        runId: item.runId,
+        scheduleId: scheduleId,
+        queuePosition: queuePosition,
+        requestedBy: clientId,
       );
       return createStartBackupResponse(
         requestId: requestId,
@@ -573,14 +566,11 @@ class ExecutionMessageHandler {
     // Publica `backupDequeued(reason=dispatched)` antes de validar
     // schedule — cliente sabe que o item saiu da fila mesmo se a
     // tentativa de iniciar falhar (ex.: schedule deletado).
-    unawaited(
-      eventBus?.publishDequeued(
-            clientId: next.clientId,
-            runId: next.runId,
-            scheduleId: next.scheduleId,
-            reason: 'dispatched',
-          ) ??
-          Future<void>.value(),
+    eventBus.fireAndForgetDequeued(
+      clientId: next.clientId,
+      runId: next.runId,
+      scheduleId: next.scheduleId,
+      reason: 'dispatched',
     );
 
     // Carrega schedule novamente (pode ter mudado entre enqueue e
@@ -663,13 +653,10 @@ class ExecutionMessageHandler {
 
     // Publica `backupStarted` antes de iniciar — cliente atualiza
     // UI para "Em execucao" sincronizado com o estado real.
-    unawaited(
-      eventBus?.publishStarted(
-            clientId: next.clientId,
-            runId: next.runId,
-            scheduleId: next.scheduleId,
-          ) ??
-          Future<void>.value(),
+    eventBus.fireAndForgetStarted(
+      clientId: next.clientId,
+      runId: next.runId,
+      scheduleId: next.scheduleId,
     );
 
     unawaited(
@@ -694,18 +681,14 @@ class ExecutionMessageHandler {
     SendToClient sendToClient,
   ) async {
     final requestId = message.header.requestId;
-    final payload = message.payload;
-    final runId = payload['runId'] is String ? payload['runId'] as String : '';
-    if (runId.isEmpty) {
-      await SocketErrorSender.sendProtocolError(
-        clientId: clientId,
-        requestId: requestId,
-        errorMessage: '`runId` ausente ou vazio',
-        sendToClient: sendToClient,
-        errorCode: ErrorCode.invalidRequest,
-      );
-      return;
-    }
+    final runId = await SocketPayloadValidators.requireStringField(
+      message.payload,
+      'runId',
+      clientId: clientId,
+      requestId: requestId,
+      sendToClient: sendToClient,
+    );
+    if (runId == null) return;
 
     final idempotencyKey = getIdempotencyKey(message);
 
@@ -778,14 +761,11 @@ class ExecutionMessageHandler {
 
     // Publica `backupDequeued(reason=cancelled)` para o cliente.
     if (scheduleId != null) {
-      unawaited(
-        eventBus?.publishDequeued(
-              clientId: clientId,
-              runId: runId,
-              scheduleId: scheduleId,
-              reason: 'cancelled',
-            ) ??
-            Future<void>.value(),
+      eventBus.fireAndForgetDequeued(
+        clientId: clientId,
+        runId: runId,
+        scheduleId: scheduleId,
+        reason: 'cancelled',
       );
     }
 
@@ -822,14 +802,15 @@ class ExecutionMessageHandler {
   ) async {
     final requestId = message.header.requestId;
     final payload = message.payload;
-    final runIdRaw = payload['runId'] is String
-        ? payload['runId'] as String
-        : null;
-    final scheduleIdRaw = payload['scheduleId'] is String
-        ? payload['scheduleId'] as String
-        : null;
-    final hasRun = runIdRaw != null && runIdRaw.isNotEmpty;
-    final hasSch = scheduleIdRaw != null && scheduleIdRaw.isNotEmpty;
+    // XOR semantico: APENAS um de runId/scheduleId — usar o helper de
+    // leitura (sem disparar erro automatico) e validar manualmente.
+    final runIdRaw = SocketPayloadValidators.readStringField(payload, 'runId');
+    final scheduleIdRaw = SocketPayloadValidators.readStringField(
+      payload,
+      'scheduleId',
+    );
+    final hasRun = runIdRaw != null;
+    final hasSch = scheduleIdRaw != null;
     if (hasRun == hasSch) {
       await SocketErrorSender.sendProtocolError(
         clientId: clientId,

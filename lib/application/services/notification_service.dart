@@ -543,17 +543,9 @@ Data/Hora do teste: ${DateTime.now()}
         return result;
     }
 
-    final result = sendResult.fold(
-      (sent) => sent
-          ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
-          : _RecipientDeliveryResult.skipped(
-              recipientEmail: target.recipientEmail,
-              reason: 'Envio não realizado pelo serviço SMTP',
-            ),
-      (failure) => _RecipientDeliveryResult.failed(
-        recipientEmail: target.recipientEmail,
-        failure: _toException(failure),
-      ),
+    final result = _RecipientDeliveryResult.fromEmailSendResult(
+      sendResult,
+      recipientEmail: target.recipientEmail,
     );
     await _saveBackupDeliveryAuditLog(
       historyId: history.id,
@@ -633,17 +625,9 @@ Data/Hora do teste: ${DateTime.now()}
       databaseName: databaseName,
       warningMessage: warningMessage,
     );
-    final result = sendResult.fold(
-      (sent) => sent
-          ? _RecipientDeliveryResult.sent(recipientEmail: target.recipientEmail)
-          : _RecipientDeliveryResult.skipped(
-              recipientEmail: target.recipientEmail,
-              reason: 'Envio não realizado pelo serviço SMTP',
-            ),
-      (failure) => _RecipientDeliveryResult.failed(
-        recipientEmail: target.recipientEmail,
-        failure: _toException(failure),
-      ),
+    final result = _RecipientDeliveryResult.fromEmailSendResult(
+      sendResult,
+      recipientEmail: target.recipientEmail,
     );
     await _saveBackupDeliveryAuditLog(
       configId: config.id,
@@ -863,26 +847,51 @@ Data/Hora do teste: ${DateTime.now()}
     }
 
     final text = failureUserMessage(failure).toLowerCase();
-    if (text.contains('autenticacao') ||
-        text.contains('authentication') ||
-        text.contains('535')) {
-      return 'authentication';
-    }
-    if (text.contains('timeout') ||
-        text.contains('socket') ||
-        text.contains('conectar')) {
-      return 'connectivity';
-    }
-    if (text.contains('rejeitou') || text.contains('rejected')) {
-      return 'smtp_rejection';
-    }
-    if (text.contains('invalido') ||
-        text.contains('validation') ||
-        text.contains('destino')) {
-      return 'validation';
+    for (final entry in _testFailureClassifiers) {
+      if (entry.keywords.any(text.contains)) {
+        return entry.category;
+      }
     }
     return 'unknown';
   }
+
+  /// Classificador de erros de teste SMTP. A ordem importa: a primeira
+  /// categoria que tiver qualquer keyword presente no texto do erro é
+  /// retornada. Substitui o switch encadeado de `if (text.contains(...))`
+  /// que dificultava adicionar nova categoria sem editar fluxo.
+  ///
+  /// Para adicionar nova categoria: incluir entrada no final da lista
+  /// (mais permissiva) ou no início (mais prioritária).
+  static const List<_TestFailureClassifier> _testFailureClassifiers = [
+    _TestFailureClassifier(
+      category: 'authentication',
+      keywords: ['autenticacao', 'authentication', '535'],
+    ),
+    _TestFailureClassifier(
+      category: 'connectivity',
+      keywords: ['timeout', 'socket', 'conectar'],
+    ),
+    _TestFailureClassifier(
+      category: 'smtp_rejection',
+      keywords: ['rejeitou', 'rejected'],
+    ),
+    _TestFailureClassifier(
+      category: 'validation',
+      keywords: ['invalido', 'validation', 'destino'],
+    ),
+  ];
+}
+
+/// Par `(categoria, keywords)` usado por [NotificationService] para
+/// classificar erros de teste SMTP via lookup tabular.
+class _TestFailureClassifier {
+  const _TestFailureClassifier({
+    required this.category,
+    required this.keywords,
+  });
+
+  final String category;
+  final List<String> keywords;
 }
 
 class _RecipientDeliveryResult {
@@ -919,6 +928,33 @@ class _RecipientDeliveryResult {
       recipientEmail: recipientEmail,
       reason: reason,
       state: _RecipientDeliveryState.skipped,
+    );
+  }
+
+  /// Converte o `Result<bool>` retornado pelo `IEmailService` no
+  /// equivalente `_RecipientDeliveryResult`:
+  /// - `Success(true)` → `sent`
+  /// - `Success(false)` → `skipped` (serviço SMTP recusou silenciosamente)
+  /// - `Failure(e)` → `failed(e)`
+  ///
+  /// Antes este 3-way fold aparecia inline em `_sendHistoryToTarget` e
+  /// `_sendWarningToTarget` — 2 cópias idênticas. Centralizar evita
+  /// que adicionar novo estado (ex.: `retried`) precise editar 2 lugares.
+  factory _RecipientDeliveryResult.fromEmailSendResult(
+    rd.Result<bool> sendResult, {
+    required String recipientEmail,
+  }) {
+    return sendResult.fold(
+      (sent) => sent
+          ? _RecipientDeliveryResult.sent(recipientEmail: recipientEmail)
+          : _RecipientDeliveryResult.skipped(
+              recipientEmail: recipientEmail,
+              reason: 'Envio não realizado pelo serviço SMTP',
+            ),
+      (failure) => _RecipientDeliveryResult.failed(
+        recipientEmail: recipientEmail,
+        failure: failure,
+      ),
     );
   }
 

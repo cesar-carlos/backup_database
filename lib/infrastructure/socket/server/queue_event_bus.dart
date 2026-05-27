@@ -112,6 +112,81 @@ class QueueEventBus {
   }
 }
 
+/// Extensão fire-and-forget sobre `QueueEventBus?`. Centraliza o
+/// pattern `unawaited(eventBus?.publishX(...) ?? Future<void>.value())`
+/// que aparecia em ~5 pontos do `ExecutionMessageHandler`.
+///
+/// Uso:
+/// ```dart
+/// eventBus.fireAndForgetQueued(clientId: ..., runId: ..., scheduleId: ...);
+/// ```
+///
+/// Quando o bus é `null` (DI ainda não cabeou ou modo de teste sem
+/// broadcast), o helper é no-op. Quando existe, o publish é disparado
+/// sem `await` e qualquer erro é capturado pelo `_safeBroadcast`
+/// interno (que já loga warning).
+extension QueueEventBusFireAndForget on QueueEventBus? {
+  void fireAndForgetQueued({
+    required String clientId,
+    required String runId,
+    required String scheduleId,
+    int? queuePosition,
+    String? requestedBy,
+    String? message,
+  }) {
+    final bus = this;
+    if (bus == null) return;
+    unawaited(
+      bus.publishQueued(
+        clientId: clientId,
+        runId: runId,
+        scheduleId: scheduleId,
+        queuePosition: queuePosition,
+        requestedBy: requestedBy,
+        message: message,
+      ),
+    );
+  }
+
+  void fireAndForgetDequeued({
+    required String clientId,
+    required String runId,
+    required String scheduleId,
+    String? reason,
+    String? message,
+  }) {
+    final bus = this;
+    if (bus == null) return;
+    unawaited(
+      bus.publishDequeued(
+        clientId: clientId,
+        runId: runId,
+        scheduleId: scheduleId,
+        reason: reason,
+        message: message,
+      ),
+    );
+  }
+
+  void fireAndForgetStarted({
+    required String clientId,
+    required String runId,
+    required String scheduleId,
+    String? message,
+  }) {
+    final bus = this;
+    if (bus == null) return;
+    unawaited(
+      bus.publishStarted(
+        clientId: clientId,
+        runId: runId,
+        scheduleId: scheduleId,
+        message: message,
+      ),
+    );
+  }
+}
+
 /// Wiring helper: cria um broadcast que despacha pelo
 /// [SendToClient] cabeado no servidor.
 Future<void> Function(String clientId, Message message)

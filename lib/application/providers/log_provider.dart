@@ -1,11 +1,17 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/application/providers/dispose_guard_mixin.dart';
 import 'package:backup_database/application/services/log_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:flutter/foundation.dart';
 
-class LogProvider extends ChangeNotifier with AsyncStateMixin {
+// Mixins: vários setters do provider disparam `unawaited(refresh())`
+// que pode completar após o widget tree descartar este provider — sem
+// o `DisposeGuardMixin`, isso lançaria "A LogProvider was used after
+// being disposed".
+class LogProvider extends ChangeNotifier
+    with AsyncStateMixin, DisposeGuardMixin {
   LogProvider(this._logService);
   final LogService _logService;
 
@@ -20,24 +26,6 @@ class LogProvider extends ChangeNotifier with AsyncStateMixin {
   int _currentPage = 0;
   final int _pageSize = 50;
   bool _hasMore = true;
-
-  // Guard contra notifyListeners pós-dispose (vários setters do provider
-  // disparam `unawaited(refresh())` que pode completar após o widget
-  // tree descartar este provider — sem o guard isso lançaria
-  // "A LogProvider was used after being disposed").
-  bool _isDisposed = false;
-
-  @override
-  void notifyListeners() {
-    if (_isDisposed) return;
-    super.notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    super.dispose();
-  }
 
   List<BackupLog> get logs => _logs;
   LogLevel? get filterLevel => _filterLevel;

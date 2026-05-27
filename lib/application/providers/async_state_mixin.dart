@@ -1,6 +1,7 @@
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 /// Mixin para `ChangeNotifier`s da camada de application que precisam
 /// expor estado assíncrono padrão (`isLoading`, `error`, `lastErrorCode`)
@@ -123,5 +124,46 @@ mixin AsyncStateMixin on ChangeNotifier {
     _error = message;
     _lastErrorCode = code;
     notifyListeners();
+  }
+
+  /// Pre-check de dependências antes de uma operação de delete.
+  ///
+  /// Padrão duplicado em `DestinationProvider.deleteDestination` e
+  /// `DatabaseConfigProviderBase.deleteConfig` — ambos executavam:
+  /// 1. Consulta ao repositório de dependências (`getBy<Type>(id)`);
+  /// 2. Se falhou, `setErrorManual` com prefixo "Não foi possível
+  ///    validar dependências";
+  /// 3. Se retornou lista não-vazia, `setErrorManual` com mensagem
+  ///    do tipo "Há X vinculados; remova antes de excluir";
+  /// 4. Caso contrário, prossegue com o delete.
+  ///
+  /// Retorna `true` quando é seguro prosseguir; `false` (já com
+  /// `error` setado e listeners notificados) quando há bloqueio.
+  ///
+  /// **Não embute o delete em si** porque cada provider tem
+  /// signatures distintas (sync vs `runAsync`) e mensagens próprias
+  /// para o erro do delete real. Esta camada cobre só o pre-check.
+  @protected
+  Future<bool> checkNoLinkedDependencies<T extends Object>({
+    required Future<rd.Result<List<T>>> Function() dependencyCheck,
+    required String dependencyErrorMessage,
+    String validationErrorPrefix = 'Não foi possível validar dependências',
+  }) async {
+    final result = await dependencyCheck();
+    if (result.isError()) {
+      final failure = result.exceptionOrNull();
+      setErrorManual(
+        failure is Failure
+            ? '$validationErrorPrefix: ${failure.message}'
+            : '$validationErrorPrefix antes da exclusão.',
+      );
+      return false;
+    }
+    final hasLinked = (result.getOrNull() ?? <T>[]).isNotEmpty;
+    if (hasLinked) {
+      setErrorManual(dependencyErrorMessage);
+      return false;
+    }
+    return true;
   }
 }

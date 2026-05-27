@@ -1,6 +1,7 @@
 import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/i_license_policy_service.dart';
@@ -27,16 +28,11 @@ class UpdateSchedule {
   final IMetricsCollector? _metricsCollector;
 
   Future<rd.Result<Schedule>> call(Schedule schedule) async {
-    if (schedule.id.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'ID não pode ser vazio'),
-      );
-    }
-    if (schedule.name.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(message: 'Nome não pode ser vazio'),
-      );
-    }
+    final validation = StringFieldValidator.requireAllNonBlank({
+      'ID': schedule.id,
+      'Nome': schedule.name,
+    });
+    if (validation != null) return rd.Failure(validation);
 
     if (schedule.destinationIds.isNotEmpty) {
       final destinationsResult = await _destinationRepository.getByIds(

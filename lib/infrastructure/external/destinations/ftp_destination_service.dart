@@ -3,12 +3,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:backup_database/core/constants/app_constants.dart';
-import 'package:backup_database/core/errors/failure.dart' hide FtpFailure;
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/ftp_failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
+import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -36,14 +37,11 @@ class FtpDestinationService implements IFtpService {
 
     LoggerService.info('$ctx Enviando para FTP: ${config.host}');
 
+    final missingSource = await BackupArtifactUtils.missingSourceFileFailure(
+      sourceFilePath,
+    );
+    if (missingSource != null) return rd.Failure(missingSource);
     final sourceFile = File(sourceFilePath);
-    if (!await sourceFile.exists()) {
-      return rd.Failure(
-        FileSystemFailure(
-          message: 'Arquivo de origem não encontrado: $sourceFilePath',
-        ),
-      );
-    }
 
     final fileSize = await sourceFile.length();
     final fileName = customFileName ?? p.basename(sourceFilePath);
@@ -163,7 +161,7 @@ class FtpDestinationService implements IFtpService {
         await _safeDeletePart(ftp, remotePartName);
         throw Exception('Falha no upload do arquivo (retorno falso)');
       }
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final validationResult = await _validatePartSize(
         ftp,
@@ -181,7 +179,7 @@ class FtpDestinationService implements IFtpService {
           ),
         );
       }
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final renamed = await ftp.rename(remotePartName, fileName);
       if (!renamed) {
@@ -192,7 +190,7 @@ class FtpDestinationService implements IFtpService {
         );
       }
 
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final finalIntegrityResult = await _validateFinalIntegrity(
         ftp: ftp,
@@ -258,7 +256,7 @@ class FtpDestinationService implements IFtpService {
         }
       }
       return rd.Failure(e.failure);
-    } on _UploadCancelledException {
+    } on UploadCancelledException {
       cancellationWatcher?.cancel();
       if (ftp != null && ftpConnected) {
         if (!config.keepPartOnCancel) {
@@ -282,12 +280,7 @@ class FtpDestinationService implements IFtpService {
         }
       }
       LoggerService.info('$ctx Upload FTP cancelado pelo usuário');
-      return const rd.Failure(
-        BackupFailure(
-          message: 'Upload cancelado pelo usuário.',
-          code: FailureCodes.uploadCancelled,
-        ),
-      );
+      return UploadCancellation.cancelledResult();
     } on Object catch (e, stackTrace) {
       cancellationWatcher?.cancel();
       if (ftp != null && ftpConnected) {
@@ -347,12 +340,6 @@ class FtpDestinationService implements IFtpService {
     });
   }
 
-  void _throwIfCancelled(bool Function()? isCancelled) {
-    if (isCancelled != null && isCancelled()) {
-      throw _UploadCancelledException();
-    }
-  }
-
   Future<_UploadResult> _performUploadWithResume({
     required FTPConnect ftp,
     required File sourceFile,
@@ -371,7 +358,7 @@ class FtpDestinationService implements IFtpService {
       String? stepOverride,
     }) {
       if (isCancelled != null && isCancelled()) {
-        throw _UploadCancelledException();
+        throw const UploadCancelledException();
       }
       onProgress?.call(progressPercent / 100, stepOverride);
     }
@@ -1263,10 +1250,6 @@ class _IntegrityValidationResult {
   final String? errorMessage;
   final String failureCode;
   final Object? originalError;
-}
-
-class _UploadCancelledException implements Exception {
-  _UploadCancelledException();
 }
 
 class _ResumeNotSupportedPolicyException implements Exception {

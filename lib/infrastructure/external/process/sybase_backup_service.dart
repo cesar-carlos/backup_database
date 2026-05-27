@@ -6,6 +6,7 @@ import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/backup_size_calculator.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_backup_options.dart';
@@ -1213,27 +1214,18 @@ class SybaseBackupService implements ISybaseBackupService {
         'Testando conexão Sybase: Engine=${config.serverName}, DBN=${config.databaseNameValue}',
       );
 
-      if (config.serverName.trim().isEmpty) {
-        return const rd.Failure(
-          BackupFailure(
-            message: 'Nome do servidor (Engine Name) não pode estar vazio',
-          ),
-        );
-      }
-
-      if (config.databaseNameValue.trim().isEmpty) {
-        return const rd.Failure(
-          BackupFailure(
-            message: 'Nome do banco de dados (DBN) não pode estar vazio',
-          ),
-        );
-      }
-
-      if (config.username.trim().isEmpty) {
-        return const rd.Failure(
-          BackupFailure(message: 'Usuário não pode estar vazio'),
-        );
-      }
+      // Antes: 3 `if (X.trim().isEmpty) return rd.Failure(BackupFailure(...))`
+      // empilhados (~18 linhas). `StringFieldValidator.requireAllNonBlank`
+      // retorna `ValidationFailure?` — semanticamente mais correto que
+      // `BackupFailure` para erros de validação de input (mas
+      // `Result<bool>` aceita qualquer subclasse de `Failure`, então
+      // não há regressão para callers).
+      final validation = StringFieldValidator.requireAllNonBlank({
+        'Nome do servidor (Engine Name)': config.serverName,
+        'Nome do banco de dados (DBN)': config.databaseNameValue,
+        'Usuário': config.username,
+      });
+      if (validation != null) return rd.Failure(validation);
 
       final databaseName = config.databaseNameValue;
       // C4: reusa a mesma fonte de estratégias do backup (sem duplicação

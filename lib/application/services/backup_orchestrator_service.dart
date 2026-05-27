@@ -222,7 +222,7 @@ class BackupOrchestratorService {
 
     await _log(
       history.id,
-      'info',
+      LogLevel.info,
       'Backup iniciado',
       step: LogStepConstants.backupStarted,
     );
@@ -324,7 +324,7 @@ class BackupOrchestratorService {
 
       await _log(
         history.id,
-        'info',
+        LogLevel.info,
         'Backup do banco concluído',
         step: LogStepConstants.backupDbDone,
       );
@@ -349,15 +349,15 @@ class BackupOrchestratorService {
       if (isEmptyLogBackup) {
         await _log(
           history.id,
-          'info',
+          LogLevel.info,
           'Sem novos segmentos de log para capturar; compressão e '
-              'pós-script ignorados.',
+          'pós-script ignorados.',
           step: LogStepConstants.compressionSkipped,
         );
       } else if (schedule.compressionFormat != CompressionFormat.none) {
         await _log(
           history.id,
-          'info',
+          LogLevel.info,
           'Iniciando compressão',
           step: LogStepConstants.compressionStarted,
         );
@@ -377,7 +377,7 @@ class BackupOrchestratorService {
           compressionDuration = result.duration;
           await _log(
             history.id,
-            'info',
+            LogLevel.info,
             'Compressão concluída',
             step: LogStepConstants.compressionDone,
           );
@@ -388,7 +388,7 @@ class BackupOrchestratorService {
           LoggerService.error('Falha na compressão: $failureMessage', failure);
           await _log(
             history.id,
-            'error',
+            LogLevel.error,
             'Falha na compressão: $failureMessage',
             step: LogStepConstants.compressionFailed,
           );
@@ -408,7 +408,7 @@ class BackupOrchestratorService {
           schedule.postBackupScript!.trim().isNotEmpty) {
         await _log(
           history.id,
-          'info',
+          LogLevel.info,
           'Executando script SQL pós-backup',
           step: LogStepConstants.scriptPostBackup,
         );
@@ -522,11 +522,10 @@ class BackupOrchestratorService {
 
   Future<void> _log(
     String historyId,
-    String levelStr,
+    LogLevel level,
     String message, {
     String? step,
   }) async {
-    final level = LogLevel.fromString(levelStr);
     if (step != null) {
       final result = await _backupLogRepository.createIdempotent(
         backupHistoryId: historyId,

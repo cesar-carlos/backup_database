@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/http_error_helpers.dart';
+import 'package:backup_database/core/utils/integrity_failure_messages.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
+import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -39,16 +41,13 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
     try {
       LoggerService.info('Enviando para Dropbox: ${config.folderName}');
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
+      final missingSource = await BackupArtifactUtils.missingSourceFileFailure(
+        sourceFilePath,
+      );
+      if (missingSource != null) return rd.Failure(missingSource);
       final sourceFile = File(sourceFilePath);
-      if (!await sourceFile.exists()) {
-        return rd.Failure(
-          FileSystemFailure(
-            message: 'Arquivo de origem não encontrado: $sourceFilePath',
-          ),
-        );
-      }
 
       final mainFolderPath = config.folderPath.isEmpty
           ? '/${config.folderName}'
@@ -58,7 +57,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
       if (mainFolderResult.isError()) {
         return rd.Failure(mainFolderResult.exceptionOrNull()!);
       }
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final dateFolderPath = '$mainFolderPath/$dateFolder';
@@ -66,14 +65,14 @@ class DropboxDestinationService implements IDropboxDestinationService {
       if (dateFolderResult.isError()) {
         return rd.Failure(dateFolderResult.exceptionOrNull()!);
       }
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
       final localContentHash = await FileHashUtils.computeDropboxContentHash(
         sourceFile,
       );
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
       final filePath = '$dateFolderPath/$fileName';
 
       await _deleteFileIfExists(filePath);
@@ -83,7 +82,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
-        _throwIfCancelled(isCancelled);
+        UploadCancellation.throwIfCancelled(isCancelled);
         try {
           final result = await _executeWithTokenRefresh(() async {
             final dioResult = await _getAuthenticatedDio();
@@ -185,15 +184,10 @@ class DropboxDestinationService implements IDropboxDestinationService {
               duration: stopwatch.elapsed,
             ),
           );
-        } on _UploadCancelledException {
+        } on UploadCancelledException {
           stopwatch.stop();
           LoggerService.info('Upload Dropbox cancelado pelo usuário');
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return UploadCancellation.cancelledResult();
         } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Dropbox: tentativa $attempt falhou: $e');
@@ -217,15 +211,10 @@ class DropboxDestinationService implements IDropboxDestinationService {
           originalError: lastError,
         ),
       );
-    } on _UploadCancelledException {
+    } on UploadCancelledException {
       stopwatch.stop();
       LoggerService.info('Upload Dropbox cancelado pelo usuário');
-      return const rd.Failure(
-        BackupFailure(
-          message: 'Upload cancelado pelo usuário.',
-          code: FailureCodes.uploadCancelled,
-        ),
-      );
+      return UploadCancellation.cancelledResult();
     } on Object catch (e) {
       stopwatch.stop();
       if (e is DropboxFailure) {
@@ -237,12 +226,6 @@ class DropboxDestinationService implements IDropboxDestinationService {
     }
   }
 
-  static void _throwIfCancelled(bool Function()? isCancelled) {
-    if (isCancelled != null && isCancelled()) {
-      throw _UploadCancelledException();
-    }
-  }
-
   Future<Map<String, dynamic>> _uploadSimple(
     Dio dio,
     File sourceFile,
@@ -251,7 +234,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
     UploadProgressCallback? onProgress,
     bool Function()? isCancelled,
   ) async {
-    _throwIfCancelled(isCancelled);
+    UploadCancellation.throwIfCancelled(isCancelled);
     final contentDio = Dio(
       BaseOptions(
         baseUrl: AppConstants.dropboxContentBaseUrl,
@@ -331,7 +314,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
     UploadProgressCallback? onProgress,
     bool Function()? isCancelled,
   ) async {
-    _throwIfCancelled(isCancelled);
+    UploadCancellation.throwIfCancelled(isCancelled);
     const dropboxChunkSize = UploadChunkConstants.dropboxResumableChunkSize;
 
     final contentDio = Dio(
@@ -350,7 +333,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
       Map<String, dynamic>? lastResponseData;
 
       while (offset < fileSize) {
-        _throwIfCancelled(isCancelled);
+        UploadCancellation.throwIfCancelled(isCancelled);
 
         final remaining = fileSize - offset;
         final bytesToRead = remaining < dropboxChunkSize
@@ -533,17 +516,11 @@ class DropboxDestinationService implements IDropboxDestinationService {
   /// heurística por substring com word‑boundary em códigos HTTP.
   @visibleForTesting
   static String getDropboxErrorMessage(Object? e) {
-    if (e is Failure && e.code != null) {
-      if (e.code == FailureCodes.integrityValidationInconclusive) {
-        return 'Não foi possível confirmar a integridade no Dropbox.\n'
-            'Detalhes: ${e.message}';
-      }
-      if (e.code == FailureCodes.integrityValidationFailed) {
-        return 'Falha de integridade no Dropbox: arquivo remoto não confere '
-            'com o original.\n'
-            'Detalhes: ${e.message}';
-      }
-    }
+    final integrity = IntegrityFailureMessages.tryDescribe(
+      e,
+      serviceName: 'Dropbox',
+    );
+    if (integrity != null) return integrity;
     if (e is TimeoutException) {
       return 'Tempo limite excedido ao enviar para o Dropbox.\n'
           'Para arquivos grandes, o upload pode levar vários minutos.\n'
@@ -1047,17 +1024,13 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
   /// Verifica se a exceção representa um erro `401 Unauthorized`. Prioriza
   /// `DioException.response.statusCode` (tipo nativo) antes de cair na
-  /// heurística por substring com word‑boundary.
+  /// heurística por substring com word‑boundary (delegada a
+  /// `HttpErrorHelpers.matchesUnauthorizedHeuristic`, compartilhada
+  /// com `GoogleDriveDestinationService`).
   static bool _isUnauthorizedError(Object e) {
     if (e is DioException && e.response?.statusCode == 401) return true;
-    final errorStr = e.toString().toLowerCase();
-    if (HttpErrorHelpers.containsHttpStatus(errorStr, 401)) return true;
-    if (errorStr.contains('unauthorized')) return true;
-    if (errorStr.contains('invalid authentication credentials')) return true;
-    return false;
+    return HttpErrorHelpers.matchesUnauthorizedHeuristic(
+      e.toString().toLowerCase(),
+    );
   }
-}
-
-class _UploadCancelledException implements Exception {
-  _UploadCancelledException();
 }

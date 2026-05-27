@@ -1,4 +1,4 @@
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
@@ -21,34 +21,13 @@ class ExecuteSybaseBackup {
     bool verifyAfterBackup = false,
     VerifyPolicy verifyPolicy = VerifyPolicy.bestEffort,
   }) async {
-    if (config.serverName.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Nome do servidor não pode ser vazio',
-        ),
-      );
-    }
-    if (config.databaseNameValue.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Nome do banco (DBN) não pode ser vazio',
-        ),
-      );
-    }
-    if (config.username.trim().isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Usuário não pode ser vazio',
-        ),
-      );
-    }
-    if (outputDirectory.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Diretório de saída não pode ser vazio',
-        ),
-      );
-    }
+    final validation = StringFieldValidator.requireAllNonBlank({
+      'Nome do servidor': config.serverName,
+      'Nome do banco (DBN)': config.databaseNameValue,
+      'Usuário': config.username,
+      'Diretório de saída': outputDirectory,
+    });
+    if (validation != null) return rd.Failure(validation);
 
     return _backupService.executeBackup(
       config: config,

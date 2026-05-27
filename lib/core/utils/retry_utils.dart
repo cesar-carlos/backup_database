@@ -10,55 +10,69 @@ import 'package:result_dart/result_dart.dart' as rd;
 final _random = Random();
 
 bool isRetryableFailure(Object failure) {
+  // 1) Validação semântica nunca retentável.
   if (failure is ValidationFailure) return false;
+
+  // 2) Decisão por failure.code (lista whitelisted explícita).
   if (failure is Failure && failure.code != null) {
-    final code = failure.code!;
-    if (code == FailureCodes.ftpIntegrityValidationInconclusive) {
-      return true;
-    }
-    if (code == FailureCodes.integrityValidationInconclusive) {
-      return true;
-    }
-    if (code == FailureCodes.uploadCancelled ||
-        code == FailureCodes.backupCancelled ||
-        code == FailureCodes.validationFailed ||
-        code == FailureCodes.ftpIntegrityValidationFailed) {
-      return false;
-    }
+    final decision = _retryDecisionFromFailureCode(failure.code!);
+    if (decision != null) return decision;
   }
+
+  // 3) Inspeção da exceção original embrulhada (timeout, socket, etc.).
   if (failure is Failure && failure.originalError != null) {
-    final original = failure.originalError;
-    if (original is TimeoutException) {
-      return true;
-    }
-    final originalStr = original.toString();
-    if (originalStr.contains('SocketException')) {
-      return true;
-    }
-    if (originalStr.contains('Connection') ||
-        originalStr.contains('connection')) {
-      return true;
-    }
-    if (originalStr.contains('timeout') || originalStr.contains('Timeout')) {
-      return true;
-    }
-    if (originalStr.contains('503') ||
-        originalStr.contains('502') ||
-        originalStr.contains('504')) {
-      return true;
-    }
+    if (_isRetryableOriginalError(failure.originalError!)) return true;
   }
-  if (failure is TimeoutException) {
+
+  // 4) Exception direta, sem wrap em Failure.
+  if (failure is TimeoutException) return true;
+
+  // 5) Fallback heurístico no toString — última linha de defesa para
+  //    erros que ainda não foram modelados como `Failure` tipado.
+  return _toStringSuggestsRetry(failure);
+}
+
+bool? _retryDecisionFromFailureCode(String code) {
+  if (code == FailureCodes.ftpIntegrityValidationInconclusive ||
+      code == FailureCodes.integrityValidationInconclusive) {
     return true;
   }
-  final msg = failure.toString().toLowerCase();
-  if (msg.contains('socket') ||
-      msg.contains('connection') ||
-      msg.contains('timeout') ||
-      msg.contains('network')) {
+  if (code == FailureCodes.uploadCancelled ||
+      code == FailureCodes.backupCancelled ||
+      code == FailureCodes.validationFailed ||
+      code == FailureCodes.ftpIntegrityValidationFailed) {
+    return false;
+  }
+  return null;
+}
+
+bool _isRetryableOriginalError(Object original) {
+  if (original is TimeoutException) return true;
+
+  final originalStr = original.toString();
+  if (originalStr.contains('SocketException')) return true;
+  if (originalStr.contains('Connection') ||
+      originalStr.contains('connection')) {
+    return true;
+  }
+  if (originalStr.contains('timeout') || originalStr.contains('Timeout')) {
+    return true;
+  }
+  // 5xx temporários comuns em proxies/load balancers.
+  if (originalStr.contains('503') ||
+      originalStr.contains('502') ||
+      originalStr.contains('504')) {
     return true;
   }
   return false;
+}
+
+bool _toStringSuggestsRetry(Object failure) {
+  final msg = failure.toString().toLowerCase();
+  return msg.contains('socket') ||
+      msg.contains('connection') ||
+      msg.contains('timeout') ||
+      msg.contains('network');
 }
 
 Duration addJitter(Duration base, double jitterFactor) {

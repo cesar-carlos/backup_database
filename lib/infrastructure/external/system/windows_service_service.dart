@@ -374,11 +374,7 @@ class WindowsServiceService implements IWindowsServiceService {
                 ? processResult.stderr
                 : processResult.stdout;
 
-            final isAccessDenied =
-                errorMessage.contains('Acesso negado') ||
-                errorMessage.contains('Access denied') ||
-                errorMessage.contains('FALHA 5') ||
-                errorMessage.contains('FAILURE 5');
+            final isAccessDenied = _textContainsAccessDenied(errorMessage);
 
             if (isAccessDenied) {
               LoggerService.warning(
@@ -431,11 +427,7 @@ class WindowsServiceService implements IWindowsServiceService {
             final failureMsg =
                 (configFailure is Failure ? configFailure.message : null) ??
                 configFailure.toString();
-            final isConfigAccessDenied =
-                failureMsg.contains('Acesso negado') ||
-                failureMsg.contains('Access denied') ||
-                failureMsg.contains('FALHA 5') ||
-                failureMsg.contains('FAILURE 5');
+            final isConfigAccessDenied = _textContainsAccessDenied(failureMsg);
 
             if (isConfigAccessDenied) {
               LoggerService.warning(
@@ -720,11 +712,7 @@ class WindowsServiceService implements IWindowsServiceService {
                 ? processResult.stderr
                 : processResult.stdout;
 
-            final isAccessDenied =
-                errorMessage.contains('Acesso negado') ||
-                errorMessage.contains('Access denied') ||
-                errorMessage.contains('FALHA 5') ||
-                errorMessage.contains('FAILURE 5');
+            final isAccessDenied = _textContainsAccessDenied(errorMessage);
 
             if (isAccessDenied) {
               LoggerService.warning(
@@ -1001,11 +989,13 @@ class WindowsServiceService implements IWindowsServiceService {
 
           final isAccessDenied =
               processResult.exitCode == _accessDeniedWinError ||
-              errorMessage.contains('Acesso negado') ||
-              errorMessage.contains('Access denied') ||
-              errorMessage.contains('Access is denied') ||
-              errorMessage.contains('FALHA 5') ||
-              errorMessage.contains('FAILURE 5');
+              _textContainsAccessDenied(errorMessage) ||
+              // Variação "Access is denied" (com "is") só é tratada
+              // pelo start path — historicamente, install/configure/
+              // uninstall/stop não acionavam elevação para esta forma.
+              // Mantemos in-line para evitar acoplar o helper a essa
+              // assimetria (ver doc de `_textContainsAccessDenied`).
+              errorMessage.toLowerCase().contains('access is denied');
 
           if (isAccessDenied) {
             LoggerService.warning(
@@ -1747,11 +1737,7 @@ try {
               ? processResult.stderr
               : processResult.stdout;
 
-          final isAccessDenied =
-              errorMessage.contains('Acesso negado') ||
-              errorMessage.contains('Access denied') ||
-              errorMessage.contains('FALHA 5') ||
-              errorMessage.contains('FAILURE 5');
+          final isAccessDenied = _textContainsAccessDenied(errorMessage);
 
           if (isAccessDenied) {
             LoggerService.warning(
@@ -1879,12 +1865,43 @@ try {
     if (processResult.exitCode == _accessDeniedWinError) {
       return true;
     }
+    final output = _getProcessOutput(processResult);
+    // Mantém a forma original (que incluía "access is denied" além das
+    // 4 variantes de `_textContainsAccessDenied`) — esta function é
+    // consumida só por `getStatus`, que historicamente tratava ambas
+    // as variações (e há teste cobrindo o caminho com "Access is denied").
+    return _textContainsAccessDenied(output) ||
+        output.toLowerCase().contains('access is denied');
+  }
 
-    final output = _getProcessOutput(processResult).toLowerCase();
-    return output.contains('access is denied') ||
-        output.contains('acesso negado') ||
-        output.contains('falha 5') ||
-        output.contains('failure 5');
+  /// Detector case-insensitive de "access denied" em mensagens do `sc.exe`,
+  /// `nssm.exe` e `taskkill` (PT-BR + EN).
+  ///
+  /// Consolida ~4 cadeias inline duplicadas (`errorMessage.contains('Acesso
+  /// negado') || errorMessage.contains('Access denied') ||
+  /// errorMessage.contains('FALHA 5') || errorMessage.contains('FAILURE 5')`)
+  /// em `_install`, `_configure`, `_uninstall` e `_stopService`. Também é a
+  /// primitiva usada por `_isAccessDeniedResponse` (que mantém o
+  /// short-circuit pelo `exitCode == _accessDeniedWinError`).
+  ///
+  /// **Importante — assimetria preservada**: o `_startService` faz um check
+  /// **adicional** in-line por `"access is denied"` (com "is" entre as
+  /// palavras), porque algumas builds do `sc.exe` imprimem essa variação
+  /// e os testes do start path validam o caminho de elevação para essa
+  /// variação. Outros sites (install/configure/uninstall/stop) **não**
+  /// matchaval esta variação na implementação original — manter a mesma
+  /// semântica aqui evita acionar `_<...>WithElevation` em paths onde os
+  /// callers de teste contam com o failure direto.
+  ///
+  /// Comparado às cadeias antigas, este helper é case-insensitive (antes
+  /// `'Acesso negado'`/`'Access denied'` eram case-sensitive) — uma
+  /// melhoria defensiva sem regressões observadas nos testes.
+  static bool _textContainsAccessDenied(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('acesso negado') ||
+        lower.contains('access denied') ||
+        lower.contains('falha 5') ||
+        lower.contains('failure 5');
   }
 
   bool _isServiceAlreadyRunningResponse(

@@ -192,16 +192,25 @@ class EmailConfigRepository implements IEmailConfigRepository {
 
   @override
   Future<rd.Result<EmailConfig>> save(EmailConfig config) async {
-    // O try/catch original wrappava `create()` e `update()` mas estes já
-    // retornam `Result` (não throwam). O catch só protegia o `getById`
-    // inicial. Agora delegamos a checagem ao `RepositoryGuard.run` somente
-    // no `getById`; create/update já cuidam dos próprios erros.
+    // Decide create vs update via `NotFoundFailure` passthrough do
+    // `RepositoryGuard.run` (ver branch `on Failure catch` em
+    // `repository_guard.dart` linhas 65-79 — `Failure` semântico não
+    // é reembrulhado em `DatabaseFailure`).
+    //
+    // Antes desta refatoração havia um sentinel `_MissingExistingRowSentinel`
+    // que dependia de o `RepositoryGuard` reembrulhar em `DatabaseFailure`
+    // especificamente; se o wrap mudasse (ex.: `NetworkFailure`) o
+    // pattern quebrava silenciosamente. Usar `NotFoundFailure` (o
+    // pattern oficial das rules — §1 do `architectural_patterns.mdc`)
+    // remove esse acoplamento frágil.
     final lookupResult = await RepositoryGuard.run<EmailConfigsTableData>(
       errorMessage: 'Erro ao salvar configuracao de e-mail',
       action: () async {
         final existing = await _database.emailConfigDao.getById(config.id);
         if (existing == null) {
-          throw _MissingExistingRowSentinel();
+          throw const NotFoundFailure(
+            message: 'Configuracao de e-mail nao encontrada (será criada)',
+          );
         }
         return existing;
       },
@@ -210,14 +219,7 @@ class EmailConfigRepository implements IEmailConfigRepository {
     return lookupResult.fold(
       (_) => update(config),
       (failure) {
-        // O sentinel sinaliza "não existe ainda → criar". Qualquer outra
-        // falha é um erro real de I/O e deve ser propagado.
-        final original = failure is DatabaseFailure
-            ? failure.originalError
-            : null;
-        if (original is _MissingExistingRowSentinel) {
-          return create(config);
-        }
+        if (failure is NotFoundFailure) return create(config);
         return Future.value(rd.Failure(failure));
       },
     );
@@ -493,13 +495,4 @@ class EmailConfigRepository implements IEmailConfigRepository {
 
     return const rd.Success(unit);
   }
-}
-
-/// Sentinel para o `save()`: sinaliza que `getById` retornou `null` (não
-/// existe ainda), e que o caller deve rotear para `create()` em vez de
-/// `update()`. Evita ter que retornar um valor "magic null" ou um Result
-/// composto.
-class _MissingExistingRowSentinel implements Exception {
-  @override
-  String toString() => 'EmailConfig row does not exist; route to create';
 }

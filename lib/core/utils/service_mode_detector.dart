@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 import 'package:win32/win32.dart';
 
 class ServiceModeDetector {
@@ -15,6 +16,16 @@ class ServiceModeDetector {
 
   static bool _isServiceMode = false;
   static bool _checked = false;
+
+  /// Limpa o resultado memoizado da detecção. Existe apenas para
+  /// permitir testes que exercitam múltiplos cenários de argumentos /
+  /// ambiente em sequência — produção chama `isServiceMode` uma vez
+  /// no boot e nunca mais.
+  @visibleForTesting
+  static void resetCacheForTest() {
+    _isServiceMode = false;
+    _checked = false;
+  }
 
   static bool isServiceMode({List<String>? executableArguments}) {
     if (_checked) {

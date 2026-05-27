@@ -26,4 +26,24 @@ class HttpErrorHelpers {
     }
     return null;
   }
+
+  /// Heurística por **substring** para detectar erro `401 Unauthorized`
+  /// quando o erro original chega como `Exception` cru (sem tipo HTTP
+  /// estruturado disponível).
+  ///
+  /// Consolida o pattern duplicado em `DropboxDestinationService.
+  /// _isUnauthorizedError` e `GoogleDriveDestinationService.
+  /// _isUnauthorizedError` — ambos faziam exatamente estas 3 checagens
+  /// **após** tentar o match por tipo nativo (`DioException` no
+  /// Dropbox, `drive.DetailedApiRequestError` no Drive).
+  ///
+  /// `errorStrLower` é esperado em **lower case** (`e.toString().toLowerCase()`).
+  static bool matchesUnauthorizedHeuristic(String errorStrLower) {
+    if (containsHttpStatus(errorStrLower, 401)) return true;
+    if (errorStrLower.contains('unauthorized')) return true;
+    if (errorStrLower.contains('invalid authentication credentials')) {
+      return true;
+    }
+    return false;
+  }
 }

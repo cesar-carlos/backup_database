@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/application/providers/dispose_guard_mixin.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/domain/entities/email_notification_target.dart';
 import 'package:backup_database/domain/entities/email_test_audit.dart';
@@ -20,7 +21,8 @@ enum NotificationHistoryPeriod {
   all,
 }
 
-class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
+class NotificationProvider extends ChangeNotifier
+    with AsyncStateMixin, DisposeGuardMixin {
   NotificationProvider({
     required IEmailConfigRepository emailConfigRepository,
     required IEmailNotificationTargetRepository
@@ -64,8 +66,6 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
   // Atualizações otimistas por configuração (toggle enabled).
   final Set<String> _updatingConfigIds = <String>{};
 
-  bool _isDisposed = false;
-
   List<EmailConfig> get configs => _configs;
   String? get selectedConfigId => _selectedConfigId;
   List<EmailNotificationTarget> get targets => _targets;
@@ -88,16 +88,6 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
       _updatingConfigIds.contains(configId);
   Set<String> get updatingConfigIds =>
       Set<String>.unmodifiable(_updatingConfigIds);
-
-  /// Sobrescreve `notifyListeners` para curto-circuitar após dispose.
-  /// Necessário porque `runAsync` (mixin) e os timers debounced de
-  /// histórico podem disparar notificações depois que o provider já foi
-  /// descartado pelo Provider tree.
-  @override
-  void notifyListeners() {
-    if (_isDisposed) return;
-    super.notifyListeners();
-  }
 
   Future<void> loadConfig() async {
     await loadConfigs();
@@ -559,14 +549,14 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
   }
 
   void _scheduleHistoryReload() {
-    if (_isDisposed) {
+    if (isDisposed) {
       return;
     }
     _historyReloadTimer?.cancel();
     _historyReloadTimer = Timer(
       const Duration(milliseconds: 300),
       () {
-        if (_isDisposed) {
+        if (isDisposed) {
           return;
         }
         unawaited(_loadTestHistory());
@@ -606,7 +596,7 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
       limit: 200,
     );
 
-    if (_isDisposed || requestId != _historyLoadRequestId) {
+    if (isDisposed || requestId != _historyLoadRequestId) {
       return;
     }
 
@@ -705,8 +695,9 @@ class NotificationProvider extends ChangeNotifier with AsyncStateMixin {
 
   @override
   void dispose() {
-    _isDisposed = true;
     _historyReloadTimer?.cancel();
+    // `DisposeGuardMixin.dispose()` marca a flag interna; `super.dispose()`
+    // resolve a MRO completa do mixin chain.
     super.dispose();
   }
 }

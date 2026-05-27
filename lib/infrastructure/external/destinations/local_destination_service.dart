@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -78,14 +79,11 @@ class LocalDestinationService implements ILocalDestinationService {
     try {
       LoggerService.info('Copiando para destino local: ${config.path}');
 
+      final missingSource = await BackupArtifactUtils.missingSourceFileFailure(
+        sourceFilePath,
+      );
+      if (missingSource != null) return rd.Failure(missingSource);
       final sourceFile = File(sourceFilePath);
-      if (!await sourceFile.exists()) {
-        return rd.Failure(
-          FileSystemFailure(
-            message: 'Arquivo de origem não encontrado: $sourceFilePath',
-          ),
-        );
-      }
 
       final sizeValidation = await _validateSourceFileWithRetry(sourceFile);
       if (sizeValidation.isError()) {

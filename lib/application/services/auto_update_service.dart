@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/application/services/auto_update/app_update_decision_engine.dart';
+import 'package:backup_database/application/services/auto_update/appcast_parser.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
@@ -11,11 +13,9 @@ import 'package:backup_database/core/utils/machine_storage_layout.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:pub_semver/pub_semver.dart';
-import 'package:xml/xml.dart';
 
 enum AppUpdateSource { startup, manual, periodic }
 
@@ -398,8 +398,6 @@ class AutoUpdateService {
   /// Espera curta antes do `exit()` para o S.O. registrar o spawn detached.
   static const Duration _exitGracePeriod = Duration(milliseconds: 250);
 
-  static const String _sparkleNamespace =
-      'http://www.andymatuschak.org/xml-namespaces/sparkle';
   static const List<String> _installerArguments = <String>[
     '/VERYSILENT',
     '/SUPPRESSMSGBOXES',
@@ -665,166 +663,30 @@ class AutoUpdateService {
     await _snapshotController.close();
   }
 
+  /// Fachada `@visibleForTesting` que delega para [AppcastParser.parse].
+  /// Mantida aqui para preservar os ~10 testes existentes em
+  /// `auto_update_service_test.dart` que chamam `AutoUpdateService.parseAppcast`.
+  /// Novo código deve usar `AppcastParser.parse` direto.
   @visibleForTesting
-  static List<AppcastRelease> parseAppcast(String xmlContent) {
-    final document = XmlDocument.parse(xmlContent);
-    final items = document.findAllElements('item');
-    final byVersion = <String, AppcastRelease>{};
+  static List<AppcastRelease> parseAppcast(String xmlContent) =>
+      AppcastParser.parse(xmlContent);
 
-    for (final item in items) {
-      final enclosure = item.getElement('enclosure');
-      if (enclosure == null) {
-        continue;
-      }
-
-      final os =
-          enclosure.getAttribute('os', namespace: _sparkleNamespace) ??
-          enclosure.getAttribute('sparkle:os');
-      if ((os ?? '').toLowerCase() != 'windows') {
-        continue;
-      }
-
-      final versionRaw =
-          enclosure.getAttribute('version', namespace: _sparkleNamespace) ??
-          enclosure.getAttribute('sparkle:version');
-      final url = enclosure.getAttribute('url');
-      final lengthRaw = enclosure.getAttribute('length');
-      final sha256 =
-          enclosure.getAttribute('sha256') ??
-          enclosure.getAttribute('sha256', namespace: _sparkleNamespace) ??
-          enclosure.getAttribute('sparkle:sha256');
-
-      if (versionRaw == null ||
-          url == null ||
-          lengthRaw == null ||
-          sha256 == null ||
-          sha256.trim().isEmpty) {
-        continue;
-      }
-
-      final version = _tryParseVersion(versionRaw);
-      final length = int.tryParse(lengthRaw);
-      if (version == null || length == null || length <= 0) {
-        continue;
-      }
-
-      final title =
-          item.getElement('title')?.innerText.trim() ?? 'Version $version';
-      final description =
-          item.getElement('description')?.innerText.trim() ?? '';
-      final publishedAt =
-          _tryParsePubDate(item.getElement('pubDate')?.innerText) ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-
-      final minSupportedRaw =
-          enclosure.getAttribute(
-            'minSupportedAppVersion',
-            namespace: _sparkleNamespace,
-          ) ??
-          enclosure.getAttribute('sparkle:minSupportedAppVersion');
-      final minSupported = _tryParseVersion(minSupportedRaw);
-
-      final rolloutRaw =
-          enclosure.getAttribute(
-            'rolloutPercentage',
-            namespace: _sparkleNamespace,
-          ) ??
-          enclosure.getAttribute('sparkle:rolloutPercentage');
-      int? rolloutPercentage;
-      if (rolloutRaw != null) {
-        final parsed = int.tryParse(rolloutRaw);
-        if (parsed != null) {
-          rolloutPercentage = parsed.clamp(0, 100);
-        }
-      }
-
-      final release = AppcastRelease(
-        version: version,
-        downloadUrl: url,
-        fileSizeBytes: length,
-        sha256: sha256.toLowerCase(),
-        publishedAt: publishedAt,
-        title: title,
-        description: description,
-        minSupportedAppVersion: minSupported,
-        rolloutPercentage: rolloutPercentage,
-      );
-
-      final key = version.toString();
-      final existing = byVersion[key];
-      if (existing == null ||
-          release.publishedAt.isAfter(existing.publishedAt)) {
-        byVersion[key] = release;
-      }
-    }
-
-    final releases = byVersion.values.toList()
-      ..sort((a, b) {
-        final versionComparison = b.version.compareTo(a.version);
-        if (versionComparison != 0) {
-          return versionComparison;
-        }
-        return b.publishedAt.compareTo(a.publishedAt);
-      });
-    return releases;
-  }
-
+  /// Fachada `@visibleForTesting` que delega para
+  /// [AppUpdateDecisionEngine.evaluate]. Mantida aqui para preservar
+  /// os testes existentes em `auto_update_service_test.dart` que
+  /// chamam `AutoUpdateService.evaluateRelease`. Novo código deve usar
+  /// `AppUpdateDecisionEngine.evaluate` direto.
   @visibleForTesting
   static AppUpdateDecision evaluateRelease({
     required List<AppcastRelease> releases,
     required Version currentVersion,
     String? machineId,
   }) {
-    for (final release in releases) {
-      if (release.version <= currentVersion) {
-        continue;
-      }
-      if (release.minSupportedAppVersion != null &&
-          currentVersion < release.minSupportedAppVersion!) {
-        continue;
-      }
-      if (!_passesRollout(release, machineId)) {
-        continue;
-      }
-      return AppUpdateDecision(
-        currentVersion: currentVersion,
-        latestRelease: release,
-      );
-    }
-
-    return AppUpdateDecision(
+    return AppUpdateDecisionEngine.evaluate(
+      releases: releases,
       currentVersion: currentVersion,
-      latestRelease: null,
+      machineId: machineId,
     );
-  }
-
-  /// Implementa staged rollout: se `rolloutPercentage` esta presente,
-  /// considera o cliente "elegivel" apenas quando `hash(machineId) % 100`
-  /// for menor que a porcentagem. Sem `machineId` confiavel, deixa todos
-  /// passarem para nao bloquear updates por falta de dado.
-  static bool _passesRollout(AppcastRelease release, String? machineId) {
-    final pct = release.rolloutPercentage;
-    if (pct == null || pct >= 100) {
-      return true;
-    }
-    if (pct <= 0) {
-      return false;
-    }
-    final id = machineId?.trim();
-    if (id == null || id.isEmpty) {
-      return true;
-    }
-    final key = '${release.targetVersion}:$id';
-    // FNV-1a (32-bit) — determinístico e suficiente para distribuicao
-    // uniforme. Sem dependencia externa.
-    const fnvOffset = 0x811C9DC5;
-    const fnvPrime = 0x01000193;
-    var hash = fnvOffset;
-    for (final unit in utf8.encode(key)) {
-      hash ^= unit;
-      hash = (hash * fnvPrime) & 0xFFFFFFFF;
-    }
-    return (hash % 100) < pct;
   }
 
   @visibleForTesting
@@ -873,6 +735,21 @@ class AutoUpdateService {
       currentVersion: currentVersion.toString(),
       attemptNumber: attemptNumber,
     );
+
+    // Helper local: muda `currentStage` (lido pelo catch global para
+    // logar onde a falha aconteceu) e atualiza o metadata do lock no
+    // disco. Antes este pattern aparecia inline ~9 vezes no pipeline.
+    Future<void> transitionStage(
+      AppUpdateStage stage, {
+      Map<String, String?> extraMetadata = const <String, String?>{},
+    }) async {
+      currentStage = stage;
+      await lockHandle?.updateMetadata({
+        'stage': _stageToken(stage),
+        ...extraMetadata,
+      });
+    }
+
     if (lockHandle == null) {
       _logTelemetry(
         'lock ocupado por outra instancia',
@@ -928,12 +805,9 @@ class AutoUpdateService {
       );
 
       final releases = await _fetchReleases();
-      currentStage = AppUpdateStage.evaluatingRelease;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(currentStage),
-      });
+      await transitionStage(AppUpdateStage.evaluatingRelease);
       final machineId = await _safeResolveMachineId();
-      final decision = evaluateRelease(
+      final decision = AppUpdateDecisionEngine.evaluate(
         releases: releases,
         currentVersion: currentVersion,
         machineId: machineId,
@@ -941,9 +815,7 @@ class AutoUpdateService {
 
       if (!decision.isUpdateAvailable) {
         checkStopwatch.stop();
-        await lockHandle.updateMetadata({
-          'stage': _stageToken(AppUpdateStage.completed),
-        });
+        await transitionStage(AppUpdateStage.completed);
         _logTelemetry(
           'nenhuma atualizacao disponivel',
           source: source,
@@ -980,10 +852,10 @@ class AutoUpdateService {
 
       final release = decision.latestRelease!;
       targetVersion = release.targetVersion;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(AppUpdateStage.evaluatingRelease),
-        'targetVersion': release.targetVersion,
-      });
+      await transitionStage(
+        AppUpdateStage.evaluatingRelease,
+        extraMetadata: {'targetVersion': release.targetVersion},
+      );
 
       _emitSnapshot(
         _snapshot.copyWith(
@@ -1001,10 +873,7 @@ class AutoUpdateService {
         ),
       );
 
-      currentStage = AppUpdateStage.downloadingInstaller;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(currentStage),
-      });
+      await transitionStage(AppUpdateStage.downloadingInstaller);
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.downloading,
@@ -1031,16 +900,10 @@ class AutoUpdateService {
         downloadDuration: downloadDuration,
       );
 
-      currentStage = AppUpdateStage.validatingInstaller;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(currentStage),
-      });
+      await transitionStage(AppUpdateStage.validatingInstaller);
       await validateDownloadedInstaller(installer, release);
 
-      currentStage = AppUpdateStage.preparingInstall;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(currentStage),
-      });
+      await transitionStage(AppUpdateStage.preparingInstall);
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.installing,
@@ -1071,10 +934,7 @@ class AutoUpdateService {
         currentVersion: currentVersion.toString(),
       );
 
-      currentStage = AppUpdateStage.launchingInstaller;
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(currentStage),
-      });
+      await transitionStage(AppUpdateStage.launchingInstaller);
 
       final spawnHandle = await _launchInstaller(installer);
       final spawnAlive = await _waitForInstallerSpawn(spawnHandle);
@@ -1093,9 +953,7 @@ class AutoUpdateService {
       }
 
       checkStopwatch.stop();
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(AppUpdateStage.completed),
-      });
+      await transitionStage(AppUpdateStage.completed);
       _logTelemetry(
         'instalador silencioso iniciado',
         source: source,
@@ -1136,10 +994,10 @@ class AutoUpdateService {
 
       // Exit code dinamico: em modo servico usamos `handoffForInstaller (78)`
       // para impedir NSSM AppExit Default Restart durante a janela do setup.
-      // Em modo UI nao ha NSSM envolvido, exit(0) basta.
+      // Em modo UI nao ha NSSM envolvido, `success (0)` basta.
       final exitCode = installContext.origin == AppUpdateLaunchOrigin.service
           ? ServiceModeExitCode.handoffForInstaller
-          : 0;
+          : UiBootstrapExitCode.success;
       _exitProcess(exitCode);
     } on AppUpdateBlockedException catch (e) {
       if (checkStopwatch.isRunning) {
@@ -1148,9 +1006,7 @@ class AutoUpdateService {
       LoggerService.warning(
         'Auto update bloqueado antes da instalacao: ${e.message}',
       );
-      await lockHandle.updateMetadata({
-        'stage': _stageToken(e.stage),
-      });
+      await transitionStage(e.stage);
       _emitSnapshot(
         _snapshot.copyWith(
           status: e.status,
@@ -1960,41 +1816,8 @@ class AutoUpdateService {
     );
   }
 
-  static Version? _tryParseVersion(String? raw) {
-    final normalized = raw?.trim();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-
-    final withoutPrefix = normalized.startsWith('v')
-        ? normalized.substring(1)
-        : normalized;
-    try {
-      return Version.parse(withoutPrefix);
-    } on FormatException {
-      return null;
-    }
-  }
-
-  static DateTime? _tryParsePubDate(String? raw) {
-    final value = raw?.trim();
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-
-    try {
-      return HttpDate.parse(value).toUtc();
-    } on Object {
-      try {
-        return DateFormat(
-          'EEE, dd MMM yyyy HH:mm:ss Z',
-          'en_US',
-        ).parseUtc(value);
-      } on Object {
-        return null;
-      }
-    }
-  }
+  static Version? _tryParseVersion(String? raw) =>
+      AppcastParser.tryParseVersion(raw);
 
   static DateTime? _tryParseIsoDateTime(Object? raw) {
     final value = raw?.toString().trim();

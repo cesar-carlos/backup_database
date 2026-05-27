@@ -230,20 +230,19 @@ exit \$p.ExitCode
       methodUsed: LegacyElevatedScanMethod.powershell,
     );
   } finally {
-    try {
-      if (await scanScript.exists()) {
-        await scanScript.delete();
-      }
-    } on Object {
-      // ignore
+    await _deleteFileBestEffort(scanScript);
+    await _deleteFileBestEffort(launcherScript);
+  }
+}
+
+Future<void> _deleteFileBestEffort(File file) async {
+  try {
+    if (await file.exists()) {
+      await file.delete();
     }
-    try {
-      if (await launcherScript.exists()) {
-        await launcherScript.delete();
-      }
-    } on Object {
-      // ignore
-    }
+  } on Object {
+    // Cleanup falhou — não-fatal; o arquivo é em system temp e será
+    // limpo pelo OS.
   }
 }
 
@@ -276,13 +275,7 @@ Future<ElevatedLegacyProfileScanOutcome> runElevatedLegacyProfileScan({
       failureKind: ElevatedLegacyScanFailureKind.unexpectedError,
     );
   } finally {
-    try {
-      if (await outputJsonFile.exists()) {
-        await outputJsonFile.delete();
-      }
-    } on Object {
-      // ignore
-    }
+    await _deleteFileBestEffort(outputJsonFile);
   }
 }
 

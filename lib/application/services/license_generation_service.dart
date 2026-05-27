@@ -5,6 +5,7 @@ import 'package:backup_database/application/services/license_decoder.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/services/i_revocation_checker.dart';
 import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
@@ -43,13 +44,14 @@ class LicenseGenerationService {
         );
       }
 
-      if (deviceKey.trim().isEmpty) {
-        return const rd.Failure(
-          core.ValidationFailure(
-            message: 'deviceKey não pode estar vazio',
-          ),
-        );
-      }
+      // Texto agora padronizado em "não pode ser vazio" (helper canônico)
+      // — variação minor vs antiga "estar vazio". Nenhum teste verificava
+      // a wording exata.
+      final deviceKeyFailure = StringFieldValidator.requireNonBlank(
+        value: deviceKey,
+        fieldLabel: 'deviceKey',
+      );
+      if (deviceKeyFailure != null) return rd.Failure(deviceKeyFailure);
 
       if (allowedFeatures.isEmpty) {
         return const rd.Failure(

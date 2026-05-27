@@ -10,6 +10,7 @@ import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/retry_utils.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
+import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_destination_orchestrator.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
@@ -76,12 +77,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
   }) async {
     try {
       if (isCancelled != null && isCancelled()) {
-        return const rd.Failure(
-          BackupFailure(
-            message: 'Upload cancelado pelo usuário.',
-            code: FailureCodes.uploadCancelled,
-          ),
-        );
+        return UploadCancellation.cancelledResult();
       }
 
       final licenseCheck = await _licensePolicyService
@@ -190,12 +186,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     for (var i = 0; i < destinations.length; i += maxParallel) {
       if (isCancelled != null && isCancelled()) {
         for (var j = i; j < destinations.length; j++) {
-          results[j] = const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          results[j] = UploadCancellation.cancelledResult();
         }
         break;
       }
@@ -539,17 +530,13 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     );
   }
 
-  /// Falha pré-construída para upload cancelado pelo usuário. Centraliza
-  /// o `Failure(...)` usado em vários pontos durante checagens de
-  /// `isCancelled`.
-  rd.Failure<T, Exception> _cancelledFailure<T extends Object>() {
-    return rd.Failure(
-      const BackupFailure(
-        message: 'Upload cancelado pelo usuário.',
-        code: FailureCodes.uploadCancelled,
-      ),
-    );
-  }
+  /// Falha pré-construída para upload cancelado pelo usuário. Delega
+  /// para [UploadCancellation.cancelledResult] (helper compartilhado
+  /// com os destination services). Mantemos esta camada fina aqui
+  /// porque vários sites neste arquivo já chamam `_cancelledFailure()`
+  /// — trocar todos pelo helper externo é puro renomear cosmético.
+  rd.Result<T> _cancelledFailure<T extends Object>() =>
+      UploadCancellation.cancelledResult<T>();
 }
 
 /// Resolve o paralelismo máximo de uploads simultâneos a partir da

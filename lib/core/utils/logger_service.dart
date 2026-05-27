@@ -26,7 +26,6 @@ class LoggerService {
       ),
     );
 
-    // Inicializa file logger se diretório fornecido
     if (logsDirectory != null) {
       try {
         _fileLogger = FileLoggerService(logsDirectory: logsDirectory);
@@ -44,7 +43,6 @@ class LoggerService {
     }
   }
 
-  /// Retorna o FileLoggerService se disponível
   static FileLoggerService? get fileLogger => _fileLogger;
   static bool get isSilenced => _silenceDepth > 0;
 
@@ -68,44 +66,164 @@ class LoggerService {
   }
 
   static void debug(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (isSilenced) return;
-    _instance.d(message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(_messageWithContext(message), level: LogLevel.debug),
+    _log(
+      _LogSeverity.debug,
+      message,
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 
   static void info(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (isSilenced) return;
-    _instance.i(message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(_fileLogger?.log(_messageWithContext(message)));
+    _log(
+      _LogSeverity.info,
+      message,
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   static void warning(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (isSilenced) return;
-    _instance.w(message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(_messageWithContext(message), level: LogLevel.warning),
+    _log(
+      _LogSeverity.warning,
+      message,
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 
   static void error(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (isSilenced) return;
-    _instance.e(message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
+    _log(
+      _LogSeverity.error,
+      message,
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 
   static void fatal(String message, [dynamic error, StackTrace? stackTrace]) {
-    if (isSilenced) return;
-    _instance.f(message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(_messageWithContext(message), level: LogLevel.error),
+    _log(
+      _LogSeverity.fatal,
+      message,
+      error: error,
+      stackTrace: stackTrace,
     );
   }
 
-  static String _contextPrefix({
+  static void infoWithContext(
+    String message, {
+    String? requestId,
+    String? runId,
+    String? clientId,
+    String? scheduleId,
+    dynamic error,
+    StackTrace? stackTrace,
+  }) {
+    _log(
+      _LogSeverity.info,
+      message,
+      error: error,
+      stackTrace: stackTrace,
+      callContextPrefix: _buildCallContextPrefix(
+        requestId: requestId,
+        runId: runId,
+        clientId: clientId,
+        scheduleId: scheduleId,
+      ),
+    );
+  }
+
+  static void warningWithContext(
+    String message, {
+    String? requestId,
+    String? runId,
+    String? clientId,
+    String? scheduleId,
+    dynamic error,
+    StackTrace? stackTrace,
+  }) {
+    _log(
+      _LogSeverity.warning,
+      message,
+      error: error,
+      stackTrace: stackTrace,
+      callContextPrefix: _buildCallContextPrefix(
+        requestId: requestId,
+        runId: runId,
+        clientId: clientId,
+        scheduleId: scheduleId,
+      ),
+    );
+  }
+
+  static void errorWithContext(
+    String message, {
+    String? requestId,
+    String? runId,
+    String? clientId,
+    String? scheduleId,
+    dynamic error,
+    StackTrace? stackTrace,
+  }) {
+    _log(
+      _LogSeverity.error,
+      message,
+      error: error,
+      stackTrace: stackTrace,
+      callContextPrefix: _buildCallContextPrefix(
+        requestId: requestId,
+        runId: runId,
+        clientId: clientId,
+        scheduleId: scheduleId,
+      ),
+    );
+  }
+
+  // Dispatch único compartilhado por todas as variantes (`debug`/`info`/
+  // `warning`/`error`/`fatal` e suas versões `*WithContext`). Antes,
+  // cada método replicava o pattern "cheque silenced → instance → file
+  // logger" — 8 cópias com pequenas variações. Centralizar aqui torna
+  // adições futuras (correlation id global, telemetria, sampling)
+  // mudança em um único ponto.
+  static void _log(
+    _LogSeverity severity,
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    String callContextPrefix = '',
+  }) {
+    if (isSilenced) return;
+
+    final consoleMessage = callContextPrefix.isEmpty
+        ? message
+        : callContextPrefix + message;
+    switch (severity) {
+      case _LogSeverity.debug:
+        _instance.d(consoleMessage, error: error, stackTrace: stackTrace);
+      case _LogSeverity.info:
+        _instance.i(consoleMessage, error: error, stackTrace: stackTrace);
+      case _LogSeverity.warning:
+        _instance.w(consoleMessage, error: error, stackTrace: stackTrace);
+      case _LogSeverity.error:
+        _instance.e(consoleMessage, error: error, stackTrace: stackTrace);
+      case _LogSeverity.fatal:
+        _instance.f(consoleMessage, error: error, stackTrace: stackTrace);
+    }
+
+    final fileLogger = _fileLogger;
+    if (fileLogger == null) return;
+
+    // File logger sempre combina o prefixo per-call com o prefixo
+    // estruturado do LogContext (runId/scheduleId globais) para que
+    // logs persistidos sejam correlacionáveis sem depender do timing
+    // de cada chamada.
+    final fileMessage = callContextPrefix.isEmpty
+        ? _messageWithContext(message)
+        : callContextPrefix + _messageWithContext(message);
+    _enqueueFileLog(fileLogger.log(fileMessage, level: severity.fileLevel));
+  }
+
+  static String _buildCallContextPrefix({
     String? requestId,
     String? runId,
     String? clientId,
@@ -119,68 +237,16 @@ class LoggerService {
     if (parts.isEmpty) return '';
     return '${parts.map((p) => '[$p]').join()} ';
   }
+}
 
-  static void infoWithContext(
-    String message, {
-    String? requestId,
-    String? runId,
-    String? clientId,
-    String? scheduleId,
-    dynamic error,
-    StackTrace? stackTrace,
-  }) {
-    final prefix = _contextPrefix(
-      requestId: requestId?.toString(),
-      runId: runId,
-      clientId: clientId,
-      scheduleId: scheduleId,
-    );
-    if (isSilenced) return;
-    _instance.i(prefix + message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(_fileLogger?.log(prefix + message));
-  }
+enum _LogSeverity {
+  debug(fileLevel: LogLevel.debug),
+  info(fileLevel: LogLevel.info),
+  warning(fileLevel: LogLevel.warning),
+  error(fileLevel: LogLevel.error),
+  fatal(fileLevel: LogLevel.error);
 
-  static void warningWithContext(
-    String message, {
-    String? requestId,
-    String? runId,
-    String? clientId,
-    String? scheduleId,
-    dynamic error,
-    StackTrace? stackTrace,
-  }) {
-    final prefix = _contextPrefix(
-      requestId: requestId?.toString(),
-      runId: runId,
-      clientId: clientId,
-      scheduleId: scheduleId,
-    );
-    if (isSilenced) return;
-    _instance.w(prefix + message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(prefix + message, level: LogLevel.warning),
-    );
-  }
+  const _LogSeverity({required this.fileLevel});
 
-  static void errorWithContext(
-    String message, {
-    String? requestId,
-    String? runId,
-    String? clientId,
-    String? scheduleId,
-    dynamic error,
-    StackTrace? stackTrace,
-  }) {
-    final prefix = _contextPrefix(
-      requestId: requestId?.toString(),
-      runId: runId,
-      clientId: clientId,
-      scheduleId: scheduleId,
-    );
-    if (isSilenced) return;
-    _instance.e(prefix + message, error: error, stackTrace: stackTrace);
-    _enqueueFileLog(
-      _fileLogger?.log(prefix + message, level: LogLevel.error),
-    );
-  }
+  final LogLevel fileLevel;
 }

@@ -27,5 +27,6 @@ abstract final class ServiceModeExitCode {
 }
 
 abstract final class UiBootstrapExitCode {
+  static const int success = 0;
   static const int fatalBootstrapError = 1;
 }

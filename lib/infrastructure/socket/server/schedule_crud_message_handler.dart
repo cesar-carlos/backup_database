@@ -34,6 +34,19 @@ class ScheduleCrudMessageHandler {
   final IdempotencyRegistry _idempotencyRegistry;
   final bool _supportsFirebird;
 
+  // Map estático de operações CRUD. Antes era um `switch` exaustivo
+  // com 60+ enum cases que caíam todos no mesmo `throw _CrudFailure`,
+  // só para satisfazer o exhaustiveness checker. Como `handle` já
+  // filtra os tipos válidos antes de chegar aqui, este map cobre os
+  // 4 reais; tipos inesperados disparam o `throw` no `_dispatch`.
+  late final Map<MessageType, Future<Message> Function(int, Message)>
+  _operations = <MessageType, Future<Message> Function(int, Message)>{
+    MessageType.createSchedule: _doCreate,
+    MessageType.deleteSchedule: _doDelete,
+    MessageType.pauseSchedule: _doPause,
+    MessageType.resumeSchedule: _doResume,
+  };
+
   Future<void> handle(
     String clientId,
     Message message,
@@ -97,88 +110,17 @@ class ScheduleCrudMessageHandler {
     MessageType type,
     int requestId,
     Message message,
-  ) async {
-    switch (type) {
-      case MessageType.createSchedule:
-        return _doCreate(requestId, message);
-      case MessageType.deleteSchedule:
-        return _doDelete(requestId, message);
-      case MessageType.pauseSchedule:
-        return _doPause(requestId, message);
-      case MessageType.resumeSchedule:
-        return _doResume(requestId, message);
-      case MessageType.authRequest:
-      case MessageType.authResponse:
-      case MessageType.authChallenge:
-      case MessageType.listSchedules:
-      case MessageType.scheduleList:
-      case MessageType.updateSchedule:
-      case MessageType.executeSchedule:
-      case MessageType.scheduleUpdated:
-      case MessageType.cancelSchedule:
-      case MessageType.scheduleCancelled:
-      case MessageType.backupProgress:
-      case MessageType.backupStep:
-      case MessageType.backupComplete:
-      case MessageType.backupFailed:
-      case MessageType.listFiles:
-      case MessageType.fileList:
-      case MessageType.fileTransferStart:
-      case MessageType.fileChunk:
-      case MessageType.fileTransferProgress:
-      case MessageType.fileTransferComplete:
-      case MessageType.fileTransferError:
-      case MessageType.fileAck:
-      case MessageType.metricsRequest:
-      case MessageType.metricsResponse:
-      case MessageType.heartbeat:
-      case MessageType.disconnect:
-      case MessageType.error:
-      case MessageType.capabilitiesRequest:
-      case MessageType.capabilitiesResponse:
-      case MessageType.healthRequest:
-      case MessageType.healthResponse:
-      case MessageType.sessionRequest:
-      case MessageType.sessionResponse:
-      case MessageType.preflightRequest:
-      case MessageType.preflightResponse:
-      case MessageType.executionStatusRequest:
-      case MessageType.executionStatusResponse:
-      case MessageType.executionQueueRequest:
-      case MessageType.executionQueueResponse:
-      case MessageType.testDatabaseConnectionRequest:
-      case MessageType.testDatabaseConnectionResponse:
-      case MessageType.startBackupRequest:
-      case MessageType.startBackupResponse:
-      case MessageType.cancelBackupRequest:
-      case MessageType.cancelBackupResponse:
-      case MessageType.scheduleMutationResponse:
-      case MessageType.listDatabaseConfigsRequest:
-      case MessageType.listDatabaseConfigsResponse:
-      case MessageType.createDatabaseConfigRequest:
-      case MessageType.updateDatabaseConfigRequest:
-      case MessageType.deleteDatabaseConfigRequest:
-      case MessageType.databaseConfigMutationResponse:
-      case MessageType.backupQueued:
-      case MessageType.backupDequeued:
-      case MessageType.backupStarted:
-      case MessageType.cancelQueuedBackupRequest:
-      case MessageType.cancelQueuedBackupResponse:
-      case MessageType.getRunLogsRequest:
-      case MessageType.getRunLogsResponse:
-      case MessageType.getRunErrorDetailsRequest:
-      case MessageType.getRunErrorDetailsResponse:
-      case MessageType.getArtifactMetadataRequest:
-      case MessageType.getArtifactMetadataResponse:
-      case MessageType.cleanupStagingRequest:
-      case MessageType.cleanupStagingResponse:
-        // Filtrado em `handle` antes de chegar aqui — defesa em
-        // profundidade. Tipo nao deveria chegar a este switch.
-        throw const _CrudFailure(
-          'Tipo de mensagem nao suportado pelo CRUD',
-          ErrorCode.invalidRequest,
-        );
+  ) {
+    final operation = _operations[type];
+    if (operation == null) {
+      // Filtrado em `handle` antes de chegar aqui — defesa em
+      // profundidade. Tipo nao deveria chegar a este dispatch.
+      throw const _CrudFailure(
+        'Tipo de mensagem nao suportado pelo CRUD',
+        ErrorCode.invalidRequest,
+      );
     }
+    return operation(requestId, message);
   }
 
   Future<Message> _doCreate(int requestId, Message message) async {
@@ -216,7 +158,10 @@ class ScheduleCrudMessageHandler {
     );
   }
 
-  Future<Message> _doDelete(int requestId, Message message) async {
+  /// Extrai e valida `scheduleId` do payload de mutação. Lança
+  /// [_CrudFailure] com `invalidRequest` quando ausente/vazio — antes
+  /// duplicado in-line nos dois sites (`_doDelete` e `_toggleEnabled`).
+  String _requireMutationScheduleId(Message message) {
     final scheduleId = getScheduleIdFromMutationPayload(message);
     if (scheduleId.isEmpty) {
       throw const _CrudFailure(
@@ -224,6 +169,11 @@ class ScheduleCrudMessageHandler {
         ErrorCode.invalidRequest,
       );
     }
+    return scheduleId;
+  }
+
+  Future<Message> _doDelete(int requestId, Message message) async {
+    final scheduleId = _requireMutationScheduleId(message);
 
     // Verifica existencia antes de tentar deletar — assim conseguimos
     // distinguir 404 (nao existe) de 500 (erro real ao deletar).
@@ -267,13 +217,7 @@ class ScheduleCrudMessageHandler {
     required bool enabled,
     required String operation,
   }) async {
-    final scheduleId = getScheduleIdFromMutationPayload(message);
-    if (scheduleId.isEmpty) {
-      throw const _CrudFailure(
-        'scheduleId vazio',
-        ErrorCode.invalidRequest,
-      );
-    }
+    final scheduleId = _requireMutationScheduleId(message);
 
     final getResult = await _scheduleRepository.getById(scheduleId);
     final current = getResult.getOrNull();

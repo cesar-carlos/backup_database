@@ -10,6 +10,8 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:backup_database/infrastructure/socket/server/database_config_store.dart';
 import 'package:backup_database/infrastructure/socket/server/database_connection_prober.dart';
 import 'package:backup_database/infrastructure/socket/server/socket_error_sender.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_handler_policies.dart';
+import 'package:backup_database/infrastructure/socket/server/socket_payload_validators.dart';
 
 /// Handler que responde `testDatabaseConnectionRequest` (PR-2).
 ///
@@ -96,9 +98,11 @@ class DatabaseConfigMessageHandler {
       return;
     }
 
-    final hasId =
-        payload['databaseConfigId'] is String &&
-        (payload['databaseConfigId'] as String).isNotEmpty;
+    final databaseConfigId = SocketPayloadValidators.readStringField(
+      payload,
+      'databaseConfigId',
+    );
+    final hasId = databaseConfigId != null;
     final hasConfig = payload['config'] is Map;
     if (hasId == hasConfig) {
       // Ambos ou nenhum -> contrato violado
@@ -114,7 +118,7 @@ class DatabaseConfigMessageHandler {
     }
 
     final configRef = hasId
-        ? DatabaseConfigById(payload['databaseConfigId'] as String)
+        ? DatabaseConfigById(databaseConfigId)
         : DatabaseConfigAdhoc(
             Map<String, dynamic>.from(payload['config'] as Map),
           );
@@ -413,10 +417,8 @@ class DatabaseConfigMessageHandler {
     RemoteDatabaseType type,
     Map<String, dynamic> payload,
   ) async {
-    final id = payload['configId'] is String
-        ? payload['configId'] as String
-        : '';
-    if (id.isEmpty) {
+    final id = SocketPayloadValidators.readStringField(payload, 'configId');
+    if (id == null) {
       throw const _DbConfigFailure(
         'configId vazio',
         ErrorCode.invalidRequest,
@@ -442,18 +444,14 @@ class DatabaseConfigMessageHandler {
     int requestId,
     RemoteDatabaseType databaseType,
     Future<void> Function(String, Message) sendToClient,
-  ) async {
-    if (_supportsFirebird || databaseType != RemoteDatabaseType.firebird) {
-      return false;
-    }
-    await SocketErrorSender.sendProtocolError(
+  ) {
+    return SocketHandlerPolicies.rejectIfFirebirdUnsupported(
+      isFirebird: databaseType == RemoteDatabaseType.firebird,
+      supportsFirebird: _supportsFirebird,
       clientId: clientId,
       requestId: requestId,
-      errorMessage: ErrorCode.unsupportedDatabaseType.defaultMessage,
       sendToClient: sendToClient,
-      errorCode: ErrorCode.unsupportedDatabaseType,
     );
-    return true;
   }
 }
 

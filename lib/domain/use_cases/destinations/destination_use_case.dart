@@ -1,4 +1,4 @@
-import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/string_field_validator.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 /// Abstract base class for destination upload use cases.
@@ -22,13 +22,11 @@ abstract class DestinationUseCase<TConfig, TResult extends Object> {
   /// Verifica que `sourceFilePath` é não-vazio e delega a validação
   /// específica do config para `validateConfig`.
   rd.Result<void> validateParams(String sourceFilePath, TConfig config) {
-    if (sourceFilePath.isEmpty) {
-      return const rd.Failure(
-        ValidationFailure(
-          message: 'Caminho do arquivo de origem não pode ser vazio',
-        ),
-      );
-    }
+    final pathFailure = notEmptyOrFailure(
+      sourceFilePath,
+      'Caminho do arquivo de origem',
+    );
+    if (pathFailure.isError()) return pathFailure;
 
     return validateConfig(config);
   }
@@ -40,12 +38,17 @@ abstract class DestinationUseCase<TConfig, TResult extends Object> {
 
   /// Helper for "campo X não pode ser vazio" — retorna `Failure` se
   /// `value` for vazio/whitespace, ou `Success` caso contrário.
+  ///
+  /// Delega para [StringFieldValidator.requireNonBlank] (lib/core/utils)
+  /// e mantém a forma `Result<void>` aqui porque os subclasses de
+  /// `DestinationUseCase` já consomem `Result<void>` em
+  /// `validateConfig` — trocar a assinatura aqui forçaria refactor em
+  /// cada destination use case concreto.
   static rd.Result<void> notEmptyOrFailure(String value, String fieldLabel) {
-    if (value.trim().isEmpty) {
-      return rd.Failure(
-        ValidationFailure(message: '$fieldLabel não pode ser vazio'),
-      );
-    }
-    return const rd.Success(());
+    final failure = StringFieldValidator.requireNonBlank(
+      value: value,
+      fieldLabel: fieldLabel,
+    );
+    return failure != null ? rd.Failure(failure) : const rd.Success(());
   }
 }

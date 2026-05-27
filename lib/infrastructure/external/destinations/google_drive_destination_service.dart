@@ -3,16 +3,17 @@ import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
-import 'package:backup_database/core/errors/failure.dart'
-    hide GoogleDriveFailure;
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/google_drive_failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/file_stream_utils.dart';
 import 'package:backup_database/core/utils/http_error_helpers.dart';
+import 'package:backup_database/core/utils/integrity_failure_messages.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
+import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_google_drive_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
@@ -63,34 +64,31 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
     try {
       LoggerService.info('Enviando para Google Drive: ${config.folderName}');
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
+      final missingSource = await BackupArtifactUtils.missingSourceFileFailure(
+        sourceFilePath,
+      );
+      if (missingSource != null) return rd.Failure(missingSource);
       final sourceFile = File(sourceFilePath);
-      if (!await sourceFile.exists()) {
-        return rd.Failure(
-          FileSystemFailure(
-            message: 'Arquivo de origem não encontrado: $sourceFilePath',
-          ),
-        );
-      }
 
       final mainFolderId = await _getOrCreateFolder(
         config.folderName,
         config.folderId,
       );
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final dateFolderId = await _getOrCreateFolder(
         dateFolder,
         mainFolderId,
       );
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       final fileName = customFileName ?? p.basename(sourceFilePath);
       final fileSize = await sourceFile.length();
       final localMd5 = await FileHashUtils.computeMd5(sourceFile);
-      _throwIfCancelled(isCancelled);
+      UploadCancellation.throwIfCancelled(isCancelled);
 
       const largeFileThreshold = 5 * 1024 * 1024;
       final useResumableUpload = fileSize > largeFileThreshold;
@@ -103,7 +101,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
-        _throwIfCancelled(isCancelled);
+        UploadCancellation.throwIfCancelled(isCancelled);
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
@@ -129,7 +127,7 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               StreamTransformer<List<int>, List<int>>.fromHandlers(
                 handleData: (data, sink) {
                   if (isCancelled != null && isCancelled()) {
-                    sink.addError(_UploadCancelledException());
+                    sink.addError(const UploadCancelledException());
                     sink.close();
                     return;
                   }
@@ -218,15 +216,10 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
               duration: stopwatch.elapsed,
             ),
           );
-        } on _UploadCancelledException {
+        } on UploadCancelledException {
           stopwatch.stop();
           LoggerService.info('Upload Google Drive cancelado pelo usuário');
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Upload cancelado pelo usuário.',
-              code: FailureCodes.uploadCancelled,
-            ),
-          );
+          return UploadCancellation.cancelledResult();
         } on Object catch (e) {
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Tentativa $attempt falhou: $e');
@@ -250,15 +243,10 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
           originalError: lastError,
         ),
       );
-    } on _UploadCancelledException {
+    } on UploadCancelledException {
       stopwatch.stop();
       LoggerService.info('Upload Google Drive cancelado pelo usuário');
-      return const rd.Failure(
-        BackupFailure(
-          message: 'Upload cancelado pelo usuário.',
-          code: FailureCodes.uploadCancelled,
-        ),
-      );
+      return UploadCancellation.cancelledResult();
     } on Object catch (e, stackTrace) {
       stopwatch.stop();
       LoggerService.error('Erro no upload Google Drive', e, stackTrace);
@@ -274,12 +262,6 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
     }
   }
 
-  static void _throwIfCancelled(bool Function()? isCancelled) {
-    if (isCancelled != null && isCancelled()) {
-      throw _UploadCancelledException();
-    }
-  }
-
   /// Mapeia uma exceção do upload Google Drive para mensagem amigável.
   ///
   /// Estratégia em camadas (igual ao padrão FTP, ver
@@ -291,17 +273,11 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
   ///    (evita "11401" matchear como 401).
   @visibleForTesting
   static String getGoogleDriveErrorMessage(Object? e) {
-    if (e is Failure && e.code != null) {
-      if (e.code == FailureCodes.integrityValidationInconclusive) {
-        return 'Não foi possível confirmar a integridade no Google Drive.\n'
-            'Detalhes: ${e.message}';
-      }
-      if (e.code == FailureCodes.integrityValidationFailed) {
-        return 'Falha de integridade no Google Drive: arquivo remoto não '
-            'confere com o original.\n'
-            'Detalhes: ${e.message}';
-      }
-    }
+    final integrity = IntegrityFailureMessages.tryDescribe(
+      e,
+      serviceName: 'Google Drive',
+    );
+    if (integrity != null) return integrity;
     if (e is TimeoutException) {
       return 'Tempo limite excedido ao enviar para o Google Drive.\n'
           'Para arquivos grandes, o upload pode levar vários minutos.\n'
@@ -694,18 +670,13 @@ class GoogleDriveDestinationService implements IGoogleDriveDestinationService {
 
   /// Verifica se a exceção representa um erro `401 Unauthorized`. Prioriza
   /// o tipo nativo (`drive.DetailedApiRequestError.status`) antes de cair
-  /// na heurística por substring (com word‑boundary para evitar matchear
-  /// "11401" e similares).
+  /// na heurística por substring (delegada a
+  /// `HttpErrorHelpers.matchesUnauthorizedHeuristic`, compartilhada
+  /// com `DropboxDestinationService`).
   static bool _isUnauthorizedError(Object e) {
     if (e is drive.DetailedApiRequestError && e.status == 401) return true;
-    final errorStr = e.toString().toLowerCase();
-    if (HttpErrorHelpers.containsHttpStatus(errorStr, 401)) return true;
-    if (errorStr.contains('unauthorized')) return true;
-    if (errorStr.contains('invalid authentication credentials')) return true;
-    return false;
+    return HttpErrorHelpers.matchesUnauthorizedHeuristic(
+      e.toString().toLowerCase(),
+    );
   }
-}
-
-class _UploadCancelledException implements Exception {
-  _UploadCancelledException();
 }
