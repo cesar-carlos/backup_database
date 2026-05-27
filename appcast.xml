@@ -5,6 +5,61 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.3.0</title>
+      <pubDate>Wed, 27 May 2026 21:56:14 +0000</pubDate>
+      <description>## Highlights
+
+**PR-6 Estabilidade Remota** + consolidação de auditorias por SGBD (AUDIT-11/12/13/14).
+
+### Novidades — Execução Remota (PR-6)
+
+- **Audit log persistido em SQLite** (`MutableCommandAuditTable` + `MutableCommandAuditDao`) — substitui registro só em memória + log.
+- **`AuditRetentionScheduler`** — housekeeping cycle de retenção (TTL).
+- **`ExecutionQueueHousekeepingScheduler`** — TTL para itens `queued` indefinidamente.
+- **`BackupHistory.runId`** tracking refinado para reidratação por `getExecutionStatus`.
+- **`file_transfer_resume_metadata_store`** valida `runId` no resume (antes era só `scheduleId`).
+- **`execution_message_handler` + `schedule_message_handler`** — enforce de transições e robustez.
+- **Telemetria expandida** em `server_preflight_checks` + `socket_server_telemetry`.
+- Novo integration test: `test/integration/pr6_resilience_test.dart`.
+- Documentação: `docs/notes/execucao_remota_status_atual_2026-05-27.md` + `execucao_remota_backlog_2026-05-27.md`.
+
+### Auditorias SGBD-by-SGBD
+
+| Audit | Commit | Destaques |
+|---|---|---|
+| **AUDIT-11 SQL Server** | `ee1561d` | Timeouts do schedule (bug funcional), validação de options, `listBackupFiles` inutilizável removido |
+| **AUDIT-12 PostgreSQL** | `6706009` | Tool verification (provider valida `psql`/`pg_basebackup`/`pg_dump`/`pg_receivewal`), `BackupFlags` accurate, PG &lt;17 incremental com mensagem orientada |
+| **AUDIT-13 Sybase** | `079c050` | `stopOnError` enganoso, `ToolPathHelp` PT+EN, use case API ampliada + reject differential, **connection string injection hardening** |
+| **AUDIT-14 Firebird** | `c20e44d` | `BackupFlags.stopOnError = false` (paridade final dos 4 SGBDs) |
+
+### Paridade alcançada nos 4 SGBDs
+
+- Provider valida ferramentas no save
+- Dialog usa `getIt&lt;I*BackupService&gt;` no `initState`
+- Strategy factory passa `backupTimeout`/`verifyTimeout`/`verifyPolicy` completos
+- `ToolPathHelp.isToolNotFoundError` em PT+EN
+- `BackupFlags.stopOnError = false` quando N/A
+- Comentário `// Criptografado` enganoso corrigido
+- Senhas (e `cryptKey` em Firebird) em secure storage com migração transparente
+
+### Validações
+
+- **`flutter analyze --no-fatal-infos`**: 0 issues
+- **`dart format`**: limpo
+- **`flutter test test/unit/`**: **1816 testes passam** (2 skipped, 0 falhas)
+- **Build do instalador**: OK
+
+### Auto-update
+
+O workflow `update-appcast.yml` rodará automaticamente após esta release ser publicada, atualizando o `appcast.xml`.
+
+### Instalador
+
+- `BackupDatabase-Setup-3.3.0.exe` (38.4 MB)
+- `BackupDatabase-Setup-3.3.0.exe.sha256`: `e26118c9aa93926c913efe6f437066382774da255c01d4c45cbcb5c9acdb44df`</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.3.0/BackupDatabase-Setup-3.3.0.exe" sparkle:version="3.3.0" sparkle:os="windows" length="38411325" type="application/octet-stream" sha256="e26118c9aa93926c913efe6f437066382774da255c01d4c45cbcb5c9acdb44df" />
+    </item>
+    <item>
       <title>Version 3.2.1</title>
       <pubDate>Mon, 25 May 2026 13:26:26 +0000</pubDate>
       <description>Release 3.2.1 com endurecimento do contrato de instancia unica global por computador.\n\nDestaques:\n- Mutex global compartilhado entre UI, Windows Service e execucoes agendadas.\n- Delegacao IPC para execucoes --schedule-id duplicadas, com canRunSchedule no PONG v1.\n- Timeouts configuraveis para conexao IPC e execucao delegada.\n- Logs estruturados para auditoria de lock, duplicatas, delegacao e exit codes.\n- Ajustes de instalador/autostart/NSSM para evitar entradas concorrentes.\n\nArtefatos:\n- BackupDatabase-Setup-3.2.1.exe\n- BackupDatabase-Setup-3.2.1.exe.sha256</description>
