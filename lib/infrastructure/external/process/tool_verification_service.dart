@@ -379,6 +379,119 @@ class ToolVerificationService {
     );
   }
 
+  Future<rd.Result<bool>> verifyPgDump() async {
+    LoggerService.info('Verificando se pg_dump está disponível...');
+
+    final result = await _processService.run(
+      executable: 'pg_dump',
+      arguments: ['--version'],
+      timeout: const Duration(seconds: 5),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info('pg_dump encontrado e disponível');
+          return const rd.Success(true);
+        }
+        LoggerService.warning(
+          'pg_dump não encontrado (exit code: ${processResult.exitCode})',
+        );
+        return rd.Failure(_pgToolMissingFailure('pg_dump'));
+      },
+      (failure) {
+        final errorMessage = failure is Failure
+            ? failure.message
+            : failure.toString();
+        LoggerService.warning('Erro ao verificar pg_dump: $errorMessage');
+        return rd.Failure(_pgToolMissingFailure('pg_dump'));
+      },
+    );
+  }
+
+  Future<rd.Result<bool>> verifyPgReceivewal() async {
+    LoggerService.info('Verificando se pg_receivewal está disponível...');
+
+    final result = await _processService.run(
+      executable: 'pg_receivewal',
+      arguments: ['--version'],
+      timeout: const Duration(seconds: 5),
+    );
+
+    return result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info('pg_receivewal encontrado e disponível');
+          return const rd.Success(true);
+        }
+        LoggerService.warning(
+          'pg_receivewal não encontrado (exit code: ${processResult.exitCode})',
+        );
+        return rd.Failure(_pgToolMissingFailure('pg_receivewal'));
+      },
+      (failure) {
+        final errorMessage = failure is Failure
+            ? failure.message
+            : failure.toString();
+        LoggerService.warning('Erro ao verificar pg_receivewal: $errorMessage');
+        return rd.Failure(_pgToolMissingFailure('pg_receivewal'));
+      },
+    );
+  }
+
+  /// Valida a presença das 4 ferramentas obrigatórias para os fluxos de
+  /// backup PostgreSQL (`psql`, `pg_basebackup`, `pg_dump`, `pg_receivewal`).
+  ///
+  /// `pg_verifybackup` é opcional (só usado quando `verifyAfterBackup=true`)
+  /// e não está incluído aqui — falha apenas com warning no log.
+  ///
+  /// Retorna [rd.Success] quando todas as 4 obrigatórias estão presentes,
+  /// ou [rd.Failure] com a mensagem da primeira ferramenta ausente
+  /// (curto-circuita para evitar bombardear o usuário com 4 erros simultâneos).
+  Future<rd.Result<bool>> verifyPostgresTools() async {
+    LoggerService.info(
+      'Verificando ferramentas PostgreSQL (psql, pg_basebackup, pg_dump, pg_receivewal)...',
+    );
+
+    final required = <Future<rd.Result<bool>> Function()>[
+      verifyPsql,
+      verifyPgBasebackup,
+      verifyPgDump,
+      verifyPgReceivewal,
+    ];
+
+    for (final verify in required) {
+      final result = await verify();
+      if (result.isError()) {
+        return result;
+      }
+    }
+
+    final verifybackup = await verifyPgVerifybackup();
+    verifybackup.fold(
+      (_) {},
+      (_) => LoggerService.warning(
+        'pg_verifybackup não encontrado. Verificação pós-backup '
+        '(verifyAfterBackup=true) ficará indisponível para tipos '
+        'full/differential. Demais fluxos PostgreSQL continuam operacionais.',
+      ),
+    );
+
+    return const rd.Success(true);
+  }
+
+  ValidationFailure _pgToolMissingFailure(String toolName) {
+    return ValidationFailure(
+      message:
+          '$toolName não está disponível no PATH do sistema.\n\n'
+          'Para fazer backup de PostgreSQL, você precisa:\n'
+          '1. Instalar PostgreSQL (inclui $toolName)\n'
+          '2. Adicionar o caminho bin ao PATH do Windows\n'
+          '   (ex: C:\\Program Files\\PostgreSQL\\16\\bin)\n\n'
+          r'Consulte: docs\path_setup.md',
+    );
+  }
+
   Future<rd.Result<bool>> verifyPgVerifybackup() async {
     LoggerService.info('Verificando se pg_verifybackup está disponível...');
 

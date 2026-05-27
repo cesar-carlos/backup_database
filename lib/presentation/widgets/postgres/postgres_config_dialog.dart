@@ -320,70 +320,71 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
       );
     }
 
-    if (_isLoadingDatabases) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: ProgressRing(),
-        ),
-      );
-    }
-
-    return Column(
+    // Alinhado ao padrão do SqlServerConfigDialog: um único controle
+    // (dropdown) com spinner inline durante o load OU botão de refresh
+    // depois. Antes havia dropdown + textfield manual abaixo,
+    // simultaneamente — UX inconsistente e validação cruzada confusa.
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AppDropdown<String>(
-          label: appLocaleString(
-            context,
-            'Nome do banco de dados',
-            'Database name',
-          ),
-          value: _selectedDatabase,
-          placeholder: Text(
-            appLocaleString(
+        Expanded(
+          child: AppDropdown<String>(
+            label: appLocaleString(
               context,
-              'Selecione um banco de dados',
-              'Select a database',
+              'Banco de dados',
+              'Database',
+            ),
+            value: _selectedDatabase,
+            placeholder: Text(
+              _isLoadingDatabases
+                  ? appLocaleString(
+                      context,
+                      'Carregando bancos...',
+                      'Loading databases...',
+                    )
+                  : _databases.isEmpty
+                  ? appLocaleString(
+                      context,
+                      'Nenhum banco encontrado',
+                      'No database found',
+                    )
+                  : appLocaleString(
+                      context,
+                      'Selecione o banco',
+                      'Select database',
+                    ),
+            ),
+            items: _databases.map((String db) {
+              return ComboBoxItem<String>(value: db, child: Text(db));
+            }).toList(),
+            onChanged: _isLoadingDatabases || _databases.isEmpty
+                ? null
+                : (String? value) {
+                    setState(() {
+                      _selectedDatabase = value;
+                      _databaseController.text = value ?? '';
+                    });
+                  },
+          ),
+        ),
+        const SizedBox(width: 8),
+        if (_isLoadingDatabases)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: ProgressRing(strokeWidth: 2),
+            ),
+          )
+        else if (_databases.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: IconButton(
+              icon: const Icon(FluentIcons.refresh),
+              onPressed: _testConnection,
             ),
           ),
-          items: _databases.map((String db) {
-            return ComboBoxItem<String>(value: db, child: Text(db));
-          }).toList(),
-          onChanged: (String? value) {
-            setState(() {
-              _selectedDatabase = value;
-              if (value != null) {
-                _databaseController.text = value;
-              }
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        AppTextField(
-          controller: _databaseController,
-          label: appLocaleString(
-            context,
-            'Nome do banco de dados (manual)',
-            'Database name (manual)',
-          ),
-          hint: appLocaleString(
-            context,
-            'Digite o nome do banco de dados',
-            'Enter database name',
-          ),
-          validator: (String? value) {
-            if ((_selectedDatabase == null || _selectedDatabase!.isEmpty) &&
-                (value == null || value.trim().isEmpty)) {
-              return appLocaleString(
-                context,
-                'Selecione ou digite um nome de banco de dados',
-                'Select or type a database name',
-              );
-            }
-            return null;
-          },
-          prefixIcon: const Icon(FluentIcons.database),
-        ),
       ],
     );
   }

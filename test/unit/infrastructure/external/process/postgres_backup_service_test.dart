@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/domain/services/backup_execution_context.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
@@ -220,6 +221,251 @@ void main() {
         },
       );
     });
+
+    test(
+      'differential em PG <17 vira mensagem especifica (achado B.1)',
+      () async {
+        // PG <17 nao reconhece --incremental. Antes desta correcao, caia
+        // no genérico "Backup PostgreSQL falhou: pg_basebackup: error: ..."
+        // e o usuário ficava sem saber que precisava atualizar o servidor.
+        when(
+          () => processService.run(
+            executable: 'pg_basebackup',
+            arguments: any(named: 'arguments'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final arguments =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final isIncremental = arguments.any(
+            (a) => a.startsWith('--incremental='),
+          );
+          if (!isIncremental) {
+            // Cria base FULL com manifest para o fallback path NAO disparar.
+            final targetDirectory = _argumentValue(arguments, '-D')!;
+            await Directory(targetDirectory).create(recursive: true);
+            await File(
+              '$targetDirectory${Platform.pathSeparator}backup_manifest',
+            ).writeAsString('manifest');
+            return const rd.Success(
+              ProcessResult(
+                exitCode: 0,
+                stdout: 'ok',
+                stderr: '',
+                duration: Duration(milliseconds: 10),
+              ),
+            );
+          }
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr:
+                  "pg_basebackup: error: unrecognized option '--incremental'",
+              duration: Duration(milliseconds: 8),
+            ),
+          );
+        });
+
+        // Roda full antes para criar a base com manifest. `BackupType.full`
+        // é o default de `BackupExecutionContext`, então omitimos.
+        await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+          ),
+        );
+
+        final result = await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            backupType: BackupType.differential,
+          ),
+        );
+
+        result.fold(
+          (value) => fail('Esperava falha, recebeu sucesso: $value'),
+          (failure) {
+            expect(failure, isA<BackupFailure>());
+            final message = (failure as BackupFailure).message;
+            expect(message, contains('PostgreSQL 17'));
+            expect(message, contains('incremental'));
+          },
+        );
+      },
+    );
+
+    test(
+      'differential em PG17 sem summarize_wal vira mensagem especifica (achado B.1)',
+      () async {
+        when(
+          () => processService.run(
+            executable: 'pg_basebackup',
+            arguments: any(named: 'arguments'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final arguments =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final isIncremental = arguments.any(
+            (a) => a.startsWith('--incremental='),
+          );
+          if (!isIncremental) {
+            final targetDirectory = _argumentValue(arguments, '-D')!;
+            await Directory(targetDirectory).create(recursive: true);
+            await File(
+              '$targetDirectory${Platform.pathSeparator}backup_manifest',
+            ).writeAsString('manifest');
+            return const rd.Success(
+              ProcessResult(
+                exitCode: 0,
+                stdout: 'ok',
+                stderr: '',
+                duration: Duration(milliseconds: 10),
+              ),
+            );
+          }
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr:
+                  'pg_basebackup: error: incremental backups require WAL '
+                  'summarization to be enabled',
+              duration: Duration(milliseconds: 8),
+            ),
+          );
+        });
+
+        // Roda full antes para criar a base com manifest. `BackupType.full`
+        // é o default de `BackupExecutionContext`, então omitimos.
+        await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+          ),
+        );
+
+        final result = await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            backupType: BackupType.differential,
+          ),
+        );
+
+        result.fold(
+          (value) => fail('Esperava falha, recebeu sucesso: $value'),
+          (failure) {
+            expect(failure, isA<BackupFailure>());
+            final message = (failure as BackupFailure).message;
+            expect(message, contains('summarize_wal'));
+          },
+        );
+      },
+    );
+
+    test(
+      'BackupFlags reflete withChecksum=true para full e verifyPolicy do schedule (achado A.2)',
+      () async {
+        when(
+          () => processService.run(
+            executable: 'pg_basebackup',
+            arguments: any(named: 'arguments'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final arguments =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final targetDirectory = _argumentValue(arguments, '-D')!;
+          await Directory(targetDirectory).create(recursive: true);
+          await File(
+            '$targetDirectory${Platform.pathSeparator}backup_manifest',
+          ).writeAsString('manifest');
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 0,
+              stdout: 'ok',
+              stderr: '',
+              duration: Duration(milliseconds: 10),
+            ),
+          );
+        });
+
+        // `BackupType.full` é o default; omitido para evitar
+        // `avoid_redundant_argument_values`. `verifyPolicy` é explicito
+        // porque o default (`bestEffort`) não comprova a asserção.
+        final result = await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            verifyPolicy: VerifyPolicy.strict,
+          ),
+        );
+
+        final exec = result.getOrNull();
+        expect(exec, isNotNull);
+        // full sempre roda --manifest-checksums=sha256 → withChecksum=true.
+        expect(exec!.metrics?.flags.withChecksum, isTrue);
+        // verifyAfterBackup=false → verifyPolicy do flag fica 'none',
+        // independente do valor do schedule (que só importa se a verify
+        // chegou a rodar).
+        expect(exec.metrics?.flags.verifyPolicy, 'none');
+        expect(exec.metrics?.flags.compression, isFalse);
+        // PG não tem stop_on_error: reportado como false (N/A).
+        expect(exec.metrics?.flags.stopOnError, isFalse);
+      },
+    );
+
+    test(
+      'BackupFlags reflete withChecksum=false para fullSingle (pg_dump, achado A.2)',
+      () async {
+        when(
+          () => processService.run(
+            executable: 'pg_dump',
+            arguments: any(named: 'arguments'),
+            environment: any(named: 'environment'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((invocation) async {
+          final arguments =
+              invocation.namedArguments[#arguments]! as List<String>;
+          final targetFile = _argumentValue(arguments, '-f')!;
+          await File(targetFile).writeAsString('pgdump-bytes');
+          return const rd.Success(
+            ProcessResult(
+              exitCode: 0,
+              stdout: 'ok',
+              stderr: '',
+              duration: Duration(milliseconds: 10),
+            ),
+          );
+        });
+
+        final result = await service.executeBackup(
+          config: config,
+          context: BackupExecutionContext(
+            outputDirectory: tempDir.path,
+            scheduleId: 'test-schedule',
+            backupType: BackupType.fullSingle,
+          ),
+        );
+
+        final exec = result.getOrNull();
+        expect(exec, isNotNull);
+        // pg_dump custom format NÃO emite manifest com checksum → false.
+        expect(exec!.metrics?.flags.withChecksum, isFalse);
+      },
+    );
 
     test(
       'log reporta erro de pg_receivewal ausente com mensagem especifica',

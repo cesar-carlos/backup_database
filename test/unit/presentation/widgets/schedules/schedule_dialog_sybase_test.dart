@@ -92,6 +92,9 @@ void main() {
     when(() => mockToolVerification.verifyFirebirdCliTools()).thenAnswer(
       (_) async => const rd.Success(true),
     );
+    when(() => mockToolVerification.verifyPostgresTools()).thenAnswer(
+      (_) async => const rd.Success(true),
+    );
     when(() => mockLicenseValidation.getCurrentLicense()).thenAnswer(
       (_) async => license != null
           ? rd.Success(license)
@@ -114,6 +117,7 @@ void main() {
     final postgresProvider = PostgresConfigProvider(
       mockPostgresRepo,
       mockScheduleRepo,
+      mockToolVerification,
     );
     final firebirdProvider = FirebirdConfigProvider(
       mockFirebirdRepo,

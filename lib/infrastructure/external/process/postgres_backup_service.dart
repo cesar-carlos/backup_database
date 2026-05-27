@@ -70,13 +70,15 @@ class PostgresBackupService implements IPostgresBackupService {
     }
 
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
-    final typeSlug = backupType == BackupType.log
-        ? 'log'
-        : backupType == BackupType.differential
-        ? 'incremental'
-        : backupType == BackupType.fullSingle
-        ? 'fullSingle'
-        : 'full';
+    final typeSlug = switch (backupType) {
+      BackupType.log => 'log',
+      BackupType.differential => 'incremental',
+      BackupType.fullSingle => 'fullSingle',
+      BackupType.full ||
+      BackupType.convertedDifferential ||
+      BackupType.convertedFullSingle ||
+      BackupType.convertedLog => 'full',
+    };
 
     final String backupPath;
     if (backupType == BackupType.fullSingle) {
@@ -158,6 +160,8 @@ class PostgresBackupService implements IPostgresBackupService {
                 totalSize: 0,
                 backupType: effectiveBackupType,
                 verifyAfterBackup: false,
+                verifyPolicy: verifyPolicy,
+                compressionApplied: commandResult.compressionApplied,
               );
               return rd.Success(
                 BackupExecutionResult(
@@ -248,6 +252,8 @@ class PostgresBackupService implements IPostgresBackupService {
             totalSize: totalSize,
             backupType: effectiveBackupType,
             verifyAfterBackup: verifyAfterBackup,
+            verifyPolicy: verifyPolicy,
+            compressionApplied: commandResult.compressionApplied,
           );
 
           return rd.Success(
@@ -567,7 +573,7 @@ class PostgresBackupService implements IPostgresBackupService {
     // fallback histórico para deploys onde não há schedule configurado.
     final effectiveTimeout = _resolveLogBackupTimeout(fallback: timeout);
 
-    final processResult = await _runPgReceiveWalWithCompressionFallback(
+    final outcomeResult = await _runPgReceiveWalWithCompressionFallback(
       executable: executable,
       baseArguments: baseArguments,
       compressionMode: compressionMode,
@@ -576,16 +582,18 @@ class PostgresBackupService implements IPostgresBackupService {
       cancelTag: cancelTag,
     );
 
-    if (processResult.isError()) {
-      return rd.Failure(processResult.exceptionOrNull()!);
+    if (outcomeResult.isError()) {
+      return rd.Failure(outcomeResult.exceptionOrNull()!);
     }
 
-    final result = processResult.getOrNull()!;
+    final outcome = outcomeResult.getOrNull()!;
+    final result = outcome.processResult;
     if (!result.isSuccess) {
       return rd.Success(
         _BackupCommandResult(
           processResult: result,
           backupPath: backupPath,
+          compressionApplied: outcome.compressionApplied,
         ),
       );
     }
@@ -614,6 +622,7 @@ class PostgresBackupService implements IPostgresBackupService {
         processResult: result,
         backupPath: backupPath,
         measuredSizeBytes: walDelta.capturedBytes,
+        compressionApplied: outcome.compressionApplied,
       ),
     );
   }
@@ -924,7 +933,8 @@ class PostgresBackupService implements IPostgresBackupService {
     return Duration(seconds: parsedSeconds);
   }
 
-  Future<rd.Result<ps.ProcessResult>> _runPgReceiveWalWithCompressionFallback({
+  Future<rd.Result<_PgReceiveWalOutcome>>
+  _runPgReceiveWalWithCompressionFallback({
     required String executable,
     required List<String> baseArguments,
     required String? compressionMode,
@@ -945,30 +955,49 @@ class PostgresBackupService implements IPostgresBackupService {
       tag: cancelTag,
     );
 
-    if (compressionMode == null || firstAttempt.isError()) {
-      return firstAttempt;
+    if (firstAttempt.isError()) {
+      return rd.Failure(firstAttempt.exceptionOrNull()!);
     }
 
     final firstResult = firstAttempt.getOrNull()!;
-    if (firstResult.isSuccess) {
-      return firstAttempt;
+    if (compressionMode == null || firstResult.isSuccess) {
+      return rd.Success(
+        _PgReceiveWalOutcome(
+          processResult: firstResult,
+          compressionApplied: firstResult.isSuccess ? compressionMode : null,
+        ),
+      );
     }
 
     final combinedOutput = '${firstResult.stdout}\n${firstResult.stderr}'
         .toLowerCase();
     if (!_isUnsupportedCompressionError(combinedOutput)) {
-      return firstAttempt;
+      return rd.Success(
+        _PgReceiveWalOutcome(
+          processResult: firstResult,
+          compressionApplied: null,
+        ),
+      );
     }
 
     LoggerService.warning(
       'pg_receivewal nao suporta --compress=$compressionMode. Reexecutando sem compressao.',
     );
-    return _processService.run(
+    final fallback = await _processService.run(
       executable: executable,
       arguments: baseArguments,
       environment: environment,
       timeout: timeout,
       tag: cancelTag,
+    );
+    if (fallback.isError()) {
+      return rd.Failure(fallback.exceptionOrNull()!);
+    }
+    return rd.Success(
+      _PgReceiveWalOutcome(
+        processResult: fallback.getOrNull()!,
+        compressionApplied: null,
+      ),
     );
   }
 
@@ -1290,8 +1319,16 @@ class PostgresBackupService implements IPostgresBackupService {
             .split('\n')
             .where((line) => line.trim().isNotEmpty && !line.startsWith(';'))
             .length;
-        LoggerService.info(
-          'Verificação de integridade concluída. Objetos no backup: $objectCount',
+        // `pg_restore -l` lê apenas o TOC (Table of Contents) do archive
+        // em custom format. Não valida CRC de dados nem reexecuta o
+        // backup, então corrupção interna em blocos de dados passa por
+        // aqui despercebida. A garantia entregue é apenas que o
+        // cabeçalho/TOC do .backup é legível pelo pg_restore.
+        LoggerService.warning(
+          'Verificação leve do backup (pg_restore -l) concluída: header/TOC '
+          'válido com $objectCount objetos. Esta validação NÃO confere CRC '
+          'do payload. Para garantia completa, execute um restore real em '
+          'ambiente de teste.',
         );
         return const rd.Success(unit);
       } else {
@@ -1316,6 +1353,38 @@ class PostgresBackupService implements IPostgresBackupService {
       return rd.Failure(_createExecutableNotFoundFailure(backupType));
     }
 
+    if (backupType == BackupType.differential) {
+      // `pg_basebackup --incremental=` foi introduzido no PostgreSQL 17.
+      // Em PG ≤ 16, o cliente devolve "unrecognized option" com o nome do
+      // flag. Mensagem específica orienta o usuário direto à causa em
+      // vez do genérico "Backup PostgreSQL falhou: ...".
+      if (_hasUnrecognizedIncrementalOption(outputLower)) {
+        return rd.Failure(
+          BackupFailure(
+            message:
+                'Backup incremental requer PostgreSQL 17+. O servidor atual '
+                'não suporta `pg_basebackup --incremental`. Atualize o '
+                'servidor PostgreSQL ou use backup `full` / `fullSingle`.',
+            originalError: Exception(stderr.isNotEmpty ? stderr : stdout),
+          ),
+        );
+      }
+
+      // Em PG 17 com `summarize_wal = off` (default em alguns deploys), o
+      // servidor recusa o incremental mencionando explicitamente o GUC.
+      if (_hasSummarizeWalDisabledError(outputLower)) {
+        return rd.Failure(
+          BackupFailure(
+            message:
+                'Backup incremental requer `summarize_wal = on` no '
+                'postgresql.conf do servidor. Habilite o parâmetro e '
+                'reinicie o serviço PostgreSQL antes de tentar novamente.',
+            originalError: Exception(stderr.isNotEmpty ? stderr : stdout),
+          ),
+        );
+      }
+    }
+
     if (backupType == BackupType.log &&
         outputLower.contains('replication') &&
         (outputLower.contains('permission denied') ||
@@ -1338,6 +1407,20 @@ class PostgresBackupService implements IPostgresBackupService {
         originalError: Exception(errorMessage),
       ),
     );
+  }
+
+  bool _hasUnrecognizedIncrementalOption(String outputLower) {
+    final hasUnrecognized =
+        outputLower.contains('unrecognized option') ||
+        outputLower.contains('unknown option') ||
+        outputLower.contains('invalid option');
+    return hasUnrecognized && outputLower.contains('--incremental');
+  }
+
+  bool _hasSummarizeWalDisabledError(String outputLower) {
+    return outputLower.contains('summarize_wal') ||
+        outputLower.contains('wal summarization') ||
+        outputLower.contains('pg_walsummarizer');
   }
 
   bool _isExecutableNotFoundError(String errorLower, BackupType backupType) {
@@ -1584,8 +1667,19 @@ class PostgresBackupService implements IPostgresBackupService {
     required int totalSize,
     required BackupType backupType,
     required bool verifyAfterBackup,
+    required VerifyPolicy verifyPolicy,
+    String? compressionApplied,
   }) {
     final totalDuration = backupDuration + verifyDuration;
+    // `pg_basebackup` em modo full/differential gera sempre
+    // `--manifest-checksums=sha256`; demais tipos (fullSingle via
+    // pg_dump custom format, log via pg_receivewal) não emitem manifest
+    // com checksum por padrão.
+    final withChecksum =
+        backupType == BackupType.full || backupType == BackupType.differential;
+    // PostgreSQL não tem o conceito SQL Server-like de `STOP_ON_ERROR` no
+    // pg_basebackup/pg_dump. Reportamos `false` para sinalizar "N/A" em
+    // vez de copiar o default herdado por engano.
     return BackupMetrics(
       totalDuration: totalDuration,
       backupDuration: backupDuration,
@@ -1597,11 +1691,11 @@ class PostgresBackupService implements IPostgresBackupService {
       ),
       backupType: backupType.name,
       flags: BackupFlags(
-        compression: false,
-        verifyPolicy: verifyAfterBackup ? 'verify' : 'none',
+        compression: compressionApplied != null,
+        verifyPolicy: verifyAfterBackup ? verifyPolicy.name : 'none',
         stripingCount: 1,
-        withChecksum: false,
-        stopOnError: true,
+        withChecksum: withChecksum,
+        stopOnError: false,
       ),
     );
   }
@@ -1613,6 +1707,7 @@ class _BackupCommandResult {
     required this.backupPath,
     this.measuredSizeBytes,
     this.executedBackupType,
+    this.compressionApplied,
   });
 
   final ps.ProcessResult processResult;
@@ -1624,6 +1719,23 @@ class _BackupCommandResult {
   /// backup base). O orchestrator usa esse campo para evitar gravar um
   /// histórico inconsistente.
   final BackupType? executedBackupType;
+
+  /// Modo de compressão efetivamente aplicado pelo `pg_receivewal` (ex.:
+  /// `gzip`, `lz4`). `null` quando nenhum modo foi requisitado ou quando
+  /// houve fallback automático para execução sem compressão. Usado por
+  /// `_buildPostgresMetrics` para reportar `BackupFlags.compression`
+  /// coerente com o T-SQL/CLI realmente executado.
+  final String? compressionApplied;
+}
+
+class _PgReceiveWalOutcome {
+  const _PgReceiveWalOutcome({
+    required this.processResult,
+    required this.compressionApplied,
+  });
+
+  final ps.ProcessResult processResult;
+  final String? compressionApplied;
 }
 
 class _WalCaptureDelta {

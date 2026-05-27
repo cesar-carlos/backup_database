@@ -87,6 +87,7 @@ void registerBackupDatabaseDefaultSgbds(GetIt getIt) {
     providerBuilder: () => PostgresConfigProvider(
       getIt<IPostgresConfigRepository>(),
       getIt<IScheduleRepository>(),
+      getIt<ToolVerificationService>(),
     ),
   );
 
