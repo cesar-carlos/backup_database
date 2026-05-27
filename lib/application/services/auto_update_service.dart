@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -54,6 +55,8 @@ class AppcastRelease {
     required this.publishedAt,
     required this.title,
     required this.description,
+    this.minSupportedAppVersion,
+    this.rolloutPercentage,
   });
 
   final Version version;
@@ -63,6 +66,16 @@ class AppcastRelease {
   final DateTime publishedAt;
   final String title;
   final String description;
+
+  /// Quando presente, clientes com versao corrente menor que esta NAO
+  /// devem aplicar esta release (vem de `sparkle:minSupportedAppVersion`
+  /// na policy do appcast).
+  final Version? minSupportedAppVersion;
+
+  /// 0..100. Quando presente, apenas `hash(machineId) % 100 < value`
+  /// clientes participam. Usado para staged rollout (vem de
+  /// `sparkle:rolloutPercentage`).
+  final int? rolloutPercentage;
 
   String get targetVersion => version.toString();
 
@@ -185,15 +198,38 @@ class AppUpdateSnapshot {
 
 typedef PackageInfoLoader = Future<PackageInfo> Function();
 typedef FeedUrlReader = String? Function();
+typedef CheckIntervalReader = String? Function();
 typedef DirectoryResolver = Future<Directory> Function();
 typedef ExitProcess = void Function(int code);
+
+/// Resultado de `Process.start(...detached)`: pid do filho ou `null` se o
+/// caller nao conseguir capturar (mantemos compat retro com starters antigos
+/// que retornavam `Future<void>`).
+@immutable
+class DetachedProcessHandle {
+  const DetachedProcessHandle({required this.pid});
+
+  final int pid;
+}
+
 typedef DetachedProcessStarter =
-    Future<void> Function(String executable, List<String> arguments);
+    Future<DetachedProcessHandle?> Function(
+      String executable,
+      List<String> arguments,
+    );
 typedef BeforeInstallHook = Future<void> Function();
 typedef InstallReadinessCheck =
     Future<String?> Function(AppcastRelease release);
 typedef UpdateInstallContextProvider =
     Future<AppUpdateInstallContext> Function(AppcastRelease release);
+typedef FreeDiskSpaceProbe = Future<int?> Function(Directory directory);
+typedef ProcessAliveCheck = bool Function(int pid);
+
+/// Devolve um identificador estavel da maquina usado APENAS para
+/// distribuicao deterministica em staged rollout. Nao precisa ser
+/// criptografico nem persistente entre reinstalacoes; basta nao trocar
+/// com frequencia (ex.: MachineGuid do Windows).
+typedef MachineIdResolver = Future<String?> Function();
 
 enum AppUpdateLaunchOrigin { ui, service }
 
@@ -312,25 +348,56 @@ class AutoUpdateService {
     Dio? dio,
     PackageInfoLoader? packageInfoLoader,
     FeedUrlReader? feedUrlReader,
+    CheckIntervalReader? checkIntervalReader,
     DirectoryResolver? locksDirectoryResolver,
     DirectoryResolver? updatesDirectoryResolver,
     DetachedProcessStarter? detachedProcessStarter,
     ExitProcess? exitProcess,
+    FreeDiskSpaceProbe? freeDiskSpaceProbe,
+    ProcessAliveCheck? processAliveCheck,
+    MachineIdResolver? machineIdResolver,
   }) : _dio = dio ?? Dio(),
        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
        _feedUrlReader =
            feedUrlReader ?? (() => dotenv.env['AUTO_UPDATE_FEED_URL']),
+       _checkIntervalReader =
+           checkIntervalReader ?? (() => dotenv.env[checkIntervalEnvVar]),
        _locksDirectoryResolver =
            locksDirectoryResolver ?? resolveMachineLocksDirectory,
        _updatesDirectoryResolver =
            updatesDirectoryResolver ?? resolveMachineUpdateDownloadsDirectory,
        _detachedProcessStarter =
            detachedProcessStarter ?? _defaultDetachedProcessStarter,
-       _exitProcess = exitProcess ?? exit {
+       _exitProcess = exitProcess ?? exit,
+       _freeDiskSpaceProbe = freeDiskSpaceProbe ?? _defaultFreeDiskSpaceProbe,
+       _processAliveCheck = processAliveCheck ?? _defaultProcessAliveCheck,
+       _machineIdResolver = machineIdResolver ?? _defaultMachineIdResolver {
     _applyDefaultNetworkTimeouts(_dio);
   }
 
   static const int defaultCheckIntervalSeconds = 3600;
+
+  /// Nome da variavel de ambiente (lida via dotenv) para sobrescrever o
+  /// intervalo periodico. Valor `0` desativa o timer periodico (so on-demand).
+  /// Outros valores positivos sao tratados como segundos (>=60).
+  static const String checkIntervalEnvVar =
+      'AUTO_UPDATE_CHECK_INTERVAL_SECONDS';
+
+  /// Espaco minimo (bytes) requerido em `staging/updates` antes de iniciar
+  /// um download. Usamos 2x o tamanho declarado pelo appcast para acomodar
+  /// o instalador alvo + um instalador anterior preservado por
+  /// `_cleanupStagedInstallers`. Em `staged/updates` raramente cresce.
+  static const int _minFreeSpaceFactor = 2;
+
+  /// Janela curta para confirmar que o instalador silencioso realmente
+  /// iniciou (processo vivo + setup.iss removeu o `update_context.json`).
+  /// Acima disso, ainda assumimos sucesso para nao bloquear o handoff em
+  /// VMs muito lentas, mas registramos a duracao em telemetria.
+  static const Duration _installerSpawnGracePeriod = Duration(seconds: 5);
+
+  /// Espera curta antes do `exit()` para o S.O. registrar o spawn detached.
+  static const Duration _exitGracePeriod = Duration(milliseconds: 250);
+
   static const String _sparkleNamespace =
       'http://www.andymatuschak.org/xml-namespaces/sparkle';
   static const List<String> _installerArguments = <String>[
@@ -343,6 +410,13 @@ class AutoUpdateService {
   static const int updateContextSchemaVersion = 2;
   @visibleForTesting
   static const Duration updateContextTtl = Duration(minutes: 45);
+
+  /// Versao do schema usada nas linhas de `auto_update_history.jsonl`.
+  /// Linhas sem `schemaVersion` (legado) sao mantidas; linhas com
+  /// `schemaVersion` desconhecida sao descartadas durante a rotacao.
+  @visibleForTesting
+  static const int diagnosticsSchemaVersion = 1;
+
   static const Duration _defaultNetworkTimeout = Duration(seconds: 30);
   static const int _maxNetworkAttempts = 3;
   static const Duration _initialRetryDelay = Duration(milliseconds: 500);
@@ -357,10 +431,14 @@ class AutoUpdateService {
   final Dio _dio;
   final PackageInfoLoader _packageInfoLoader;
   final FeedUrlReader _feedUrlReader;
+  final CheckIntervalReader _checkIntervalReader;
   final DirectoryResolver _locksDirectoryResolver;
   final DirectoryResolver _updatesDirectoryResolver;
   final DetachedProcessStarter _detachedProcessStarter;
   final ExitProcess _exitProcess;
+  final FreeDiskSpaceProbe _freeDiskSpaceProbe;
+  final ProcessAliveCheck _processAliveCheck;
+  final MachineIdResolver _machineIdResolver;
 
   final StreamController<AppUpdateSnapshot> _snapshotController =
       StreamController<AppUpdateSnapshot>.broadcast();
@@ -501,15 +579,55 @@ class AutoUpdateService {
       return;
     }
 
+    final overridden = _resolveOverriddenInterval(interval);
+    if (overridden == null) {
+      _periodicTimer?.cancel();
+      _periodicTimer = null;
+      LoggerService.info(
+        'AutoUpdateService: verificacoes periodicas DESATIVADAS '
+        '(via $checkIntervalEnvVar=0). Apenas execucoes manuais ou de startup.',
+      );
+      return;
+    }
+
     _periodicTimer?.cancel();
-    _periodicTimer = Timer.periodic(interval, (_) {
+    _periodicTimer = Timer.periodic(overridden, (_) {
       unawaited(checkNow(source: AppUpdateSource.periodic));
     });
 
     LoggerService.info(
       'AutoUpdateService: verificacoes periodicas configuradas em '
-      '${interval.inSeconds}s',
+      '${overridden.inSeconds}s',
     );
+  }
+
+  /// Calcula o intervalo efetivo aplicando `AUTO_UPDATE_CHECK_INTERVAL_SECONDS`.
+  /// Retorna `null` quando o operador pediu para desativar o timer (valor `0`).
+  /// Valores invalidos ou menores que 60 caem no `defaultInterval`.
+  Duration? _resolveOverriddenInterval(Duration defaultInterval) {
+    final raw = _checkIntervalReader()?.trim();
+    if (raw == null || raw.isEmpty) {
+      return defaultInterval;
+    }
+    final parsed = int.tryParse(raw);
+    if (parsed == null) {
+      LoggerService.warning(
+        'AutoUpdateService: $checkIntervalEnvVar="$raw" nao e numero; '
+        'mantendo padrao (${defaultInterval.inSeconds}s).',
+      );
+      return defaultInterval;
+    }
+    if (parsed == 0) {
+      return null;
+    }
+    if (parsed < 60) {
+      LoggerService.warning(
+        'AutoUpdateService: $checkIntervalEnvVar=$parsed < 60s nao e '
+        'permitido (evita pressao no feed); aplicando 60s.',
+      );
+      return const Duration(seconds: 60);
+    }
+    return Duration(seconds: parsed);
   }
 
   Future<void> checkNow({required AppUpdateSource source}) async {
@@ -598,6 +716,28 @@ class AutoUpdateService {
           _tryParsePubDate(item.getElement('pubDate')?.innerText) ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
 
+      final minSupportedRaw =
+          enclosure.getAttribute(
+            'minSupportedAppVersion',
+            namespace: _sparkleNamespace,
+          ) ??
+          enclosure.getAttribute('sparkle:minSupportedAppVersion');
+      final minSupported = _tryParseVersion(minSupportedRaw);
+
+      final rolloutRaw =
+          enclosure.getAttribute(
+            'rolloutPercentage',
+            namespace: _sparkleNamespace,
+          ) ??
+          enclosure.getAttribute('sparkle:rolloutPercentage');
+      int? rolloutPercentage;
+      if (rolloutRaw != null) {
+        final parsed = int.tryParse(rolloutRaw);
+        if (parsed != null) {
+          rolloutPercentage = parsed.clamp(0, 100);
+        }
+      }
+
       final release = AppcastRelease(
         version: version,
         downloadUrl: url,
@@ -606,6 +746,8 @@ class AutoUpdateService {
         publishedAt: publishedAt,
         title: title,
         description: description,
+        minSupportedAppVersion: minSupported,
+        rolloutPercentage: rolloutPercentage,
       );
 
       final key = version.toString();
@@ -631,20 +773,58 @@ class AutoUpdateService {
   static AppUpdateDecision evaluateRelease({
     required List<AppcastRelease> releases,
     required Version currentVersion,
+    String? machineId,
   }) {
     for (final release in releases) {
-      if (release.version > currentVersion) {
-        return AppUpdateDecision(
-          currentVersion: currentVersion,
-          latestRelease: release,
-        );
+      if (release.version <= currentVersion) {
+        continue;
       }
+      if (release.minSupportedAppVersion != null &&
+          currentVersion < release.minSupportedAppVersion!) {
+        continue;
+      }
+      if (!_passesRollout(release, machineId)) {
+        continue;
+      }
+      return AppUpdateDecision(
+        currentVersion: currentVersion,
+        latestRelease: release,
+      );
     }
 
     return AppUpdateDecision(
       currentVersion: currentVersion,
       latestRelease: null,
     );
+  }
+
+  /// Implementa staged rollout: se `rolloutPercentage` esta presente,
+  /// considera o cliente "elegivel" apenas quando `hash(machineId) % 100`
+  /// for menor que a porcentagem. Sem `machineId` confiavel, deixa todos
+  /// passarem para nao bloquear updates por falta de dado.
+  static bool _passesRollout(AppcastRelease release, String? machineId) {
+    final pct = release.rolloutPercentage;
+    if (pct == null || pct >= 100) {
+      return true;
+    }
+    if (pct <= 0) {
+      return false;
+    }
+    final id = machineId?.trim();
+    if (id == null || id.isEmpty) {
+      return true;
+    }
+    final key = '${release.targetVersion}:$id';
+    // FNV-1a (32-bit) — determinístico e suficiente para distribuicao
+    // uniforme. Sem dependencia externa.
+    const fnvOffset = 0x811C9DC5;
+    const fnvPrime = 0x01000193;
+    var hash = fnvOffset;
+    for (final unit in utf8.encode(key)) {
+      hash ^= unit;
+      hash = (hash * fnvPrime) & 0xFFFFFFFF;
+    }
+    return (hash % 100) < pct;
   }
 
   @visibleForTesting
@@ -685,6 +865,8 @@ class AutoUpdateService {
     final currentVersion = await _resolveCurrentVersion();
     String? targetVersion;
     var lockReleased = false;
+    int? installerBytes;
+    AppUpdateInstallContext? installContext;
 
     final lockHandle = await _tryAcquireLock(
       source: source,
@@ -750,9 +932,11 @@ class AutoUpdateService {
       await lockHandle.updateMetadata({
         'stage': _stageToken(currentStage),
       });
+      final machineId = await _safeResolveMachineId();
       final decision = evaluateRelease(
         releases: releases,
         currentVersion: currentVersion,
+        machineId: machineId,
       );
 
       if (!decision.isUpdateAvailable) {
@@ -835,6 +1019,7 @@ class AutoUpdateService {
       final installer = await _downloadInstaller(release);
       downloadStopwatch.stop();
       downloadDuration = downloadStopwatch.elapsed;
+      installerBytes = await installer.length();
       _logTelemetry(
         'download do instalador concluido',
         source: source,
@@ -842,6 +1027,8 @@ class AutoUpdateService {
         stage: currentStage,
         targetVersion: release.targetVersion,
         totalDuration: downloadDuration,
+        installerBytes: installerBytes,
+        downloadDuration: downloadDuration,
       );
 
       currentStage = AppUpdateStage.validatingInstaller;
@@ -879,7 +1066,7 @@ class AutoUpdateService {
         await beforeInstallHook!.call();
       }
 
-      await _persistInstallContext(
+      installContext = await _persistInstallContext(
         release: release,
         currentVersion: currentVersion.toString(),
       );
@@ -888,7 +1075,22 @@ class AutoUpdateService {
       await lockHandle.updateMetadata({
         'stage': _stageToken(currentStage),
       });
-      await _launchInstaller(installer);
+
+      final spawnHandle = await _launchInstaller(installer);
+      final spawnAlive = await _waitForInstallerSpawn(spawnHandle);
+      if (!spawnAlive) {
+        // O processo do instalador morreu antes da janela de graca. Pode
+        // ser UAC negado (modo UI nao admin), antivirus bloqueando, ou
+        // Inno Setup falhando no preflight. Nao podemos chamar exit aqui
+        // — manter UI/servico vivo para o operador investigar/reagir.
+        throw StateError(
+          'Instalador encerrou imediatamente apos o spawn '
+          '(pid=${spawnHandle?.pid ?? "desconhecido"}). '
+          'Possiveis causas: UAC negado, antivirus bloqueando, '
+          'instalador corrompido. Verifique o log do Inno Setup em '
+          r'%TEMP%\Setup Log*.txt.',
+        );
+      }
 
       checkStopwatch.stop();
       await lockHandle.updateMetadata({
@@ -901,6 +1103,8 @@ class AutoUpdateService {
         stage: currentStage,
         targetVersion: release.targetVersion,
         totalDuration: checkStopwatch.elapsed,
+        installerBytes: installerBytes,
+        downloadDuration: downloadDuration,
       );
       _emitSnapshot(
         _snapshot.copyWith(
@@ -923,11 +1127,20 @@ class AutoUpdateService {
         status: AppUpdateStatus.handoffCompleted,
         startedAt: now,
         duration: checkStopwatch.elapsed,
+        installerBytes: installerBytes,
+        downloadDuration: downloadDuration,
       );
       await lockHandle.release();
       lockReleased = true;
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      _exitProcess(0);
+      await Future<void>.delayed(_exitGracePeriod);
+
+      // Exit code dinamico: em modo servico usamos `handoffForInstaller (78)`
+      // para impedir NSSM AppExit Default Restart durante a janela do setup.
+      // Em modo UI nao ha NSSM envolvido, exit(0) basta.
+      final exitCode = installContext.origin == AppUpdateLaunchOrigin.service
+          ? ServiceModeExitCode.handoffForInstaller
+          : 0;
+      _exitProcess(exitCode);
     } on AppUpdateBlockedException catch (e) {
       if (checkStopwatch.isRunning) {
         checkStopwatch.stop();
@@ -953,6 +1166,7 @@ class AutoUpdateService {
           lastCheckDuration: checkStopwatch.elapsed,
         ),
       );
+      await _removeInstallContextOnEarlyFailure(e.stage);
       await _persistDiagnostics(
         source: source,
         attemptNumber: attemptNumber,
@@ -962,6 +1176,8 @@ class AutoUpdateService {
         status: e.status,
         startedAt: now,
         duration: checkStopwatch.elapsed,
+        installerBytes: installerBytes,
+        downloadDuration: downloadDuration,
       );
     } on Object catch (e, s) {
       if (checkStopwatch.isRunning) {
@@ -989,6 +1205,7 @@ class AutoUpdateService {
           lastCheckDuration: checkStopwatch.elapsed,
         ),
       );
+      await _removeInstallContextOnEarlyFailure(currentStage);
       await _persistDiagnostics(
         source: source,
         attemptNumber: attemptNumber,
@@ -999,6 +1216,8 @@ class AutoUpdateService {
         startedAt: now,
         duration: checkStopwatch.elapsed,
         errorMessage: e.toString(),
+        installerBytes: installerBytes,
+        downloadDuration: downloadDuration,
       );
     } finally {
       if (!lockReleased) {
@@ -1039,6 +1258,11 @@ class AutoUpdateService {
       preserveInstallerName: release.installerFileName,
     );
 
+    await _ensureSufficientDiskSpace(
+      updatesDir: updatesDir,
+      release: release,
+    );
+
     final targetFile = File(p.join(updatesDir.path, release.installerFileName));
     if (await targetFile.exists()) {
       await targetFile.delete();
@@ -1061,12 +1285,69 @@ class AutoUpdateService {
     return targetFile;
   }
 
-  Future<void> _launchInstaller(File installer) async {
+  Future<void> _ensureSufficientDiskSpace({
+    required Directory updatesDir,
+    required AppcastRelease release,
+  }) async {
+    final freeBytes = await _freeDiskSpaceProbe(updatesDir);
+    if (freeBytes == null) {
+      // Probe nao suportado nesta plataforma/instalacao; nao bloqueia.
+      return;
+    }
+    final required = release.fileSizeBytes * _minFreeSpaceFactor;
+    if (freeBytes < required) {
+      throw StateError(
+        'Espaco insuficiente em ${updatesDir.path} para baixar '
+        '${release.installerFileName}. '
+        'Livre: $freeBytes B, necessario aproximado: $required B '
+        '(${_minFreeSpaceFactor}x o tamanho do instalador).',
+      );
+    }
+  }
+
+  Future<DetachedProcessHandle?> _launchInstaller(File installer) async {
     LoggerService.info(
       'Iniciando instalador silencioso: ${installer.path} '
       '${_installerArguments.join(' ')}',
     );
-    await _detachedProcessStarter(installer.path, _installerArguments);
+    return _detachedProcessStarter(installer.path, _installerArguments);
+  }
+
+  /// Confirma que o instalador detached realmente iniciou. Estrategia:
+  /// 1. Pula a checagem se o starter custom nao expoe pid (testes).
+  /// 2. Espera ate `_installerSpawnGracePeriod` (5s) verificando o pid em
+  ///    janelas curtas. Se o processo morrer cedo, devolve false.
+  /// 3. Como heuristica adicional, considera vivo se o `update_context.json`
+  ///    ainda existir (o `setup.iss` so apaga apos `restore_update_state.ps1`).
+  ///
+  /// Retorna `true` quando assumimos sucesso (suficiente para chamar `exit`).
+  Future<bool> _waitForInstallerSpawn(DetachedProcessHandle? handle) async {
+    if (handle == null) {
+      // Fallback retro: starter custom (ex.: testes) que nao expoe pid;
+      // assume sucesso para preservar o comportamento anterior.
+      return true;
+    }
+
+    final deadline = DateTime.now().add(_installerSpawnGracePeriod);
+    const pollInterval = Duration(milliseconds: 250);
+    var attempts = 0;
+    while (DateTime.now().isBefore(deadline)) {
+      attempts++;
+      if (_processAliveCheck(handle.pid)) {
+        // Encontramos o pid pelo menos uma vez — o Inno extrai recursos no
+        // %TEMP% por ~1s antes de spawnar children; basta o pai estar vivo.
+        if (attempts >= 2) {
+          return true;
+        }
+      } else if (attempts >= 2) {
+        // Duas tentativas seguidas sem o pid: confirmamos que morreu cedo.
+        return false;
+      }
+      await Future<void>.delayed(pollInterval);
+    }
+    // Esgotou janela com checks inconclusivos: assume sucesso para nao
+    // bloquear o handoff em VMs muito lentas.
+    return true;
   }
 
   Future<Version> _resolveCurrentVersion() async {
@@ -1093,11 +1374,13 @@ class AutoUpdateService {
     required Map<String, String?> metadata,
     Duration staleAfter = defaultLockStaleAfter,
     DateTime? now,
+    ProcessAliveCheck? processAliveCheck,
   }) async {
     await locksDir.create(recursive: true);
 
     final lockFile = File(p.join(locksDir.path, _lockFileName));
     final acquiredAt = (now ?? DateTime.now()).toUtc();
+    final aliveCheck = processAliveCheck ?? _defaultProcessAliveCheck;
 
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
@@ -1110,11 +1393,18 @@ class AutoUpdateService {
         });
         return handle;
       } on PathExistsException {
-        final isStale = await _isStaleLockFile(
+        final ownerPid = await _readLockOwnerPid(lockFile);
+        final ownerAlive = ownerPid == null || aliveCheck(ownerPid);
+        final isStaleByAge = await _isStaleLockFile(
           lockFile,
           staleAfter: staleAfter,
           now: acquiredAt,
         );
+
+        // Considera obsoleto se (a) excedeu janela de stale OU (b) o
+        // processo dono nao existe mais no S.O. Combinacao reduz a janela
+        // de bloqueio apos crash do dono (antes esperavamos 2h cheias).
+        final isStale = isStaleByAge || !ownerAlive;
         if (!isStale) {
           final summary = await _describeLockOwner(lockFile);
           LoggerService.info(
@@ -1122,6 +1412,12 @@ class AutoUpdateService {
             '${lockFile.path}${summary == null ? '' : ' ($summary)'}',
           );
           return null;
+        }
+        if (!ownerAlive) {
+          LoggerService.warning(
+            'AutoUpdateService: lock global pertence ao pid=$ownerPid '
+            'que nao existe mais; tratando como stale.',
+          );
         }
 
         try {
@@ -1161,6 +1457,7 @@ class AutoUpdateService {
         'attempt': '$attemptNumber',
         'stage': _stageToken(AppUpdateStage.fetchingFeed),
       },
+      processAliveCheck: _processAliveCheck,
     );
     if (handle == null) {
       LoggerService.info(
@@ -1177,18 +1474,106 @@ class AutoUpdateService {
     }
   }
 
-  static Future<void> _defaultDetachedProcessStarter(
+  static Future<DetachedProcessHandle?> _defaultDetachedProcessStarter(
     String executable,
     List<String> arguments,
   ) async {
-    await Process.start(
+    final process = await Process.start(
       executable,
       arguments,
       mode: ProcessStartMode.detached,
     );
+    return DetachedProcessHandle(pid: process.pid);
   }
 
-  Future<void> _persistInstallContext({
+  /// Estimativa de espaco livre, em bytes, na particao em que `directory`
+  /// reside. Retorna `null` quando nao consegue medir (ex.: plataforma nao
+  /// Windows, falta de permissao). O caller trata `null` como "sem
+  /// restricao" para nao bloquear o auto update em situacoes nao usuais.
+  static Future<int?> _defaultFreeDiskSpaceProbe(Directory directory) async {
+    if (!Platform.isWindows) {
+      return null;
+    }
+    try {
+      // PowerShell e' a forma mais simples de obter `FreeSpace` por volume sem
+      // depender de FFI; o overhead (~200ms) e' irrelevante perto do download.
+      final cmd =
+          '(Get-PSDrive -PSProvider FileSystem -Name '
+          '(Split-Path -Qualifier "${directory.path}").TrimEnd(":")).Free';
+      final result = await Process.run('powershell.exe', <String>[
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        cmd,
+      ]);
+      if (result.exitCode != 0) {
+        return null;
+      }
+      final raw = result.stdout.toString().trim();
+      if (raw.isEmpty) {
+        return null;
+      }
+      return int.tryParse(raw);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Lê o MachineGuid do registro do Windows (HKLM\SOFTWARE\Microsoft\
+  /// Cryptography). E' estavel entre reboots e relativamente entre
+  /// reinstalacoes do Windows; ideal para staged rollout determinístico.
+  /// Em qualquer falha, retorna `null` — `evaluateRelease` interpreta
+  /// como "deixa passar" para nao bloquear updates por falta de dado.
+  static Future<String?> _defaultMachineIdResolver() async {
+    if (!Platform.isWindows) {
+      return null;
+    }
+    try {
+      final result = await Process.run('reg.exe', <String>[
+        'query',
+        r'HKLM\SOFTWARE\Microsoft\Cryptography',
+        '/v',
+        'MachineGuid',
+      ]);
+      if (result.exitCode != 0) {
+        return null;
+      }
+      final output = result.stdout.toString();
+      final match = RegExp(
+        r'MachineGuid\s+REG_SZ\s+([0-9a-fA-F\-]+)',
+      ).firstMatch(output);
+      return match?.group(1)?.trim();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Heuristica leve para checar se um PID Windows segue ativo. Usa
+  /// `tasklist /FI` com filtro por PID. Em qualquer falha, retorna `true`
+  /// (assume vivo) para nao remover um lock potencialmente valido por engano.
+  static bool _defaultProcessAliveCheck(int pid) {
+    if (!Platform.isWindows || pid <= 0) {
+      return true;
+    }
+    try {
+      final result = Process.runSync('tasklist.exe', <String>[
+        '/FI',
+        'PID eq $pid',
+        '/NH',
+      ]);
+      if (result.exitCode != 0) {
+        return true;
+      }
+      final output = result.stdout.toString();
+      // `tasklist` imprime "INFO: No tasks are running..." quando nao encontra.
+      return !output.contains('No tasks are running') &&
+          !output.contains('Nenhuma tarefa em execu');
+    } on Object {
+      return true;
+    }
+  }
+
+  Future<AppUpdateInstallContext> _persistInstallContext({
     required AppcastRelease release,
     required String currentVersion,
   }) async {
@@ -1215,6 +1600,40 @@ class AutoUpdateService {
       '${encoder.convert(context.toJson())}\n',
       flush: true,
     );
+    return context;
+  }
+
+  /// Remove `update_context.json` quando o pipeline aborta antes de
+  /// `launchingInstaller`. Sem isso, restos de contextos de falhas
+  /// intermediarias poderiam ser interpretados por uma execucao manual
+  /// do `restore_update_state.ps1` (fora do fluxo normal) — operadores
+  /// confundem o estado.
+  Future<void> _removeInstallContextOnEarlyFailure(
+    AppUpdateStage failureStage,
+  ) async {
+    if (failureStage == AppUpdateStage.launchingInstaller ||
+        failureStage == AppUpdateStage.completed) {
+      // Apos lancar o instalador, ele e' quem decide o que fazer com o
+      // contexto — preservamos.
+      return;
+    }
+    try {
+      final updatesDir = await _updatesDirectoryResolver();
+      final file = File(p.join(updatesDir.path, _updateContextFileName));
+      if (await file.exists()) {
+        await file.delete();
+        LoggerService.info(
+          'AutoUpdateService: update_context.json removido apos falha em '
+          '${_stageToken(failureStage)}.',
+        );
+      }
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao remover update_context.json apos erro pre-launch',
+        e,
+        s,
+      );
+    }
   }
 
   Future<void> _persistDiagnostics({
@@ -1227,13 +1646,26 @@ class AutoUpdateService {
     required Duration duration,
     String? targetVersion,
     String? errorMessage,
+    int? installerBytes,
+    Duration? downloadDuration,
   }) async {
     try {
       final updatesDir = await _updatesDirectoryResolver();
       await updatesDir.create(recursive: true);
       final file = File(p.join(updatesDir.path, _updateDiagnosticsFileName));
       await _rotateDiagnosticsIfNeeded(file);
+
+      double? downloadMbps;
+      if (installerBytes != null &&
+          installerBytes > 0 &&
+          downloadDuration != null &&
+          downloadDuration.inMilliseconds > 0) {
+        final seconds = downloadDuration.inMilliseconds / 1000.0;
+        downloadMbps = (installerBytes / (1024 * 1024)) / seconds;
+      }
+
       final record = <String, Object?>{
+        'schemaVersion': diagnosticsSchemaVersion,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'attemptNumber': attemptNumber,
         'source': source.name,
@@ -1243,6 +1675,11 @@ class AutoUpdateService {
         'targetVersion': targetVersion,
         'startedAt': startedAt.toUtc().toIso8601String(),
         'durationMs': duration.inMilliseconds,
+        'installerBytes': ?installerBytes,
+        'downloadDurationMs': ?downloadDuration?.inMilliseconds,
+        'downloadMbps': downloadMbps != null
+            ? double.parse(downloadMbps.toStringAsFixed(3))
+            : null,
         'error': errorMessage,
       };
       await file.writeAsString(
@@ -1380,6 +1817,20 @@ class AutoUpdateService {
         if (decoded is! Map<String, dynamic>) {
           continue;
         }
+
+        // Linhas legadas (sem schemaVersion) sao aceitas como
+        // schemaVersion=null/0; linhas com schemaVersion futura
+        // (desconhecida) sao descartadas para evitar misinterpretacao.
+        final rawSchema = decoded['schemaVersion'];
+        if (rawSchema != null) {
+          final schema = rawSchema is int
+              ? rawSchema
+              : int.tryParse(rawSchema.toString());
+          if (schema == null || schema > diagnosticsSchemaVersion) {
+            continue;
+          }
+        }
+
         final timestamp = _tryParseIsoDateTime(decoded['timestamp']);
         if (timestamp == null || timestamp.isBefore(cutoff)) {
           continue;
@@ -1561,6 +2012,8 @@ class AutoUpdateService {
     String? currentVersion,
     String? targetVersion,
     Duration? totalDuration,
+    int? installerBytes,
+    Duration? downloadDuration,
   }) {
     final details = <String>[
       'tentativa=$attemptNumber',
@@ -1569,8 +2022,33 @@ class AutoUpdateService {
       if (currentVersion != null) 'versaoAtual=$currentVersion',
       if (targetVersion != null) 'versaoAlvo=$targetVersion',
       if (totalDuration != null) 'duracaoMs=${totalDuration.inMilliseconds}',
+      if (installerBytes != null) 'bytes=$installerBytes',
+      if (downloadDuration != null &&
+          installerBytes != null &&
+          installerBytes > 0 &&
+          downloadDuration.inMilliseconds > 0)
+        'downloadMbps=${_formatMbps(installerBytes, downloadDuration)}',
     ];
     LoggerService.info('AutoUpdateService: $message (${details.join(', ')})');
+  }
+
+  Future<String?> _safeResolveMachineId() async {
+    try {
+      return await _machineIdResolver();
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'AutoUpdateService: falha ao obter MachineId para rollout',
+        e,
+        s,
+      );
+      return null;
+    }
+  }
+
+  static String _formatMbps(int bytes, Duration duration) {
+    final seconds = duration.inMilliseconds / 1000.0;
+    final mbps = (bytes / (1024 * 1024)) / seconds;
+    return mbps.toStringAsFixed(2);
   }
 
   static String _stageToken(AppUpdateStage stage) {
@@ -1585,6 +2063,27 @@ class AutoUpdateService {
       AppUpdateStage.launchingInstaller => 'launching_installer',
       AppUpdateStage.completed => 'completed',
     };
+  }
+
+  static Future<int?> _readLockOwnerPid(File file) async {
+    try {
+      final lines = await file.readAsLines();
+      for (final line in lines) {
+        final separator = line.indexOf('=');
+        if (separator <= 0) {
+          continue;
+        }
+        final key = line.substring(0, separator).trim();
+        if (key != 'pid') {
+          continue;
+        }
+        final value = line.substring(separator + 1).trim();
+        return int.tryParse(value);
+      }
+    } on Object {
+      // Ignorado: arquivo pode estar parcialmente escrito.
+    }
+    return null;
   }
 
   static Future<String?> _describeLockOwner(File file) async {

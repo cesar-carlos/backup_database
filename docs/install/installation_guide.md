@@ -7,10 +7,16 @@ minima para colocar backups em funcionamento.
 
 Voce precisa de:
 
-1. Windows 8 ou superior, ou Windows Server 2012 ou superior
+1. Windows 8.1 ou superior, ou Windows Server 2012 ou superior
 2. Arquitetura x64
 3. Permissao de administrador
 4. Conexao com a internet para baixar dependencias, quando necessario
+
+> **Atencao**: auto update silencioso requer Windows 8.1+ ou Server 2016+.
+> Em Windows Server 2012 / 2012 R2 o app instala e roda normalmente, mas o
+> updater fica desabilitado (a UI mostra um `InfoBar` explicando). Use
+> atualizacao manual via instalador nesses sistemas. Detalhes em
+> `auto_update_setup.md` ("Matriz de plataformas suportadas").
 
 Para detalhes de requisitos e ferramentas por banco, consulte
 `requirements.md`.
@@ -38,6 +44,14 @@ O instalador oferece dois modos:
   configurado.
 
 Se voce vai operar localmente e quer a instalacao padrao, use `Server Mode`.
+
+Comportamento de startup com Windows (quando voce marca "Iniciar com o Windows"):
+
+- `Server Mode`: o instalador registra o app como Windows Service via NSSM
+  (`BackupDatabaseService`) rodando como `LocalSystem`, com `AppParameters
+  = --mode=server --minimized --run-as-service`.
+- `Client Mode`: o instalador cria uma Scheduled Task ONLOGON
+  (`\BackupDatabase\MachineStartup`) que sobe o app minimizado em modo UI.
 
 ## Passo 4: revisar as opcoes do assistente
 
@@ -164,6 +178,8 @@ Verifique:
 - Visual C++ Redistributable
 - logs em `C:\ProgramData\BackupDatabase\logs\`
 - arquivo `.env` em `C:\ProgramData\BackupDatabase\config\`
+- caminho do executavel: `C:\Program Files\Backup Database\backup_database.exe`
+  (util ao adicionar excecao em antivirus / firewall corporativo).
 
 ## Proximos documentos
 

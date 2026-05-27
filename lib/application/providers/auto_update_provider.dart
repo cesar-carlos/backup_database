@@ -3,6 +3,15 @@ import 'dart:async';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:flutter/foundation.dart';
 
+/// Provider de UI para o auto update.
+///
+/// **Por que NAO usa `AsyncStateMixin`** (vs. `architectural_patterns.mdc §2`):
+/// o estado de loading/erro vive dentro do `AutoUpdateService` (snapshot
+/// continuo, multi-stage, com lock global entre instancias). O provider e'
+/// um shim sobre o stream `snapshots`, sem contador local de operacoes
+/// concorrentes — adicionar o mixin duplicaria o estado e potencialmente
+/// dessincronizaria com o servico (ex.: `isChecking` no provider vs.
+/// `_activeCheck != null` no servico).
 class AutoUpdateProvider extends ChangeNotifier {
   AutoUpdateProvider({required AutoUpdateService autoUpdateService})
     : _autoUpdateService = autoUpdateService,

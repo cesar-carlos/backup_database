@@ -95,9 +95,11 @@ function Set-NssmCritical {
     }
 }
 
-# Configurar argumentos explicitamente — CRÍTICO: sem os args o serviço roda em modo UI
+# Configurar argumentos explicitamente — CRÍTICO: sem os args o serviço roda em modo UI.
+# Mantemos a mesma ordem usada por restore_update_state.ps1 e pela doc operacional
+# (TROUBLESHOOTING_SERVICE.md) para simplificar grep em logs de auditoria.
 Write-Host "Configurando parâmetros do aplicativo..." -ForegroundColor Green
-Set-NssmCritical -Key "AppParameters" -ExtraArgs @("--minimized --mode=server --run-as-service")
+Set-NssmCritical -Key "AppParameters" -ExtraArgs @("--mode=server --minimized --run-as-service")
 
 # Configurar diretório de trabalho — CRÍTICO: necessário para assets e arquivos auxiliares
 Write-Host "Configurando diretório de trabalho..." -ForegroundColor Green
@@ -125,7 +127,11 @@ Set-NssmCritical -Key "AppStderr" -ExtraArgs @("$logPath\service_stderr.log")
 
 # Configurar auto-restart em caso de crash
 & $NssmPath set $ServiceName AppExit Default Restart
+# 77 = lockDenied (single-instance) — nao reiniciar
 & $NssmPath set $ServiceName AppExit 77 Exit
+# 78 = handoffForInstaller (auto update silencioso) — nao reiniciar enquanto
+# o setup.iss substitui binarios; restore_update_state.ps1 reativa o servico.
+& $NssmPath set $ServiceName AppExit 78 Exit
 & $NssmPath set $ServiceName AppRestartDelay 60000
 
 # Configurar usuário do serviço

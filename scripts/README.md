@@ -13,7 +13,7 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `run_parse_ftp_metrics.py` | Python | Wrapper para `parse_ftp_metrics.dart` |
 | `coverage.py` | Python | Executa testes com cobertura e filtro de lcov |
 | `sync_appcast_from_releases.py` | Python | Versao Python do sincronizador de appcast |
-| `update_appcast_manual.py` | Python | Utilitario legado para manutencao emergencial; o fluxo oficial usa `update-appcast` |
+| `update_appcast_manual.py` | Python | **DEPRECATED** — manutencao emergencial; o fluxo oficial usa `update-appcast`. Exige `--sha256` para nao gerar feed silenciosamente invalido. |
 | `verify_windows_icons.py` | Python | Valida `app_icon.ico`, `app_tray.ico` e hash da fonte PNG (CI / pre-release) |
 
 ## Icones Windows
@@ -101,19 +101,28 @@ python scripts/coverage.py --dart-mode --fail-under 70
 ### `sync_appcast_from_releases.py`
 
 Reconstrui `appcast.xml` do zero a partir de todos os releases publicados
-do GitHub, deduplicando versoes, aplicando `scripts/appcast_policy.json` e
-exigindo o sidecar `.sha256` em cada release elegivel.
+do GitHub, deduplicando versoes, aplicando `scripts/appcast_policy.json`
+(incluindo `blocked_versions`, `min_supported_app_version`,
+`rollout_percentages`, `min_publication_age_minutes`) e exigindo o
+sidecar `.sha256` em cada release elegivel.
 
-### `update_appcast_manual.py`
+Para o schema completo da policy, veja
+`docs/install/release_guide.md#schema-de-scriptsappcast_policyjson`.
+
+### `update_appcast_manual.py` (DEPRECATED)
 
 Utilitario legado para manutencao emergencial. O fluxo oficial continua sendo
 publicar a release com sidecar `.sha256` e deixar o workflow `update-appcast`
 reconstruir o feed.
 
+Diferenca importante vs. versao antiga: o `--sha256` e obrigatorio. Sem
+ele, o runtime descartaria o item silenciosamente (ver `parseAppcast` em
+`auto_update_service.dart`).
+
 Uso:
 
 ```bash
-python scripts/update_appcast_manual.py <versao> <asset_url> <asset_size_bytes>
+python scripts/update_appcast_manual.py <versao> <asset_url> <asset_size_bytes> --sha256 <hex64>
 ```
 
 ## Limpeza de Scripts

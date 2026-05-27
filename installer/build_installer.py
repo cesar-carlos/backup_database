@@ -317,6 +317,14 @@ def main() -> int:
     print("========================================")
     print()
 
+    if sys.platform != "win32":
+        print(
+            "ERRO: build_installer.py roda apenas em Windows (Inno Setup + "
+            "PowerShell para inspecionar VersionInfo do .exe). Plataforma "
+            f"detectada: {sys.platform}",
+        )
+        return 1
+
     script_root = Path(__file__).resolve().parent
     project_root = script_root.parent
     pubspec_path = project_root / "pubspec.yaml"

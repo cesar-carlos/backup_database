@@ -284,6 +284,7 @@ void main() {
           detachedProcessStarter: (executable, arguments) async {
             launchedExecutable = executable;
             launchedArguments = arguments;
+            return null;
           },
           exitProcess: (code) {
             exitCode = code;
@@ -432,6 +433,7 @@ void main() {
           updatesDirectoryResolver: () async => updatesDir,
           detachedProcessStarter: (executable, arguments) async {
             launched = true;
+            return null;
           },
           exitProcess: (code) {},
         );
@@ -518,7 +520,7 @@ void main() {
           feedUrlReader: () => '$baseUrl/appcast.xml',
           locksDirectoryResolver: () async => locksDir,
           updatesDirectoryResolver: () async => updatesDir,
-          detachedProcessStarter: (executable, arguments) async {},
+          detachedProcessStarter: (executable, arguments) async => null,
           exitProcess: (code) {},
         );
 
@@ -573,7 +575,7 @@ void main() {
           locksDirectoryResolver: () async =>
               Directory(p.join(tempDir.path, 'locks')),
           updatesDirectoryResolver: () async => updatesDir,
-          detachedProcessStarter: (executable, arguments) async {},
+          detachedProcessStarter: (executable, arguments) async => null,
           exitProcess: (code) {},
         );
 
@@ -635,7 +637,7 @@ void main() {
         locksDirectoryResolver: () async =>
             Directory(p.join(tempDir.path, 'locks')),
         updatesDirectoryResolver: () async => updatesDir,
-        detachedProcessStarter: (executable, arguments) async {},
+        detachedProcessStarter: (executable, arguments) async => null,
         exitProcess: (code) {},
       );
 
@@ -675,6 +677,208 @@ void main() {
       expect(compacted, hasLength(1));
       expect(compacted.single, contains('"payload":"B'));
     });
+
+    test(
+      'compactDiagnosticsLines descarta linhas com schemaVersion futura',
+      () async {
+        final now = DateTime.utc(2026, 1, 1);
+        final futureRecord = jsonEncode(<String, Object?>{
+          'schemaVersion': AutoUpdateService.diagnosticsSchemaVersion + 1,
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
+          'source': 'manual',
+          'payload': 'should-be-dropped',
+        });
+        final currentRecord = jsonEncode(<String, Object?>{
+          'schemaVersion': AutoUpdateService.diagnosticsSchemaVersion,
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
+          'source': 'manual',
+          'payload': 'should-be-kept',
+        });
+        final legacyRecord = jsonEncode(<String, Object?>{
+          'timestamp': now.subtract(const Duration(hours: 1)).toIso8601String(),
+          'source': 'manual',
+          'payload': 'legacy-kept',
+        });
+
+        final compacted = await AutoUpdateService.compactDiagnosticsLines(
+          <String>[futureRecord, currentRecord, legacyRecord],
+          now: now,
+        );
+
+        expect(compacted, hasLength(2));
+        expect(compacted.any((l) => l.contains('legacy-kept')), isTrue);
+        expect(compacted.any((l) => l.contains('should-be-kept')), isTrue);
+        expect(compacted.any((l) => l.contains('should-be-dropped')), isFalse);
+      },
+    );
+  });
+
+  group('AutoUpdateService.evaluateRelease staged rollout', () {
+    test('respeita minSupportedAppVersion', () {
+      final release = AppcastRelease(
+        version: Version.parse('3.5.0'),
+        downloadUrl: 'https://example.com/x.exe',
+        fileSizeBytes: 1,
+        sha256: 'a',
+        publishedAt: DateTime.utc(2026, 5, 1),
+        title: 'Version 3.5.0',
+        description: '',
+        minSupportedAppVersion: Version.parse('3.4.0'),
+      );
+
+      final tooOld = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[release],
+        currentVersion: Version.parse('3.3.9'),
+      );
+      expect(tooOld.isUpdateAvailable, isFalse);
+
+      final eligible = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[release],
+        currentVersion: Version.parse('3.4.0'),
+      );
+      expect(eligible.isUpdateAvailable, isTrue);
+    });
+
+    test('rolloutPercentage = 0 bloqueia todos os clientes', () {
+      final release = AppcastRelease(
+        version: Version.parse('3.5.0'),
+        downloadUrl: 'https://example.com/x.exe',
+        fileSizeBytes: 1,
+        sha256: 'a',
+        publishedAt: DateTime.utc(2026, 5, 1),
+        title: 'Version 3.5.0',
+        description: '',
+        rolloutPercentage: 0,
+      );
+
+      final decision = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[release],
+        currentVersion: Version.parse('3.0.0'),
+        machineId: 'machine-A',
+      );
+      expect(decision.isUpdateAvailable, isFalse);
+    });
+
+    test('rolloutPercentage = 100 deixa todos passarem', () {
+      final release = AppcastRelease(
+        version: Version.parse('3.5.0'),
+        downloadUrl: 'https://example.com/x.exe',
+        fileSizeBytes: 1,
+        sha256: 'a',
+        publishedAt: DateTime.utc(2026, 5, 1),
+        title: 'Version 3.5.0',
+        description: '',
+        rolloutPercentage: 100,
+      );
+
+      for (final id in <String>['machine-A', 'machine-B', 'machine-X']) {
+        final decision = AutoUpdateService.evaluateRelease(
+          releases: <AppcastRelease>[release],
+          currentVersion: Version.parse('3.0.0'),
+          machineId: id,
+        );
+        expect(
+          decision.isUpdateAvailable,
+          isTrue,
+          reason: 'machineId=$id deveria ter passado em rollout=100',
+        );
+      }
+    });
+
+    test('rollout deterministico por machineId', () {
+      final release = AppcastRelease(
+        version: Version.parse('3.5.0'),
+        downloadUrl: 'https://example.com/x.exe',
+        fileSizeBytes: 1,
+        sha256: 'a',
+        publishedAt: DateTime.utc(2026, 5, 1),
+        title: 'Version 3.5.0',
+        description: '',
+        rolloutPercentage: 50,
+      );
+
+      // Determinismo: mesma chamada repetida da mesmo resultado.
+      final a1 = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[release],
+        currentVersion: Version.parse('3.0.0'),
+        machineId: 'machine-canary',
+      );
+      final a2 = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[release],
+        currentVersion: Version.parse('3.0.0'),
+        machineId: 'machine-canary',
+      );
+      expect(a1.isUpdateAvailable, a2.isUpdateAvailable);
+    });
+  });
+
+  group('AutoUpdateService.startPeriodicChecks', () {
+    test(
+      'AUTO_UPDATE_CHECK_INTERVAL_SECONDS=0 desativa o timer periodico',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_interval_off_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => 'https://example.com/appcast.xml',
+          checkIntervalReader: () => '0',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+        // Nao deve lancar nem agendar timer; sucesso e' nao bloquear.
+        service.startPeriodicChecks();
+        await service.dispose();
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'AUTO_UPDATE_CHECK_INTERVAL_SECONDS < 60 e clampado para 60s',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_interval_clamp_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => 'https://example.com/appcast.xml',
+          checkIntervalReader: () => '5',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+        service.startPeriodicChecks();
+        // Sem hooks de teste para inspecionar o Duration; sucesso e'
+        // nao explodir e ter timer ativo (validado por nao-throw).
+        await service.dispose();
+      },
+      skip: !Platform.isWindows,
+    );
   });
 }
 

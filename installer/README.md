@@ -31,10 +31,16 @@ sincronizar versao sem compilar o instalador.
 - Inno Setup 6 instalado
   Download: [jrsoftware.org/isdl.php](https://jrsoftware.org/isdl.php)
 - artefatos do app e docs esperados pelo `setup.iss`
+- `LICENSE` presente na raiz do repositorio (referenciado por
+  `LicenseFile=..\LICENSE` no `setup.iss`). Se o arquivo sumir,
+  `build_installer.py` falha tarde com erro do ISCC.
 
 O `build_installer.py` ja encontra `ISCC.exe` nos caminhos padrao do Inno
 Setup 6. Se o compilador nao estiver instalado, o script falha com instrucao
 objetiva.
+
+`build_installer.py` recusa rodar fora do Windows (depende do ISCC + da
+inspecao de `VersionInfo` via PowerShell).
 
 ## Arquivos relevantes
 
@@ -80,7 +86,8 @@ ele deve nascer em Python, nao em PowerShell.
 Estes caminhos sao artefatos locais, nao documentacao nem codigo-fonte:
 
 - `installer\dist\`
-- `installer\dependencies\`
+- `installer\dependencies\` (exceto o `.gitkeep` versionado, que serve
+  apenas para garantir a presenca da pasta no clone)
 - `installer\__pycache__\`
 
 `build_installer.py` recria dependencias locais quando necessario:

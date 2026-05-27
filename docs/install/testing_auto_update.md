@@ -16,6 +16,7 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
 
 3. Ter uma release publicada no GitHub com um unico instalador `.exe`
 4. Ter o sidecar correspondente `.exe.sha256` anexado na release
+5. (Opcional) Definir `AUTO_UPDATE_CHECK_INTERVAL_SECONDS` se quiser sobrescrever o intervalo padrao de 1h. Valor `0` desativa o timer periodico.
 
 ## Teste manual na UI
 
@@ -33,13 +34,14 @@ Se houver release mais nova:
 - o app baixa o instalador
 - valida `length` e `sha256`
 - executa o instalador silencioso
-- encerra o processo atual
+- valida que o processo do instalador segue vivo por ate 5 s
+- encerra o processo atual (exit `0` para UI; exit `78` para servico)
 - reabre a UI com os argumentos originais do processo atualizado
 
 ## Teste no Windows Service
 
 1. Instale o app como servico.
-2. Confirme que a conta do servico e `LocalSystem`.
+2. Confirme que a conta do servico e `LocalSystem` (aliases `System` / `NT AUTHORITY\SYSTEM` tambem sao aceitos).
 3. Confirme que o arquivo de configuracao da maquina existe em `ProgramData`.
 4. Publique uma release nova.
 5. Aguarde a verificacao inicial ou periodica.
@@ -61,19 +63,57 @@ Se o servico estiver configurado com conta customizada, o auto update silencioso
    - confirme que a UI fecha e reabre sozinha
    - confirme que `C:\ProgramData\BackupDatabase\staging\updates\update_context.json` foi consumido
 3. No modo servico:
-   - instale o servico via `tools\install_service.ps1`
+   - instale o servico via `{app}\tools\install_service.ps1` (caminho pos-instalacao)
    - confirme que a conta do servico e `LocalSystem`
    - confirme `nssm status BackupDatabaseService`
    - publique N+1 e aguarde o auto update
    - confirme que o servico segue registrado e volta para `RUNNING`
-4. Cenário negativo:
+4. Cenario negativo:
    - reconfigure o servico com conta customizada
    - force uma nova verificacao
    - confirme que o updater bloqueia o handoff silencioso com mensagem previsivel
 5. Em ambos os cenarios, valide:
    - `C:\ProgramData\BackupDatabase\staging\updates\auto_update_history.jsonl`
+   - cada linha deve ter `"schemaVersion": 1`, `installerBytes`, `downloadDurationMs`, `downloadMbps`
    - preservacao de `C:\ProgramData\BackupDatabase\config\.env`
-   - ausencia de `auto_update.lock` orfao
+   - ausencia de `auto_update.lock` orfao (se restar, abra `C:\ProgramData\BackupDatabase\locks\auto_update.lock` e confirme o `pid` no `tasklist`)
+
+## Cenarios adicionais (defesa-em-profundidade)
+
+### UAC negado (modo UI)
+
+1. Logue na VM como usuario sem privilegio admin.
+2. Disparar `Verificar atualizacoes`.
+3. Quando o prompt UAC aparecer, escolha **Nao**.
+4. Esperado: o app permanece aberto; a secao `Atualizacoes` mostra `error` com mensagem citando `Instalador encerrou imediatamente apos o spawn`.
+5. Verificar `auto_update_history.jsonl` — deve registrar o erro com `stage="launching_installer"`.
+
+### Windows Defender SmartScreen bloqueando o spawn
+
+1. Habilitar `SmartScreen for Apps and Files` em modo "Block".
+2. Confirmar que o `.exe` baixado nao e familiar (release nova).
+3. Esperado: similar ao UAC negado — spawn morre cedo, app preserva UI/servico, snapshot vira `error`.
+4. Mitigacao operacional: assinar o instalador (`signtool sign /tr ...`). A assinatura tambem aparece no `service_stdout.log` via `restore_update_state.ps1`.
+
+### Disco cheio em `staging/updates`
+
+1. Encher o volume onde fica `C:\ProgramData` ate < 2x o tamanho do `BackupDatabase-Setup-X.Y.Z.exe`.
+2. Disparar a verificacao.
+3. Esperado: snapshot `error` com mensagem `Espaco insuficiente em ... para baixar BackupDatabase-Setup-X.Y.Z.exe. Livre: N B, necessario aproximado: M B`. Nenhum download iniciado, nenhum `update_context.json` gravado.
+
+### Staged rollout
+
+1. Editar `scripts/appcast_policy.json` com:
+
+```jsonc
+{
+  "rollout_percentages": { "X.Y.Z": 0 }
+}
+```
+
+2. Push na `main`, aguardar o workflow `update-appcast`.
+3. Em qualquer cliente: `Verificar atualizacoes` deve reportar `upToDate`.
+4. Subir para `100` para liberar geral.
 
 ## Validacoes do feed
 
@@ -84,6 +124,7 @@ Confira o `appcast.xml` publicado e valide:
 - `length`
 - `sha256`
 - URL do instalador apontando para `BackupDatabase-Setup-<versao>.exe`
+- Quando aplicavel: `sparkle:minSupportedAppVersion`, `sparkle:rolloutPercentage`
 
 ## Problemas comuns
 
@@ -99,8 +140,8 @@ Confira o `appcast.xml` publicado e valide:
 
 ### Rollback de release ruim
 
-- Adicione a versao em `scripts/appcast_policy.json`
-- Faça push na `main` ou execute manualmente o workflow `update-appcast`
+- Adicione a versao em `scripts/appcast_policy.json` → `blocked_versions`
+- Faca push na `main` ou execute manualmente o workflow `update-appcast`
 - Confirme que o `appcast.xml` publicado nao lista mais a versao bloqueada
 
 ### Nenhuma atualizacao detectada
@@ -108,3 +149,5 @@ Confira o `appcast.xml` publicado e valide:
 - Confirme que a release nao e draft nem prerelease
 - Confirme que a versao da release e maior que a instalada
 - Confirme que existe exatamente um instalador `.exe`
+- Confirme que a release atinge `min_publication_age_minutes` e nao esta abaixo de `min_supported_app_version`
+- Se houver `rollout_percentages`, recheque o calculo: `FNV1a("<targetVersion>:<MachineGuid>") % 100 < porcentagem`

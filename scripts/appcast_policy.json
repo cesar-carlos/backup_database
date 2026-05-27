@@ -1,3 +1,32 @@
 {
-  "blocked_versions": []
+  "_doc": [
+    "Schema processado por scripts/sync_appcast_from_releases.py.",
+    "Todos os campos sao opcionais; defaults aceitam tudo.",
+    "",
+    "blocked_versions:",
+    "  Array de versoes (com ou sem prefixo 'v') que devem ser ocultadas",
+    "  do appcast.xml. Usado para tirar uma release ruim do ar sem",
+    "  apagar o GitHub Release.",
+    "",
+    "min_supported_app_version:",
+    "  String 'x.y.z'. Quando definido, vira atributo",
+    "  sparkle:minSupportedAppVersion em cada enclosure. Clientes",
+    "  com versao atual menor que esse valor NAO devem aplicar a",
+    "  release (cliente respeita; ver auto_update_service.dart).",
+    "",
+    "rollout_percentages:",
+    "  Objeto { 'versao': 0-100 }. Quando presente para uma versao,",
+    "  vira atributo sparkle:rolloutPercentage no enclosure. Clientes",
+    "  decidem participar via hash determinístico do machine id; o",
+    "  serviço aplica a release apenas se hash%100 < rolloutPercentage.",
+    "",
+    "min_publication_age_minutes:",
+    "  Objeto { 'versao': minutos }. Mantem a release fora do appcast",
+    "  ate atingir essa idade desde published_at. Util para janelas de",
+    "  observacao pos-publicacao."
+  ],
+  "blocked_versions": [],
+  "min_supported_app_version": null,
+  "rollout_percentages": {},
+  "min_publication_age_minutes": {}
 }
