@@ -41,7 +41,7 @@ function Write-OptionalToolStatus {
     Write-Host ""
 }
 
-Write-Host "[1/7] Verificando Visual C++ Redistributables..." -ForegroundColor Yellow
+Write-Host "[1/10] Verificando Visual C++ Redistributables..." -ForegroundColor Yellow
 $vcRedist = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" -ErrorAction SilentlyContinue
 if ($vcRedist) {
     Write-Host "  OK: Visual C++ Redistributables encontrado (versao: $($vcRedist.Version))" -ForegroundColor Green
@@ -52,14 +52,15 @@ if ($vcRedist) {
 }
 Write-Host ""
 
-Write-OptionalToolStatus -Label "[2/7] Verificando sqlcmd (SQL Server)..." -CommandName "sqlcmd" -OnlyIfUsing "SQL Server"
-Write-OptionalToolStatus -Label "[3/7] Verificando dbisql (Sybase SQL Anywhere)..." -CommandName "dbisql" -OnlyIfUsing "Sybase SQL Anywhere"
-Write-OptionalToolStatus -Label "[4/7] Verificando dbbackup (Sybase SQL Anywhere)..." -CommandName "dbbackup" -OnlyIfUsing "Sybase SQL Anywhere"
-Write-OptionalToolStatus -Label "[5/7] Verificando psql (PostgreSQL)..." -CommandName "psql" -OnlyIfUsing "PostgreSQL"
-Write-OptionalToolStatus -Label "[6/7] Verificando pg_basebackup (PostgreSQL)..." -CommandName "pg_basebackup" -OnlyIfUsing "PostgreSQL"
-Write-OptionalToolStatus -Label "[7/7] Verificando gbak (Firebird)..." -CommandName "gbak" -OnlyIfUsing "Firebird"
-
-Write-Host "Observacao: para Firebird em producao tambem valide nbackup, gstat e isql." -ForegroundColor Gray
+Write-OptionalToolStatus -Label "[2/10] Verificando sqlcmd (SQL Server)..." -CommandName "sqlcmd" -OnlyIfUsing "SQL Server"
+Write-OptionalToolStatus -Label "[3/10] Verificando dbisql (Sybase SQL Anywhere)..." -CommandName "dbisql" -OnlyIfUsing "Sybase SQL Anywhere"
+Write-OptionalToolStatus -Label "[4/10] Verificando dbbackup (Sybase SQL Anywhere)..." -CommandName "dbbackup" -OnlyIfUsing "Sybase SQL Anywhere"
+Write-OptionalToolStatus -Label "[5/10] Verificando psql (PostgreSQL)..." -CommandName "psql" -OnlyIfUsing "PostgreSQL"
+Write-OptionalToolStatus -Label "[6/10] Verificando pg_basebackup (PostgreSQL)..." -CommandName "pg_basebackup" -OnlyIfUsing "PostgreSQL"
+Write-OptionalToolStatus -Label "[7/10] Verificando gbak (Firebird)..." -CommandName "gbak" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[8/10] Verificando nbackup (Firebird)..." -CommandName "nbackup" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[9/10] Verificando gstat (Firebird)..." -CommandName "gstat" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[10/10] Verificando isql (Firebird)..." -CommandName "isql" -OnlyIfUsing "Firebird"
 Write-Host ""
 
 Write-Host "========================================" -ForegroundColor Cyan

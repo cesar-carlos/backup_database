@@ -11,7 +11,7 @@ import sys
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 SPARKLE_NS = "http://www.andymatuschak.org/xml-namespaces/sparkle"
@@ -29,7 +29,6 @@ class ReleaseAsset:
     url: str
     size: int
     sha256: str
-    sha256_source: str
 
 
 @dataclass(frozen=True)
@@ -43,6 +42,9 @@ class PublishedRelease:
 @dataclass(frozen=True)
 class AppcastPolicy:
     blocked_versions: frozenset[str]
+    min_supported_app_version: str | None
+    rollout_percentages: dict[str, int]
+    min_publication_age_minutes: dict[str, int]
 
 
 def _build_api_url(repo: str) -> str:
@@ -81,26 +83,76 @@ def _normalize_version(tag_name: str) -> str:
     return tag_name[1:] if tag_name.startswith("v") else tag_name
 
 
-def load_policy(path: Path) -> AppcastPolicy:
-    if not path.exists():
-        return AppcastPolicy(blocked_versions=frozenset())
+def _empty_policy() -> AppcastPolicy:
+    return AppcastPolicy(
+        blocked_versions=frozenset(),
+        min_supported_app_version=None,
+        rollout_percentages={},
+        min_publication_age_minutes={},
+    )
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise RuntimeError(f"Appcast policy must be a JSON object: {path}")
 
+def _parse_blocked(payload: dict, path: Path) -> frozenset[str]:
     raw_versions = payload.get("blocked_versions", [])
     if not isinstance(raw_versions, list):
         raise RuntimeError(
             f"blocked_versions must be a JSON array in appcast policy: {path}"
         )
-
     versions = {
         _normalize_version(version.strip())
         for version in raw_versions
         if isinstance(version, str) and version.strip()
     }
-    return AppcastPolicy(blocked_versions=frozenset(versions))
+    return frozenset(versions)
+
+
+def _parse_min_supported(payload: dict, path: Path) -> str | None:
+    raw = payload.get("min_supported_app_version")
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise RuntimeError(
+            f"min_supported_app_version must be a non-empty string: {path}"
+        )
+    return _normalize_version(raw.strip())
+
+
+def _parse_int_map(payload: dict, key: str, path: Path) -> dict[str, int]:
+    raw = payload.get(key, {})
+    if not isinstance(raw, dict):
+        raise RuntimeError(
+            f"{key} must be a JSON object {{'<version>': <int>}}: {path}"
+        )
+    out: dict[str, int] = {}
+    for version, value in raw.items():
+        if not isinstance(version, str) or not version.strip():
+            continue
+        if not isinstance(value, int):
+            raise RuntimeError(
+                f"{key} value for {version} must be integer: {path}"
+            )
+        out[_normalize_version(version.strip())] = value
+    return out
+
+
+def load_policy(path: Path) -> AppcastPolicy:
+    if not path.exists():
+        return _empty_policy()
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Appcast policy must be a JSON object: {path}")
+
+    return AppcastPolicy(
+        blocked_versions=_parse_blocked(payload, path),
+        min_supported_app_version=_parse_min_supported(payload, path),
+        rollout_percentages=_parse_int_map(
+            payload, "rollout_percentages", path,
+        ),
+        min_publication_age_minutes=_parse_int_map(
+            payload, "min_publication_age_minutes", path,
+        ),
+    )
 
 
 def _sha256_from_sidecar_content(content: str, installer_name: str) -> str | None:
@@ -186,15 +238,24 @@ def _select_installer_asset(release: dict) -> ReleaseAsset:
         raise RuntimeError(
             f"{release.get('tag_name')}: invalid checksum sidecar for {name}"
         )
-    sha256_source = "release-sidecar"
 
     return ReleaseAsset(
         name=name,
         url=url,
         size=size,
         sha256=sha256,
-        sha256_source=sha256_source,
     )
+
+
+def _is_too_young(published_at: str, min_age_minutes: int) -> bool:
+    if min_age_minutes <= 0 or not published_at:
+        return False
+    try:
+        parsed = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    age = datetime.now(timezone.utc) - parsed
+    return age.total_seconds() < min_age_minutes * 60
 
 
 def build_published_releases(repo: str, policy: AppcastPolicy) -> list[PublishedRelease]:
@@ -212,10 +273,20 @@ def build_published_releases(repo: str, policy: AppcastPolicy) -> list[Published
         if version in policy.blocked_versions:
             continue
 
+        published_at_raw = release.get("published_at") or ""
+        min_age = policy.min_publication_age_minutes.get(version, 0)
+        if _is_too_young(published_at_raw, min_age):
+            print(
+                f"INFO: holding {version} from appcast (too young; "
+                f"min_publication_age_minutes={min_age})",
+                file=sys.stderr,
+            )
+            continue
+
         asset = _select_installer_asset(release)
         published_release = PublishedRelease(
             version=version,
-            published_at=release.get("published_at") or "",
+            published_at=published_at_raw,
             body=(release.get("body") or "").strip(),
             asset=asset,
         )
@@ -239,7 +310,11 @@ def _format_pub_date(published_at: str) -> str:
     return parsed.strftime("%a, %d %b %Y %H:%M:%S +0000")
 
 
-def render_appcast(repo: str, releases: list[PublishedRelease]) -> ET.ElementTree:
+def render_appcast(
+    repo: str,
+    releases: list[PublishedRelease],
+    policy: AppcastPolicy,
+) -> ET.ElementTree:
     ET.register_namespace("sparkle", SPARKLE_NS)
 
     root = ET.Element("rss")
@@ -266,6 +341,21 @@ def render_appcast(repo: str, releases: list[PublishedRelease]) -> ET.ElementTre
         enclosure.set("type", "application/octet-stream")
         enclosure.set("sha256", release.asset.sha256)
 
+        # Atributos opcionais de staged rollout (cliente respeita; sparkle
+        # ignora se desconhecer). Mantidos no namespace sparkle para nao
+        # poluir o root XML.
+        if policy.min_supported_app_version:
+            enclosure.set(
+                f"{{{SPARKLE_NS}}}minSupportedAppVersion",
+                policy.min_supported_app_version,
+            )
+        rollout = policy.rollout_percentages.get(release.version)
+        if rollout is not None:
+            clamped = max(0, min(100, rollout))
+            enclosure.set(
+                f"{{{SPARKLE_NS}}}rolloutPercentage", str(clamped),
+            )
+
     tree = ET.ElementTree(root)
     ET.indent(tree, space="  ")
     return tree
@@ -285,20 +375,15 @@ def main() -> int:
     try:
         policy = load_policy(policy_path)
         releases = build_published_releases(repo, policy)
-        tree = render_appcast(repo, releases)
+        tree = render_appcast(repo, releases, policy)
         write_appcast(output_path, tree)
     except Exception as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    sidecar_count = sum(
-        1 for release in releases if release.asset.sha256_source == "release-sidecar"
-    )
-    downloaded_count = len(releases) - sidecar_count
     print(
         f"OK: rebuilt {output_path} with {len(releases)} release item(s) "
-        f"(sidecar={sidecar_count}, fallback_download={downloaded_count}, "
-        f"blocked={len(policy.blocked_versions)})"
+        f"(blocked={len(policy.blocked_versions)})"
     )
     return 0
 

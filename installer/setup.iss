@@ -123,12 +123,22 @@ var
   RegPath: String;
   SecondQuotePos: Integer;
 begin
-  // Lista de caminhos para verificar (em ordem de probabilidade)
+  // Lista de caminhos para verificar (em ordem de probabilidade).
+  // Inno Setup pode gerar unins001/unins002 quando o instalador foi reaplicado
+  // fora da ordem normal de upgrade; varremos as 3 variantes para nao errar.
   Paths := [
     ExpandConstant('C:\Program Files\{#MyAppName}\unins000.exe'),
+    ExpandConstant('C:\Program Files\{#MyAppName}\unins001.exe'),
+    ExpandConstant('C:\Program Files\{#MyAppName}\unins002.exe'),
     ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins000.exe'),
+    ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins001.exe'),
+    ExpandConstant('C:\Program Files (x86)\{#MyAppName}\unins002.exe'),
     ExpandConstant('{pf}\{#MyAppName}\unins000.exe'),
-    ExpandConstant('{autopf}\{#MyAppName}\unins000.exe')
+    ExpandConstant('{pf}\{#MyAppName}\unins001.exe'),
+    ExpandConstant('{pf}\{#MyAppName}\unins002.exe'),
+    ExpandConstant('{autopf}\{#MyAppName}\unins000.exe'),
+    ExpandConstant('{autopf}\{#MyAppName}\unins001.exe'),
+    ExpandConstant('{autopf}\{#MyAppName}\unins002.exe')
   ];
 
   // Tentar encontrar em cada caminho
@@ -416,16 +426,24 @@ begin
       Sleep(2000);
     end;
     
-    // Se ainda estiver rodando após todas as tentativas, apenas avisar
-    // mas tentar continuar (alguns arquivos podem ser substituídos mesmo assim)
+    // Se ainda estiver rodando após todas as tentativas, registrar evidência
+    // explícita no log do Inno Setup. Em modo silencioso (auto update) também
+    // sinalizamos via Result para o updater capturar no histórico — o instalador
+    // continua, mas alguns arquivos podem não ser substituídos.
     if IsAppRunning(AppExe) then
     begin
-      // Não bloquear completamente - apenas avisar
-      // O Windows pode conseguir substituir alguns arquivos mesmo com o processo rodando
-      // Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}') + ' ainda está em execução. Alguns arquivos podem não ser atualizados.';
+      Log('WARNING: ' + AppExe + ' continua em execucao apos taskkill; '
+        + 'arquivos abertos podem nao ser substituidos nesta instalacao.');
+      if WizardSilent() then
+      begin
+        Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}')
+          + ' continua em execucao. A instalacao silenciosa nao pode garantir '
+          + 'a substituicao completa dos binarios.';
+        Exit;
+      end;
     end;
   end;
-  
+
   if VCRedistNeeded then
   begin
     VCRedistPage.SetText('Instalando Visual C++ Redistributables 2015-2022 (x64)...', 'Aguarde...');
@@ -591,6 +609,33 @@ var
   Args: String;
 begin
   ScriptPath := ExpandConstant('{app}\tools\install_service.ps1');
+
+  // Pre-condicoes: scripts e binarios necessarios. Sem isso o
+  // install_service.ps1 falha tarde (ResultCode 1) e o atalho "Iniciar com o
+  // Windows" silenciosamente nao registra o servico.
+  if not FileExists(ScriptPath) then
+  begin
+    Log('ERROR: install_service.ps1 ausente em ' + ScriptPath
+      + '; servico nao sera registrado.');
+    if not WizardSilent() then
+      MsgBox('Nao foi possivel encontrar o script de instalacao do servico:'
+        + #13#10 + ScriptPath + #13#10 + #13#10
+        + 'Reinstale o aplicativo ou execute manualmente.',
+        mbError, MB_OK);
+    Exit;
+  end;
+  if not FileExists(NssmPath) then
+  begin
+    Log('ERROR: nssm.exe ausente em ' + NssmPath
+      + '; servico nao sera registrado.');
+    if not WizardSilent() then
+      MsgBox('Nao foi possivel encontrar nssm.exe em:' + #13#10 + NssmPath
+        + #13#10 + #13#10
+        + 'Reinstale o aplicativo ou copie nssm.exe para a pasta tools.',
+        mbError, MB_OK);
+    Exit;
+  end;
+
   Args :=
     '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' +
     '-NonInteractive ' +

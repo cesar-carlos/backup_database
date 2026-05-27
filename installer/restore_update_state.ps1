@@ -14,6 +14,39 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Test-AuthenticodeSignature {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    # Best-effort: registra a assinatura Authenticode do executavel. Nao
+    # bloqueia o restore se o binario ainda nao for assinado, mas deixa
+    # trilha clara no stdout (capturado por nssm em service_stdout.log).
+    if (-not (Test-Path $Path)) {
+        Write-Host "AVISO: $Path nao existe para checar Authenticode." -ForegroundColor Yellow
+        return
+    }
+    try {
+        $sig = Get-AuthenticodeSignature -FilePath $Path -ErrorAction Stop
+    } catch {
+        Write-Host "AVISO: falha ao consultar Authenticode de $($Path): $_" -ForegroundColor Yellow
+        return
+    }
+    switch ($sig.Status) {
+        'Valid' {
+            $subject = if ($sig.SignerCertificate) { $sig.SignerCertificate.Subject } else { '(sem subject)' }
+            Write-Host "OK: Authenticode valido para $Path (assinante: $subject)" -ForegroundColor Green
+        }
+        'NotSigned' {
+            Write-Host "AVISO: $Path nao esta assinado digitalmente." -ForegroundColor Yellow
+        }
+        default {
+            Write-Host "AVISO: Authenticode com status '$($sig.Status)' para $Path; revisar assinatura." -ForegroundColor Yellow
+        }
+    }
+}
+
 function Get-DateValue {
     param(
         [object]$Value
@@ -77,6 +110,10 @@ function Set-NssmValue {
 if (-not (Test-Path $ContextPath)) {
     exit 0
 }
+
+# Loga assinatura Authenticode do binario alvo (defesa-em-profundidade
+# alem do SHA-256 ja validado pelo Dart antes do handoff).
+Test-AuthenticodeSignature -Path $AppPath
 
 $context = Get-Content -Path $ContextPath -Raw | ConvertFrom-Json
 $schemaVersion = 0
@@ -166,6 +203,7 @@ if ($serviceExists) {
     )
     Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "Default", "Restart")
     Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "77", "Exit")
+    Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "78", "Exit")
     Set-NssmValue -Arguments @(
         "set",
         $ServiceName,
@@ -180,7 +218,9 @@ if ($serviceExists) {
     )
 
     $objectName = Get-ConfigValue -Config $serviceConfig -Name "ObjectName" -Default "LocalSystem"
-    if ($objectName -ne "LocalSystem" -and $objectName -ne "NT AUTHORITY\\SYSTEM" -and $objectName -ne "System") {
+    $normalizedAccount = $objectName.Trim().ToLowerInvariant()
+    $supportedAccounts = @('localsystem', 'system', 'nt authority\system')
+    if ($supportedAccounts -notcontains $normalizedAccount) {
         throw "Restauracao automatica do Windows Service so e suportada para LocalSystem. Conta detectada: $objectName"
     }
     Set-NssmValue -Arguments @("set", $ServiceName, "ObjectName", "LocalSystem")

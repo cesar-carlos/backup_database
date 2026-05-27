@@ -7,6 +7,8 @@ import re
 import sys
 from pathlib import Path
 
+VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(\+\d+)?$")
+
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -63,6 +65,13 @@ def main() -> int:
         return 1
 
     full_version = version_match.group(1).strip()
+    if not VERSION_PATTERN.match(full_version):
+        print(
+            f"ERRO: versao '{full_version}' no pubspec.yaml nao bate com "
+            "o formato esperado <major>.<minor>.<patch>[+build]. "
+            "Atualize o pubspec antes de gerar a release."
+        )
+        return 1
     version_only = full_version.split("+", 1)[0]
     print(f"Versao encontrada no pubspec.yaml: {full_version}")
     print(f"Versao (sem build): {version_only}")

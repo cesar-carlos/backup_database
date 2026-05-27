@@ -238,6 +238,160 @@ void main() {
     );
 
     test(
+      'restore_update_state accepts NT AUTHORITY\\SYSTEM and System aliases',
+      () async {
+        for (final account in <String>[
+          r'NT AUTHORITY\SYSTEM',
+          'System',
+          'localsystem',
+        ]) {
+          final tempDir = await Directory.systemTemp.createTemp(
+            'restore_account_alias_test',
+          );
+          final nssmLogPath = p.join(tempDir.path, 'nssm.log');
+          final nssmPath = p.join(tempDir.path, 'nssm.cmd');
+          final contextPath = p.join(tempDir.path, 'update_context.json');
+
+          await File(nssmPath).writeAsString(
+            '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
+          );
+          await File(contextPath).writeAsString(
+            jsonEncode(<String, Object?>{
+              'schemaVersion': 2,
+              'contextId': 'alias-context-$account',
+              'origin': 'service',
+              'appMode': 'server',
+              'currentVersion': '3.0.1',
+              'targetVersion': '3.0.2',
+              'relaunchArguments': const <String>[],
+              'executablePath':
+                  r'C:\Program Files\Backup Database\backup_database.exe',
+              'createdAt': DateTime.now().toUtc().toIso8601String(),
+              'expiresAt': DateTime.now()
+                  .add(const Duration(minutes: 30))
+                  .toUtc()
+                  .toIso8601String(),
+              'serviceName': 'BackupDatabaseService',
+              'serviceExists': true,
+              'serviceConfig': <String, Object?>{
+                'AppParameters': '--mode=server --minimized --run-as-service',
+                'AppDirectory': tempDir.path,
+                'AppEnvironmentExtra': 'SERVICE_MODE=server',
+                'DisplayName': 'Backup Database Service',
+                'Description': 'Servico de backup',
+                'Start': 'SERVICE_AUTO_START',
+                'AppStdout': p.join(tempDir.path, 'stdout.log'),
+                'AppStderr': p.join(tempDir.path, 'stderr.log'),
+                'AppRestartDelay': '60000',
+                'AppNoConsole': '1',
+                'ObjectName': account,
+              },
+            }),
+          );
+
+          final result = await _runPowerShellScript(
+            scriptRelativePath: p.join('installer', 'restore_update_state.ps1'),
+            arguments: <String>[
+              '-ContextPath',
+              contextPath,
+              '-AppPath',
+              r'C:\Program Files\Backup Database\backup_database.exe',
+              '-AppDirectory',
+              tempDir.path,
+              '-NssmPath',
+              nssmPath,
+            ],
+            environment: <String, String>{'NSSM_LOG_PATH': nssmLogPath},
+          );
+
+          expect(
+            result.exitCode,
+            0,
+            reason:
+                'Account "$account" should be accepted as LocalSystem alias. '
+                'stderr=${result.stderr}',
+          );
+          final nssmLog = await File(nssmLogPath).readAsString();
+          expect(
+            nssmLog,
+            contains('set BackupDatabaseService ObjectName LocalSystem'),
+            reason: 'Failed normalizing account "$account" to LocalSystem',
+          );
+
+          await _deleteTempDirBestEffort(tempDir);
+        }
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'restore_update_state rejects custom service accounts',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'restore_account_custom_test',
+        );
+        final nssmLogPath = p.join(tempDir.path, 'nssm.log');
+        final nssmPath = p.join(tempDir.path, 'nssm.cmd');
+        final contextPath = p.join(tempDir.path, 'update_context.json');
+
+        await File(nssmPath).writeAsString(
+          '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
+        );
+        await File(contextPath).writeAsString(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 2,
+            'contextId': 'custom-account-context',
+            'origin': 'service',
+            'appMode': 'server',
+            'currentVersion': '3.0.1',
+            'targetVersion': '3.0.2',
+            'relaunchArguments': const <String>[],
+            'executablePath':
+                r'C:\Program Files\Backup Database\backup_database.exe',
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'expiresAt': DateTime.now()
+                .add(const Duration(minutes: 30))
+                .toUtc()
+                .toIso8601String(),
+            'serviceName': 'BackupDatabaseService',
+            'serviceExists': true,
+            'serviceConfig': <String, Object?>{
+              'AppParameters': '--mode=server --minimized --run-as-service',
+              'AppDirectory': tempDir.path,
+              'AppEnvironmentExtra': 'SERVICE_MODE=server',
+              'ObjectName': r'CONTOSO\backupsvc',
+            },
+          }),
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'restore_update_state.ps1'),
+          arguments: <String>[
+            '-ContextPath',
+            contextPath,
+            '-AppPath',
+            r'C:\Program Files\Backup Database\backup_database.exe',
+            '-AppDirectory',
+            tempDir.path,
+            '-NssmPath',
+            nssmPath,
+          ],
+          environment: <String, String>{'NSSM_LOG_PATH': nssmLogPath},
+        );
+
+        expect(result.exitCode, isNot(0));
+        expect(
+          result.stderr.toString(),
+          contains('LocalSystem'),
+          reason: 'Error message should mention LocalSystem requirement',
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
       'restore_update_state replays LocalSystem service configuration',
       () async {
         final tempDir = await Directory.systemTemp.createTemp(
@@ -309,6 +463,11 @@ void main() {
         expect(
           nssmLog,
           contains('set BackupDatabaseService AppExit 77 Exit'),
+        );
+        expect(
+          nssmLog,
+          contains('set BackupDatabaseService AppExit 78 Exit'),
+          reason: 'handoff exit code (78) must be preserved on restore',
         );
         expect(nssmLog, contains('start BackupDatabaseService'));
         expect(await File(contextPath).exists(), isFalse);

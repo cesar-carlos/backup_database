@@ -174,6 +174,71 @@ Get-Content "C:\ProgramData\BackupDatabase\logs\service_stdout.log" -Wait
 | 3001 | Service started |
 | 3002 | Service failed to start |
 
+## Auto update do servico
+
+### Diretorios e arquivos
+
+| Arquivo | Onde | Funcao |
+| --- | --- | --- |
+| `update_context.json` | `C:\ProgramData\BackupDatabase\staging\updates\` | Contexto do handoff (origem, modo, args, config do NSSM). TTL 45 min. |
+| `auto_update_history.jsonl` | `…\staging\updates\` | Trilha de tentativas (`schemaVersion`, `source`, `status`, `stage`, `installerBytes`, `downloadMbps`, `error`). |
+| `auto_update.lock` | `C:\ProgramData\BackupDatabase\locks\` | Coordenacao entre UI/servico/execucoes agendadas. Texto `chave=valor` por linha. |
+| `BackupDatabase-Setup-*.exe` | `…\staging\updates\` | Instaladores baixados; rotacao mantem o atual + 1 anterior por 7 dias. |
+
+### Como ler o `auto_update.lock`
+
+```text
+pid=1234
+acquiredAt=2026-05-27T14:00:00.000Z
+source=periodic
+currentVersion=3.2.1
+attempt=2
+stage=downloading_installer
+targetVersion=3.2.2
+```
+
+Lock e considerado **obsoleto** quando: (a) excedeu 2 h desde
+`acquiredAt`, OU (b) o `pid` registrado ja nao existe (`tasklist /FI "PID
+eq <pid>"`). O proximo `checkNow` remove e tenta novamente.
+
+### Forcando o auto update no servico
+
+Nao ha comando exposto. Para forcar:
+
+```powershell
+nssm restart BackupDatabaseService
+```
+
+O bootstrap dispara `checkNow(source: AppUpdateSource.startup)` apos
+inicializar.
+
+### Bloqueio por conta customizada
+
+O `ServiceAccountProbe` consulta `Win32_Service.StartName`. Auto update
+silencioso so e aceito para `LocalSystem`, `System` e
+`NT AUTHORITY\SYSTEM` (case-insensitive). Outras contas geram log:
+
+```text
+Atualizacao automatica silenciosa bloqueada: o Windows Service esta configurado
+com a conta "CONTOSO\backupsvc". ... Atualize manualmente ou reinstale o servico
+com LocalSystem.
+```
+
+E o snapshot vira `blockedByActiveBackup` (status sentinel reusado para
+qualquer bloqueio pre-launch).
+
+### Exit codes especificos
+
+| Codigo | Significado | NSSM `AppExit` |
+| --- | --- | --- |
+| `0` | Encerramento normal | `Default Restart` (servico sobe de novo) |
+| `1` | Falha de bootstrap | `Default Restart` |
+| `77` | Single-instance lock denied | `Exit` (nao reinicia) |
+| `78` | Handoff para auto update | `Exit` (nao reinicia ate o `restore_update_state.ps1` recriar o servico) |
+
+Esses codigos sao definidos em `lib/core/exit_codes.dart` e mapeados em
+`install_service.ps1` / `restore_update_state.ps1`.
+
 ## Informacoes para suporte
 
 Inclua:
@@ -182,4 +247,7 @@ Inclua:
 2. Conteudo completo de `service_stderr.log`
 3. Saida de `nssm get BackupDatabaseService AppParameters`
 4. Saida de `nssm get BackupDatabaseService AppEnvironmentExtra`
-5. Session ID detectado nos logs
+5. Saida de `nssm get BackupDatabaseService AppExit`
+6. Conteudo de `C:\ProgramData\BackupDatabase\locks\auto_update.lock` (se existir)
+7. Ultimas 20 linhas de `C:\ProgramData\BackupDatabase\staging\updates\auto_update_history.jsonl`
+8. Session ID detectado nos logs
