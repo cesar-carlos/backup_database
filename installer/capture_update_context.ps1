@@ -65,6 +65,19 @@ function Get-NssmValue(
     return Get-StringValue -Value (($result | Out-String).Trim())
 }
 
+# S2 da auditoria: captura valores de AppExit (Default/77/78) que estavam
+# faltando na implementação original. Sem essa captura, customizações do
+# cliente (ex.: mudar AppRestartDelay) eram perdidas no restore — e se o
+# update introduzir uma nova chave (AppExit 79, p.ex.), não há como
+# detectar regressão entre captura e restore.
+function Get-NssmAppExitValue(
+    [string]$NssmPath,
+    [string]$Name,
+    [string]$ExitCode
+) {
+    return Get-NssmValue -NssmPath $NssmPath -Name $Name -Arguments @("AppExit", $ExitCode)
+}
+
 if (-not (Test-Path $ContextPath)) {
     exit 0
 }
@@ -91,6 +104,9 @@ if ($serviceExists) {
         AppStderr           = Get-NssmValue -NssmPath $nssmPath -Name $ServiceName -Arguments @("AppStderr")
         AppRestartDelay     = Get-NssmValue -NssmPath $nssmPath -Name $ServiceName -Arguments @("AppRestartDelay")
         AppNoConsole        = Get-NssmValue -NssmPath $nssmPath -Name $ServiceName -Arguments @("AppNoConsole")
+        AppExitDefault      = Get-NssmAppExitValue -NssmPath $nssmPath -Name $ServiceName -ExitCode "Default"
+        AppExit77           = Get-NssmAppExitValue -NssmPath $nssmPath -Name $ServiceName -ExitCode "77"
+        AppExit78           = Get-NssmAppExitValue -NssmPath $nssmPath -Name $ServiceName -ExitCode "78"
     }
 }
 

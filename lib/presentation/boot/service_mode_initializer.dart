@@ -20,6 +20,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
@@ -31,18 +32,39 @@ import 'package:backup_database/presentation/boot/service_shutdown_callbacks.dar
 import 'package:backup_database/presentation/boot/socket_server_bootstrap.dart';
 import 'package:flutter/foundation.dart';
 
+/// Etapas declarativas do bootstrap do modo serviço. Antes os números
+/// estavam hardcoded em cada chamada `stepRunner.run(step: 1, ...)` e a
+/// constante `_bootstrapTotalSteps = 11` precisava ser mantida em sincronia
+/// manualmente — inserir/remover etapa exigia renumerar tudo (issue §3.3).
+enum _ServiceBootstrapStep {
+  init,
+  loadEnv,
+  detectMode,
+  checkSingleInstance,
+  setupDi,
+  resolveServices,
+  startIpc,
+  initEventLog,
+  setupShutdown,
+  startCoreServices,
+  initAutoUpdate;
+
+  /// Index humano (1-based) usado nos labels `[N/total]`.
+  int get oneBased => index + 1;
+}
+
 class ServiceModeInitializer {
   ServiceModeInitializer._();
 
-  static const String _serviceName = 'BackupDatabaseService';
-  static const int _bootstrapTotalSteps = 11;
+  static const String _serviceName = WindowsServiceConstants.serviceName;
   static const Duration _fatalShutdownBackupBudget = Duration(seconds: 30);
 
   static Future<void> initialize() async {
     final shutdownCompleter = Completer<void>();
     final log = ServiceBootstrapLog();
+    final totalSteps = _ServiceBootstrapStep.values.length;
     final stepRunner = ServiceBootstrapStepRunner(
-      totalSteps: _bootstrapTotalSteps,
+      totalSteps: totalSteps,
       log: log,
     );
 
@@ -62,19 +84,19 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 1,
+        step: _ServiceBootstrapStep.init.oneBased,
         label: 'Iniciando ServiceModeInitializer',
         action: () async {},
       );
 
       await stepRunner.run(
-        step: 2,
+        step: _ServiceBootstrapStep.loadEnv.oneBased,
         label: 'Carregando variaveis de ambiente',
         action: () => EnvironmentLoader.loadIfNeeded(logPrefix: '[service]'),
       );
 
       await stepRunner.run(
-        step: 3,
+        step: _ServiceBootstrapStep.detectMode.oneBased,
         label: 'Detectando modo do aplicativo',
         action: () async {
           final config = BootstrapConfigResolver(
@@ -88,7 +110,7 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 4,
+        step: _ServiceBootstrapStep.checkSingleInstance.oneBased,
         label: 'Verificando single instance global',
         action: () async {
           singleInstanceService = SingleInstanceService();
@@ -100,7 +122,7 @@ class ServiceModeInitializer {
               'Encerrando servico.',
             );
             await stepRunner.markAborted(
-              step: 4,
+              step: _ServiceBootstrapStep.checkSingleInstance.oneBased,
               reason: 'global_instance_lock_denied',
               exitCode: ServiceModeExitCode.lockDenied,
             );
@@ -110,13 +132,33 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 5,
+        step: _ServiceBootstrapStep.setupDi.oneBased,
         label: 'Configurando dependencias (DI)',
-        action: service_locator.setupServiceLocatorForServiceMode,
+        action: () async {
+          await service_locator.setupServiceLocatorForServiceMode();
+          // §2.3: o `SingleInstanceService` foi instanciado na step
+          // anterior (antes do DI estar pronto) para adquirir o lock cedo.
+          // Se o DI registrou uma `ISingleInstanceService` lazy (via
+          // `infrastructure_module`), substituímos pelo instance que
+          // realmente detém o lock — caso contrário consumidores de
+          // `getIt<ISingleInstanceService>()` recebem outro objeto sem o
+          // lock e o serviço pode tentar duplicar o IPC.
+          final lockedInstance = singleInstanceService;
+          if (lockedInstance != null) {
+            if (service_locator.getIt
+                .isRegistered<ISingleInstanceService>()) {
+              await service_locator.getIt
+                  .unregister<ISingleInstanceService>();
+            }
+            service_locator.getIt.registerSingleton<ISingleInstanceService>(
+              lockedInstance,
+            );
+          }
+        },
       );
 
       await stepRunner.run(
-        step: 6,
+        step: _ServiceBootstrapStep.resolveServices.oneBased,
         label: 'Obtendo servicos do container DI',
         action: () async {
           schedulerService = service_locator.getIt<ISchedulerService>();
@@ -127,7 +169,7 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 7,
+        step: _ServiceBootstrapStep.startIpc.oneBased,
         label: 'Inicializando IPC do processo dono do lock',
         action: () async {
           await singleInstanceService!.startIpcServer(
@@ -138,7 +180,7 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 8,
+        step: _ServiceBootstrapStep.initEventLog.oneBased,
         label: 'Inicializando Event Log',
         action: () async {
           await eventLog!.initialize();
@@ -147,10 +189,11 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 9,
+        step: _ServiceBootstrapStep.setupShutdown.oneBased,
         label: 'Configurando shutdown handler',
         action: () async {
-          shutdownHandler = ServiceShutdownHandler();
+          // S9: resolvido via DI em vez de singleton estático.
+          shutdownHandler = service_locator.getIt<ServiceShutdownHandler>();
           await shutdownHandler!.initialize();
           ServiceShutdownCallbacks(
             shutdownCompleter: shutdownCompleter,
@@ -163,7 +206,7 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 10,
+        step: _ServiceBootstrapStep.startCoreServices.oneBased,
         label:
             'Iniciando scheduler, health, fila persistida e limpeza de staging',
         action: () async {
@@ -192,13 +235,16 @@ class ServiceModeInitializer {
       );
 
       await stepRunner.run(
-        step: 11,
+        step: _ServiceBootstrapStep.initAutoUpdate.oneBased,
         label: 'Inicializando auto update do servico',
         action: () async {
           await ServiceAutoUpdateConfigurator(
             features: service_locator.getIt<FeatureAvailabilityService>(),
             autoUpdateService: autoUpdateService!,
-            accountProbe: ServiceAccountProbe(serviceName: _serviceName),
+            accountProbe: ServiceAccountProbe(
+              serviceName: _serviceName,
+              processService: service_locator.getIt<ProcessService>(),
+            ),
             beforeInstallHook: () async {
               await shutdownHandler?.shutdown();
               await singleInstanceService?.releaseLock();

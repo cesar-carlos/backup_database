@@ -616,10 +616,13 @@ void main() {
     );
 
     test(
-      'should return failure when access is denied',
+      'should attempt UAC elevation when access is denied (S13)',
       () async {
+        // S13 da auditoria: "Access is denied" agora aciona elevação UAC
+        // (consolidado no `_textContainsAccessDenied`). Antes apenas o
+        // start path tratava essa variante; agora todos os comandos
+        // (stop/install/uninstall) tentam elevar quando matchear.
         _stubQuery(mockProcessService, _runningQueryResult);
-
         _stubStop(
           mockProcessService,
           const ProcessResult(
@@ -629,17 +632,36 @@ void main() {
             duration: Duration(milliseconds: 10),
           ),
         );
+        // Stubs powershell elevation (UAC negado pelo usuário). A
+        // mensagem precisa bater no detector `_wasUacCancelled` (busca
+        // 'cancelada pelo usuário' com acento).
+        when(
+          () => mockProcessService.run(
+            executable: 'powershell',
+            arguments: any(named: 'arguments'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr: 'A operacao foi cancelada pelo usuário',
+              duration: Duration(milliseconds: 10),
+            ),
+          ),
+        );
 
         final result = await windowsServiceService.stopService();
 
         result.fold(
           (success) => fail('Expected failure, got success'),
           (failure) {
-            expect(failure, isA<ServerFailure>());
-            expect(
-              (failure as ServerFailure).message.toLowerCase(),
-              contains('denied'),
-            );
+            // Após elevation cancelada, retorna ValidationFailure com
+            // mensagem sobre UAC.
+            expect(failure, isA<ValidationFailure>());
+            final msg = (failure as ValidationFailure).message.toLowerCase();
+            expect(msg, contains('administrador'));
           },
         );
       },
@@ -706,10 +728,12 @@ void main() {
     );
 
     test(
-      'should return failure when stop fails',
+      'should return failure when stop fails after UAC cancel',
       () async {
+        // S13 da auditoria: "Access is denied" agora aciona elevação UAC
+        // mesmo no path de stop (consumido pelo restart). Quando o UAC
+        // é cancelado pelo usuário, retornamos ValidationFailure.
         _stubQuery(mockProcessService, _runningQueryResult);
-
         _stubStop(
           mockProcessService,
           const ProcessResult(
@@ -719,17 +743,30 @@ void main() {
             duration: Duration(milliseconds: 10),
           ),
         );
+        when(
+          () => mockProcessService.run(
+            executable: 'powershell',
+            arguments: any(named: 'arguments'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr: 'A operacao foi cancelada pelo usuário',
+              duration: Duration(milliseconds: 10),
+            ),
+          ),
+        );
 
         final result = await windowsServiceService.restartService();
 
         result.fold(
           (success) => fail('Expected failure, got success'),
           (failure) {
-            expect(failure, isA<ServerFailure>());
-            expect(
-              (failure as ServerFailure).message.toLowerCase(),
-              contains('denied'),
-            );
+            // O ValidationFailure do UAC cancel propaga pelo restart.
+            expect(failure, isA<ValidationFailure>());
           },
         );
       },

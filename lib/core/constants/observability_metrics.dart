@@ -27,4 +27,12 @@ class ObservabilityMetrics {
   static const windowsServiceUninstallFailure =
       'windows_service_uninstall_failure';
   static const windowsServiceScRetries = 'windows_service_sc_retries';
+
+  /// Tempo total entre o usuário clicar "Instalar serviço" e o serviço
+  /// atingir RUNNING, medido pelo provider. Diferente de
+  /// [windowsServiceStartConvergenceSeconds] (que só mede o polling do
+  /// start), este histograma cobre install + start + convergência —
+  /// representando UX real (S16 da auditoria).
+  static const windowsServiceInstallToRunningSeconds =
+      'windows_service_install_to_running_seconds';
 }

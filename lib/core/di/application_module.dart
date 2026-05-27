@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
 import 'package:backup_database/application/services/services.dart';
@@ -110,6 +112,23 @@ Future<void> setupApplicationModule(GetIt getIt) async {
       postgresConfigRepository: getIt<IPostgresConfigRepository>(),
       logService: getIt<LogService>(),
       alertService: getIt<AlertService>(),
+      // S1 da auditoria: checa drives onde o app realmente grava em vez
+      // de `Directory.current` (que em Session 0 vira System32).
+      // - appDir: onde ferramentas auxiliares (sqlcmd, pg_dump) ficam.
+      // - %ProgramData%\BackupDatabase: logs, config e staging temporário.
+      // Drives duplicados são deduplicados internamente por root.
+      diskCheckPaths: _resolveHealthCheckDiskPaths(),
     ),
   );
+}
+
+/// Retorna paths a checar pelo `_checkDiskSpace`. Mantido em função
+/// separada para facilitar override em testes.
+List<String> _resolveHealthCheckDiskPaths() {
+  final programData =
+      Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+  return <String>[
+    File(Platform.resolvedExecutable).parent.path,
+    '$programData\\BackupDatabase',
+  ];
 }

@@ -1,9 +1,18 @@
-import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:backup_database/core/utils/appending_file_sink.dart';
+
 class ServiceBootstrapLog {
-  ServiceBootstrapLog({String? logPath}) : _logPath = logPath;
+  ServiceBootstrapLog({String? logPath}) : _logPath = logPath {
+    // S3 da auditoria: rotação obrigatória — em loop de restart NSSM
+    // (60s entre tentativas, ~1440 reinícios/dia), cada bootstrap
+    // emite 11+ linhas. Sem rotação, o arquivo crescia GBs em horas.
+    // 5 MB × 5 arquivos = ~25 MB total cap (default do AppendingFileSink).
+    _sink = AppendingFileSink(
+      path: path,
+      maxFileSize: 5 * 1024 * 1024,
+    );
+  }
 
   static const String _defaultProgramData = r'C:\ProgramData';
   static const List<String> _relativeSegments = <String>[
@@ -13,6 +22,7 @@ class ServiceBootstrapLog {
   ];
 
   final String? _logPath;
+  late final AppendingFileSink _sink;
 
   String get path => _logPath ?? _defaultLogPath();
 
@@ -21,27 +31,20 @@ class ServiceBootstrapLog {
     Object? error,
     StackTrace? stackTrace,
   }) async {
-    try {
-      final file = File(path);
-      await file.parent.create(recursive: true);
-      final now = DateTime.now().toIso8601String();
-      final buffer = StringBuffer('[$now] $message');
-      if (error != null) {
-        buffer.write('\nerror: $error');
-      }
-      if (stackTrace != null) {
-        buffer.write('\nstack: $stackTrace');
-      }
-      buffer.write('\n');
-      await file.writeAsString(buffer.toString(), mode: FileMode.append);
-    } on Object catch (e) {
-      developer.log(
-        '[ServiceBootstrapLog] write failed: $e',
-        name: 'service_bootstrap',
-        level: 1000,
-      );
+    final now = DateTime.now().toIso8601String();
+    final buffer = StringBuffer('[$now] $message');
+    if (error != null) {
+      buffer.write('\nerror: $error');
     }
+    if (stackTrace != null) {
+      buffer.write('\nstack: $stackTrace');
+    }
+    _sink.append(buffer.toString());
   }
+
+  /// Aguarda a fila do sink drenar. Útil em testes ou em paths de erro
+  /// fatal antes de `exit()`.
+  Future<void> flush() => _sink.flush();
 
   static String _defaultLogPath() {
     final programData =

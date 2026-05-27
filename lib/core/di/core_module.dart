@@ -8,6 +8,7 @@ import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/logging.dart';
+import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -78,6 +79,14 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerSingleton<SocketLoggerService>(socketLogger);
 
   getIt.registerLazySingleton<ClipboardService>(ClipboardService.new);
+  // S9 da auditoria: ServiceShutdownHandler agora vem do DI em vez de
+  // singleton estático. Cada chamada a `getIt<ServiceShutdownHandler>()`
+  // retorna o mesmo objeto (lazySingleton). O construtor antigo
+  // `ServiceShutdownHandler()` redirecionou para `factory.legacy()` que
+  // mantém compat com testes que ainda não migraram.
+  getIt.registerLazySingleton<ServiceShutdownHandler>(
+    ServiceShutdownHandler.new,
+  );
   getIt.registerLazySingleton<ISingleInstanceService>(
     SingleInstanceService.new,
   );

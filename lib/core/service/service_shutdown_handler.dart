@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 /// Callback para executar durante o shutdown.
 ///
@@ -12,13 +13,42 @@ typedef ShutdownCallback = Future<void> Function(Duration timeout);
 ///
 /// Escuta sinais de shutdown (SIGTERM, SIGINT) e executa
 /// limpeza apropriada antes de encerrar o processo.
+///
+/// **S9 da auditoria — migração do singleton estático**: anteriormente
+/// era um `static ServiceShutdownHandler? _instance` com `factory ()`
+/// que devolvia o mesmo objeto. Isso causava 3 problemas:
+///   1. Estado persistia entre testes (não havia reset).
+///   2. `_isShuttingDown` nunca voltava a `false` — segunda chamada
+///      virava no-op silencioso.
+///   3. Impossível injetar mock em testes do bootstrap.
+///
+/// Agora o construtor é público e o handler é registrado como
+/// `lazySingleton` no `setupCoreModule`. Para preservar
+/// retrocompatibilidade temporária com callers antigos, mantemos um
+/// `factory.legacy()` que delega ao mesmo objeto cacheado — **deprecated**,
+/// novos callers devem usar `getIt<ServiceShutdownHandler>()`.
 class ServiceShutdownHandler {
-  static ServiceShutdownHandler? _instance;
+  ServiceShutdownHandler();
 
-  ServiceShutdownHandler._();
+  /// Construtor para callers legados (sem DI). Mantém compatibilidade
+  /// com o `factory ServiceShutdownHandler()` original que retornava
+  /// um singleton implícito.
+  ///
+  /// Equivalente a `getIt<ServiceShutdownHandler>()` quando o DI já
+  /// está pronto. Use em scripts/tools que rodam fora do bootstrap
+  /// completo do app.
+  @Deprecated('Use getIt<ServiceShutdownHandler>() ou injete via construtor')
+  factory ServiceShutdownHandler.legacy() {
+    return _legacyInstance ??= ServiceShutdownHandler();
+  }
 
-  /// Retorna a instância singleton do ServiceShutdownHandler.
-  factory ServiceShutdownHandler() => _instance ??= ServiceShutdownHandler._();
+  static ServiceShutdownHandler? _legacyInstance;
+
+  /// Reseta o singleton legado. Apenas para uso em testes.
+  @visibleForTesting
+  static void resetLegacyInstanceForTest() {
+    _legacyInstance = null;
+  }
 
   final List<ShutdownCallback> _shutdownCallbacks = [];
   final List<StreamSubscription<ProcessSignal>> _signalSubscriptions = [];
@@ -173,4 +203,24 @@ class ServiceShutdownHandler {
 
   /// Verifica se o handler está inicializado.
   bool get isInitialized => _isInitialized;
+
+  /// Cancela todas as subscriptions de sinal e limpa callbacks.
+  /// Idempotente — chamadas subsequentes são no-op.
+  ///
+  /// Usado por:
+  /// - Testes que precisam de estado limpo entre runs.
+  /// - Hot reload em desenvolvimento (callbacks antigos não devem
+  ///   acumular).
+  /// - Cleanup explícito em paths alternativos de bootstrap.
+  Future<void> dispose() async {
+    for (final sub in _signalSubscriptions) {
+      try {
+        await sub.cancel();
+      } on Object catch (_) {}
+    }
+    _signalSubscriptions.clear();
+    _shutdownCallbacks.clear();
+    _isShuttingDown = false;
+    _isInitialized = false;
+  }
 }

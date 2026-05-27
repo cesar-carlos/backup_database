@@ -61,8 +61,30 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
   final ps.ProcessService _processService;
   final String sourceName;
 
-  bool isEnabled = true;
+  // Antes era `bool isEnabled = true;` — flag pública mutável era um
+  // foot-gun: qualquer caller podia setar `eventLog.isEnabled = false`
+  // e silenciosamente desabilitar TODO o event logging. Agora é
+  // private + setter explícito que loga a transição (S8 da auditoria).
+  bool _isEnabled = true;
   bool _isAvailable = false;
+
+  /// Mantido apenas como leitura compatível com chamadores existentes.
+  bool get isEnabled => _isEnabled;
+
+  /// Permite desabilitar event logging explicitamente (ex.: para testes
+  /// que não devem poluir o Event Viewer, ou para hosts onde
+  /// `eventcreate` está bloqueado por política).
+  ///
+  /// Uma transição true→false é loggada para que troubleshooting saiba
+  /// que eventos posteriores foram intencionalmente suprimidos.
+  void setEnabled({required bool enabled, String? reason}) {
+    if (_isEnabled == enabled) return;
+    _isEnabled = enabled;
+    LoggerService.info(
+      'WindowsEventLogService: enabled=$enabled'
+      '${reason != null ? ' (reason: $reason)' : ''}',
+    );
+  }
 
   /// Inicializa o serviço verificando se eventcreate está disponível.
   ///
@@ -75,7 +97,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
         'WindowsEventLogService: não é Windows, desabilitado',
       );
       _isAvailable = false;
-      isEnabled = false;
+      setEnabled(enabled: false, reason: 'not Windows');
       return;
     }
 
@@ -120,7 +142,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
     required int eventId,
     required String message,
   }) async {
-    if (!isEnabled || !_isAvailable) {
+    if (!_isEnabled || !_isAvailable) {
       return false;
     }
 

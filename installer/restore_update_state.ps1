@@ -201,9 +201,31 @@ if ($serviceExists) {
         "AppStderr",
         (Get-ConfigValue -Config $serviceConfig -Name "AppStderr" -Default "C:\ProgramData\BackupDatabase\logs\service_stderr.log")
     )
-    Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "Default", "Restart")
-    Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "77", "Exit")
-    Set-NssmValue -Arguments @("set", $ServiceName, "AppExit", "78", "Exit")
+    # S2 da auditoria: usa valores capturados quando presentes; cai para
+    # defaults conhecidos quando o capture é antigo (schemaVersion < 3) ou
+    # o cliente nunca customizou. Os defaults aqui DEVEM espelhar o
+    # `_NssmConfigPlan` do Dart e o `install_service.ps1`.
+    Set-NssmValue -Arguments @(
+        "set",
+        $ServiceName,
+        "AppExit",
+        "Default",
+        (Get-ConfigValue -Config $serviceConfig -Name "AppExitDefault" -Default "Restart")
+    )
+    Set-NssmValue -Arguments @(
+        "set",
+        $ServiceName,
+        "AppExit",
+        "77",
+        (Get-ConfigValue -Config $serviceConfig -Name "AppExit77" -Default "Exit")
+    )
+    Set-NssmValue -Arguments @(
+        "set",
+        $ServiceName,
+        "AppExit",
+        "78",
+        (Get-ConfigValue -Config $serviceConfig -Name "AppExit78" -Default "Exit")
+    )
     Set-NssmValue -Arguments @(
         "set",
         $ServiceName,

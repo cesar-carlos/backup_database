@@ -31,6 +31,9 @@ void main() {
         label: 'doing something',
         action: () async {},
       );
+      // S3 da auditoria: o sink agora é async com fila serializada.
+      // Forçamos drain para validar conteúdo no arquivo.
+      await log.flush();
 
       final content = await logFile.readAsString();
       expect(content, contains('step 2/3: doing something begin'));
@@ -44,6 +47,7 @@ void main() {
         action: () async {},
         successDetails: () => 'loaded=42',
       );
+      await log.flush();
 
       final content = await logFile.readAsString();
       expect(
@@ -61,6 +65,7 @@ void main() {
         ),
         throwsStateError,
       );
+      await log.flush();
 
       final content = await logFile.readAsString();
       expect(content, contains('step 3/3: risky failed'));
@@ -75,6 +80,7 @@ void main() {
         reason: 'global_instance_lock_denied',
         exitCode: 77,
       );
+      await log.flush();
 
       final content = await logFile.readAsString();
       expect(

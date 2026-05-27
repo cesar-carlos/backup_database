@@ -89,6 +89,7 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     () => WindowsServiceProvider(
       getIt<IWindowsServiceService>(),
       getIt<IWindowsServiceEventLogger>(),
+      metricsCollector: getIt<IMetricsCollector>(),
     ),
   );
 

@@ -1,11 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/observability_metrics.dart';
+import 'package:backup_database/core/constants/windows_service_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/appending_file_sink.dart';
+import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart'
     as rd
@@ -17,6 +22,7 @@ class WindowsServiceTimingConfig {
   const WindowsServiceTimingConfig({
     this.shortTimeout = const Duration(seconds: 10),
     this.longTimeout = const Duration(seconds: 30),
+    this.elevatedInstallTimeout = const Duration(seconds: 90),
     this.serviceDelay = const Duration(seconds: 2),
     this.startPollingInterval = const Duration(seconds: 1),
     this.startPollingTimeout = const Duration(seconds: 30),
@@ -28,6 +34,14 @@ class WindowsServiceTimingConfig {
 
   final Duration shortTimeout;
   final Duration longTimeout;
+
+  /// Timeout dedicado para o script PowerShell elevado de instalação. O
+  /// script faz `nssm install` + ~10 chamadas `nssm set` + `Start-Sleep`s,
+  /// somando ~20-40s no caminho feliz e mais que isso em retries de
+  /// "Can't open service". Manter `longTimeout` (30s) aqui causava
+  /// cancelamentos com o script ainda em execução, deixando o serviço
+  /// parcialmente configurado.
+  final Duration elevatedInstallTimeout;
   final Duration serviceDelay;
   final Duration startPollingInterval;
   final Duration startPollingTimeout;
@@ -46,18 +60,35 @@ class WindowsServiceService implements IWindowsServiceService {
     WindowsServiceTimingConfig? timingConfig,
     IMetricsCollector? metricsCollector,
   }) : _timing = timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
-       _metrics = metricsCollector;
+       _metrics = metricsCollector,
+       // 5 MB por arquivo × 5 arquivos (default) = ~25 MB total no pior
+       // caso. Suficiente para auditoria de horas de polling em
+       // troubleshooting.
+       _diagnosticsSink = AppendingFileSink(
+         path: _controlDiagnosticsPath,
+         maxFileSize: 5 * 1024 * 1024,
+       );
 
   final ProcessService _processService;
   final WindowsServiceTimingConfig _timing;
   final IMetricsCollector? _metrics;
 
-  static const String _serviceName = 'BackupDatabaseService';
-  static const String _displayName = 'Backup Database Service';
-  static const String _description =
-      'Servico de backup automatico para SQL Server e Sybase';
+  /// Sink dedicado de diagnostics, com fila serializada e rotação por
+  /// tamanho. Substitui o `File.writeAsStringSync(flush: true)` síncrono
+  /// (S2.5 da auditoria — bloqueava event loop) e a versão async
+  /// fire-and-forget (S4 — race de interleaving).
+  final AppendingFileSink _diagnosticsSink;
+
+  static const String _serviceName = WindowsServiceConstants.serviceName;
+  static const String _displayName = WindowsServiceConstants.displayName;
+  static const String _description = WindowsServiceConstants.description;
   static const int _successExitCode = 0;
-  static const int _serviceNotFoundExitCode = 3;
+
+  /// Exit code retornado pelo `nssm remove confirm` quando o serviço já
+  /// não está registrado. Anteriormente era `_serviceNotFoundExitCode`,
+  /// nome genérico que confundia com `_serviceNotInstalledWinError`
+  /// (1060), retornado pelo `sc.exe` em situação parecida.
+  static const int _nssmServiceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
   static const String _scExeName = 'sc';
   static const String _toolsSubdir = 'tools';
@@ -68,7 +99,7 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _runningStatePt = 'EM EXECUÇÃO';
   static const String _runningStatePtNoAccent = 'EM EXECUCAO';
   static const String _localSystemAccount = 'LocalSystem';
-  static const String _logPath = r'C:\ProgramData\BackupDatabase\logs';
+  static const String _logPath = WindowsServiceConstants.logPath;
   static const String _controlDiagnosticsPath =
       r'C:\ProgramData\BackupDatabase\logs\service_control_diagnostics.log';
   static final RegExp _runningStateRegex = RegExp(
@@ -105,7 +136,9 @@ class WindowsServiceService implements IWindowsServiceService {
   static const int _accessDeniedWinError = 5;
   static const int _serviceAlreadyRunningWinError = 1056;
 
-  Future<rd.Result<void>> _runInstallPreflight(String appDir) async {
+  Future<rd.Result<void>> _runInstallPreflight({
+    required String appDir,
+  }) async {
     final statusResult = await getStatus();
     final statusFailure = statusResult.exceptionOrNull();
     if (statusFailure != null) {
@@ -117,36 +150,37 @@ class WindowsServiceService implements IWindowsServiceService {
       if (msg.contains('acesso negado') ||
           msg.contains('access denied') ||
           msg.contains('administrator')) {
-        return rd.Failure(
-          statusFailure is Failure
-              ? statusFailure
-              : ServerFailure(message: statusFailure.toString()),
-        );
+        return rd.Failure(_asFailure(statusFailure));
       }
     }
 
-    final envPath =
-        '${Platform.environment[_programDataEnv] ?? _defaultProgramData}'
-        r'\BackupDatabase\config\.env';
-    if (!File(envPath).existsSync()) {
-      LoggerService.warning(
-        'Arquivo .env nao encontrado em $envPath. '
-        'Copie .env.example para esse caminho em ProgramData. '
-        'O servico pode falhar ao iniciar.',
-      );
+    final envCopyResult = await _ensureServiceEnvFile(appDir: appDir);
+    if (envCopyResult.isError()) {
+      return rd.Failure(_asFailure(envCopyResult.exceptionOrNull()!));
     }
+
     try {
-      final logDir = Directory(_logPath);
-      logDir.createSync(recursive: true);
-      final testFile = File('$_logPath\\.preflight_write_test');
-      testFile.writeAsStringSync('');
-      testFile.deleteSync();
+      Directory(_logPath).createSync(recursive: true);
     } on Object catch (e) {
       return rd.Failure(
         ValidationFailure(
           message:
-              'Diretório de logs não é gravável: $_logPath\n\n'
+              'Diretório de logs não pôde ser criado: $_logPath\n\n'
               'Erro: $e\n\n'
+              'Tente:\n'
+              '1. Executar como Administrador\n'
+              '2. Verificar permissões da pasta $_logPath',
+        ),
+      );
+    }
+
+    final hasWritePermission =
+        await DirectoryPermissionCheck.hasWritePermissionForPath(_logPath);
+    if (!hasWritePermission) {
+      return const rd.Failure(
+        ValidationFailure(
+          message:
+              'Diretório de logs não é gravável: $_logPath\n\n'
               'Tente:\n'
               '1. Executar como Administrador\n'
               '2. Verificar permissões da pasta $_logPath',
@@ -157,7 +191,111 @@ class WindowsServiceService implements IWindowsServiceService {
     return const rd.Success(unit);
   }
 
+  /// Garante que `%ProgramData%\BackupDatabase\config\.env` exista antes
+  /// da instalação. Anteriormente o preflight apenas avisava e prosseguia,
+  /// mas o serviço subseqüentemente falhava em `EnvironmentLoader`,
+  /// `exit(1)`, e o NSSM reiniciava em loop a cada 60s — invisível na UI
+  /// (issue §2.2 da auditoria).
+  ///
+  /// Estratégia: se `.env` já existe, no-op. Caso contrário, tenta copiar
+  /// `<appDir>\.env` ou `<appDir>\.env.example` para o destino. Se nada
+  /// estiver disponível, retorna `ValidationFailure` bloqueante com
+  /// instrução acionável ao usuário.
+  ///
+  /// O parâmetro [configDirOverride] é exclusivamente para testes — em
+  /// produção sempre usa `%ProgramData%\BackupDatabase\config`. Testes
+  /// unitários injetam um diretório temporário para evitar side-effects
+  /// no sistema.
+  @visibleForTesting
+  Future<rd.Result<void>> ensureServiceEnvFileForTesting({
+    required String appDir,
+    String? configDirOverride,
+  }) => _ensureServiceEnvFile(
+    appDir: appDir,
+    configDirOverride: configDirOverride,
+  );
+
+  Future<rd.Result<void>> _ensureServiceEnvFile({
+    required String appDir,
+    String? configDirOverride,
+  }) async {
+    final configDir = configDirOverride ?? _defaultServiceConfigDir();
+    final envPath = '$configDir${Platform.pathSeparator}.env';
+    final envFile = File(envPath);
+    if (await envFile.exists()) {
+      return const rd.Success(unit);
+    }
+
+    try {
+      Directory(configDir).createSync(recursive: true);
+    } on Object catch (e) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Não foi possível criar diretório de configuração '
+              '$configDir: $e\n\n'
+              'Tente executar como Administrador.',
+        ),
+      );
+    }
+
+    final candidates = [
+      File(p.join(appDir, '.env')),
+      File(p.join(appDir, '.env.example')),
+    ];
+    for (final candidate in candidates) {
+      if (await candidate.exists()) {
+        try {
+          await candidate.copy(envPath);
+          LoggerService.info(
+            'Copiado ${candidate.path} → $envPath para uso do serviço',
+          );
+          return const rd.Success(unit);
+        } on Object catch (e) {
+          LoggerService.warning(
+            'Falha ao copiar ${candidate.path} para $envPath: $e',
+          );
+        }
+      }
+    }
+
+    return rd.Failure(
+      ValidationFailure(
+        message:
+            'Arquivo .env não encontrado em $envPath e nenhum '
+            'template (.env / .env.example) está disponível em $appDir.\n\n'
+            'Crie manualmente o arquivo $envPath com a configuração do '
+            'serviço antes de instalar. Sem ele, o serviço entra em loop '
+            'de restart silencioso após instalado.',
+      ),
+    );
+  }
+
+  String _defaultServiceConfigDir() {
+    final programData =
+        Platform.environment[_programDataEnv] ?? _defaultProgramData;
+    return '$programData\\BackupDatabase\\config';
+  }
+
+  /// Classifica falhas retrátaveis vs permanentes.
+  ///
+  /// S10 da auditoria: antes confiávamos puramente em `failure.toString()`
+  /// contendo strings como "timeout"/"scm"/"busy". Isso era frágil porque:
+  /// - `TimeoutException.toString()` em alguns formats de locale não
+  ///   começa com "timeout" lowercase;
+  /// - `Failure(code: 'TIMEOUT')` é a forma canônica do projeto e
+  ///   merece check explícito por tipo + code.
+  ///
+  /// A nova lógica:
+  /// 1. `TimeoutException` direto: sempre retentar.
+  /// 2. `Failure` com `code` em `_retryableFailureCodes`: retentar.
+  /// 3. Fallback: string-match preservado para erros opacos do
+  ///    `Process.run` que não foram embrulhados em `Failure`.
   bool _isRetryableProcessFailure(Object failure) {
+    if (failure is TimeoutException) return true;
+    if (failure is Failure && _retryableFailureCodes.contains(failure.code)) {
+      return true;
+    }
     final msg = failure.toString().toLowerCase();
     return msg.contains('timeout') ||
         msg.contains('timed out') ||
@@ -166,6 +304,12 @@ class WindowsServiceService implements IWindowsServiceService {
         msg.contains('busy') ||
         msg.contains('temporarily');
   }
+
+  static const Set<String> _retryableFailureCodes = {
+    'TIMEOUT',
+    'PROCESS_TIMEOUT',
+    'SCM_BUSY',
+  };
 
   Future<rd.Result<ProcessResult>> _runScWithRetry({
     required List<String> arguments,
@@ -341,7 +485,7 @@ class WindowsServiceService implements IWindowsServiceService {
         );
       }
 
-      final preflightResult = await _runInstallPreflight(appDir);
+      final preflightResult = await _runInstallPreflight(appDir: appDir);
       final preflightFailure = preflightResult.exceptionOrNull();
       if (preflightFailure != null) {
         _metrics?.incrementCounter(
@@ -424,9 +568,7 @@ class WindowsServiceService implements IWindowsServiceService {
           );
           final configFailure = configResult.exceptionOrNull();
           if (configFailure != null) {
-            final failureMsg =
-                (configFailure is Failure ? configFailure.message : null) ??
-                configFailure.toString();
+            final failureMsg = failureUserMessage(configFailure);
             final isConfigAccessDenied = _textContainsAccessDenied(failureMsg);
 
             if (isConfigAccessDenied) {
@@ -553,47 +695,14 @@ class WindowsServiceService implements IWindowsServiceService {
       }
     }
 
-    // Critical keys: if any fail the installation must be aborted.
-    const criticalKeys = {
-      'AppParameters',
-      'AppDirectory',
-      'AppEnvironmentExtra',
-      'AppStdout',
-      'AppStderr',
-    };
+    final plan = _NssmConfigPlan.build(appDir: appDir, logPath: logPath);
 
-    final configs = [
-      // Critical: --run-as-service triggers headless mode; without it the
-      // service process opens a (invisible) window and the SCM times out.
-      [
-        'set',
-        _serviceName,
-        'AppParameters',
-        '--mode=server --minimized --run-as-service',
-      ],
-      // Critical: working dir is still needed for assets and helper scripts.
-      ['set', _serviceName, 'AppDirectory', appDir],
-      // Critical: environment variable used as the primary service-mode signal.
-      ['set', _serviceName, 'AppEnvironmentExtra', 'SERVICE_MODE=server'],
-      ['set', _serviceName, 'DisplayName', _displayName],
-      ['set', _serviceName, 'Description', _description],
-      ['set', _serviceName, 'Start', 'SERVICE_AUTO_START'],
-      ['set', _serviceName, 'AppStdout', '$logPath\\service_stdout.log'],
-      ['set', _serviceName, 'AppStderr', '$logPath\\service_stderr.log'],
-      ['set', _serviceName, 'AppExit', 'Default', 'Restart'],
-      ['set', _serviceName, 'AppExit', '77', 'Exit'],
-      ['set', _serviceName, 'AppRestartDelay', '60000'],
-    ];
-
-    for (final config in configs) {
-      final key = config[2];
+    for (final entry in plan.entries) {
       final result = await _processService.run(
         executable: nssmPath,
-        arguments: config,
+        arguments: entry.arguments(_serviceName),
         timeout: _timing.shortTimeout,
       );
-
-      final isCritical = criticalKeys.contains(key);
 
       final failure = result.fold(
         (processResult) {
@@ -601,24 +710,24 @@ class WindowsServiceService implements IWindowsServiceService {
             final msg = processResult.stderr.isNotEmpty
                 ? processResult.stderr
                 : processResult.stdout;
-            if (isCritical) {
+            if (entry.critical) {
               return ServerFailure(
                 message:
-                    'Falha ao configurar chave crítica "$key" do serviço '
+                    'Falha ao configurar chave crítica "${entry.key}" do serviço '
                     '(exit ${processResult.exitCode}): $msg',
               );
             }
-            LoggerService.warning('Aviso ao configurar $key: $msg');
+            LoggerService.warning('Aviso ao configurar ${entry.key}: $msg');
           }
           return null;
         },
         (f) {
-          if (isCritical) {
+          if (entry.critical) {
             return ServerFailure(
-              message: 'Erro ao configurar chave crítica "$key": $f',
+              message: 'Erro ao configurar chave crítica "${entry.key}": $f',
             );
           }
-          LoggerService.warning('Erro ao configurar $key: $f');
+          LoggerService.warning('Erro ao configurar ${entry.key}: $f');
           return null;
         },
       );
@@ -638,16 +747,14 @@ class WindowsServiceService implements IWindowsServiceService {
         timeout: _timing.shortTimeout,
       );
     } else if (servicePassword != null && servicePassword.isNotEmpty) {
-      await _processService.run(
-        executable: nssmPath,
-        arguments: [
-          'set',
-          _serviceName,
-          'ObjectName',
-          serviceUser,
-          servicePassword,
-        ],
-        timeout: _timing.shortTimeout,
+      // Não logamos saída/erro deste comando: o `nssm` pode ecoar a linha
+      // de comando inteira (incluindo a senha) em stderr quando falha.
+      // O `_processService.run` por padrão já redige `-P`/`-Password`, mas
+      // não conhece a posição "user/password" do `nssm set ObjectName`.
+      await _runNssmSetObjectNameWithCredentials(
+        nssmPath: nssmPath,
+        serviceUser: serviceUser,
+        servicePassword: servicePassword,
       );
     } else {
       LoggerService.warning(
@@ -661,6 +768,49 @@ class WindowsServiceService implements IWindowsServiceService {
     }
 
     return const rd.Success(unit);
+  }
+
+  /// Executa `nssm set <service> ObjectName <user> <password>` redigindo
+  /// qualquer eco do comando ou da senha no log de erro. Ver §1.2 da
+  /// auditoria: o NSSM ocasionalmente ecoa o comando completo no stderr,
+  /// e qualquer caller que loggue verbatim acaba persistindo a senha em
+  /// `service_control_diagnostics.log` ou `service_stderr.log`.
+  Future<rd.Result<ProcessResult>> _runNssmSetObjectNameWithCredentials({
+    required String nssmPath,
+    required String serviceUser,
+    required String servicePassword,
+  }) async {
+    final result = await _processService.run(
+      executable: nssmPath,
+      arguments: [
+        'set',
+        _serviceName,
+        'ObjectName',
+        serviceUser,
+        servicePassword,
+      ],
+      timeout: _timing.shortTimeout,
+    );
+    return result.fold(
+      (processResult) {
+        if (processResult.exitCode != _successExitCode) {
+          // NÃO loggar processResult.stderr/stdout — pode conter a senha.
+          LoggerService.warning(
+            'nssm set ObjectName falhou para usuário "$serviceUser" '
+            '(exit ${processResult.exitCode}). Detalhes suprimidos para '
+            'evitar vazamento de credencial em log.',
+          );
+        }
+        return rd.Success(processResult);
+      },
+      (failure) {
+        LoggerService.warning(
+          'nssm set ObjectName falhou para usuário "$serviceUser". '
+          'Detalhes suprimidos para evitar vazamento de credencial em log.',
+        );
+        return rd.Failure(_asFailure(failure));
+      },
+    );
   }
 
   @override
@@ -696,7 +846,19 @@ class WindowsServiceService implements IWindowsServiceService {
         timeout: _timing.longTimeout,
       );
 
-      await Future.delayed(_timing.serviceDelay);
+      // Aguarda STOPPED de verdade antes do `nssm remove`. Antes era um
+      // `Future.delayed(_timing.serviceDelay)` (2s) — insuficiente quando
+      // o `ServiceShutdownHandler` está aguardando backups (até 30s),
+      // levando a `nssm remove` falhar silenciosamente ou deixar o
+      // registro órfão (issue §2.4 da auditoria).
+      await _pollUntilStopped(
+        timeout: _timing.longTimeout,
+        interval: _timing.startPollingInterval,
+        onConvergence: (d) => _metrics?.recordHistogram(
+          ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
+          d.inMilliseconds / 1000,
+        ),
+      );
 
       final removeResult = await _processService.run(
         executable: nssmPath,
@@ -707,7 +869,7 @@ class WindowsServiceService implements IWindowsServiceService {
       return await removeResult.fold<Future<rd.Result<void>>>(
         (processResult) async {
           if (processResult.exitCode != _successExitCode &&
-              processResult.exitCode != _serviceNotFoundExitCode) {
+              processResult.exitCode != _nssmServiceNotFoundExitCode) {
             final errorMessage = processResult.stderr.isNotEmpty
                 ? processResult.stderr
                 : processResult.stdout;
@@ -808,6 +970,7 @@ class WindowsServiceService implements IWindowsServiceService {
   /// Inicia o serviço com parâmetros de polling configuráveis.
   ///
   /// Exposto para testes — use [startService] no código de produção.
+  @visibleForTesting
   Future<rd.Result<void>> startServiceWithTimeout({
     Duration? pollingTimeout,
     Duration? pollingInterval,
@@ -989,13 +1152,7 @@ class WindowsServiceService implements IWindowsServiceService {
 
           final isAccessDenied =
               processResult.exitCode == _accessDeniedWinError ||
-              _textContainsAccessDenied(errorMessage) ||
-              // Variação "Access is denied" (com "is") só é tratada
-              // pelo start path — historicamente, install/configure/
-              // uninstall/stop não acionavam elevação para esta forma.
-              // Mantemos in-line para evitar acoplar o helper a essa
-              // assimetria (ver doc de `_textContainsAccessDenied`).
-              errorMessage.toLowerCase().contains('access is denied');
+              _textContainsAccessDenied(errorMessage);
 
           if (isAccessDenied) {
             LoggerService.warning(
@@ -1327,13 +1484,31 @@ class WindowsServiceService implements IWindowsServiceService {
     final logPath = '$programData\\BackupDatabase\\$_logSubdir';
     final logDir = '$programData\\BackupDatabase';
 
+    // Script + install log moram em `%ProgramData%\BackupDatabase\install\`
+    // (não em `%TEMP%`) porque podem conter a senha do serviço — ACL
+    // restritiva (apenas SYSTEM + Administrators) é aplicada no PowerShell
+    // antes de qualquer dado sensível ser escrito.
+    final installScriptDir = '$programData\\BackupDatabase\\install';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final randomSuffix = DateTime.now().microsecondsSinceEpoch
+        .toRadixString(16);
     final scriptPath = p.join(
-      Directory.systemTemp.path,
-      'backup_db_install_$timestamp.ps1',
+      installScriptDir,
+      'backup_db_install_${timestamp}_$randomSuffix.ps1',
     );
     final installLogPath =
-        '$programData\\BackupDatabase\\logs\\install_elevated_$timestamp.log';
+        '$programData\\BackupDatabase\\logs\\install_elevated_${timestamp}_$randomSuffix.log';
+
+    try {
+      Directory(installScriptDir).createSync(recursive: true);
+    } on Object catch (e) {
+      return rd.Failure(
+        ServerFailure(
+          message:
+              'Não foi possível criar diretório de scripts de instalação: $e',
+        ),
+      );
+    }
 
     String safePath(String s) => s.replaceAll("'", "''");
     final scriptContent =
@@ -1342,6 +1517,7 @@ class WindowsServiceService implements IWindowsServiceService {
 if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
   \$PSNativeCommandUseErrorActionPreference = \$false
 }
+\$selfScript = \$MyInvocation.MyCommand.Path
 \$installLog = '${safePath(installLogPath)}'
 \$nssmPath = '${safePath(nssmPath)}'
 \$appPath = '${safePath(appPath)}'
@@ -1354,54 +1530,81 @@ if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyCo
 function Write-InstallLog { param(\$msg) Add-Content -Path \$installLog -Value \$msg }
 function Fail { param(\$step,\$err) Write-InstallLog "ERRO em \$step`: \$err"; exit 1 }
 
+# Restringe ACL do script e do install log antes de qualquer outra coisa,
+# para que outros usuarios da maquina nao possam ler enquanto rodamos.
+function Restrict-Acl { param(\$path)
+  try {
+    if (Test-Path \$path) {
+      icacls \$path /inheritance:r /grant:r 'NT AUTHORITY\\SYSTEM:(F)' 'BUILTIN\\Administrators:(F)' | Out-Null
+    }
+  } catch {}
+}
+
+# S14 da auditoria: retry em TODAS as chaves criticas, nao so AppParameters.
+# "Can't open service" pode acontecer em qualquer chave logo apos o install
+# se o NSSM ainda esta propagando estado para o SCM.
+function Set-NssmKeyWithRetry {
+  param(
+    [string]\$KeyName,
+    [string[]]\$Values,
+    [int]\$MaxAttempts = 3
+  )
+  \$lastErr = \$null
+  for (\$attempt = 1; \$attempt -le \$MaxAttempts; \$attempt++) {
+    \$r = & \$nssmPath set $_serviceName \$KeyName @Values 2>&1
+    if (\$LASTEXITCODE -eq 0) { return }
+    \$lastErr = \$r -join " "
+    if (\$lastErr -notmatch "Can't open service") { Fail \$KeyName \$lastErr }
+    Start-Sleep -Seconds 2
+  }
+  Fail \$KeyName "Can't open service apos \$MaxAttempts tentativas: \$lastErr"
+}
+
 if (-not (Test-Path \$logDir)) { New-Item -ItemType Directory -Path \$logDir -Force | Out-Null }
 if (-not (Test-Path \$logPath)) { New-Item -ItemType Directory -Path \$logPath -Force | Out-Null }
+Restrict-Acl \$installLog
+Restrict-Acl \$selfScript
 
 try {
-  sc.exe query $_serviceName 2>\$null | Out-Null
-  if (\$LASTEXITCODE -eq 0) {
-    & \$nssmPath remove $_serviceName confirm 2>\$null | Out-Null
-    Start-Sleep -Seconds 2
+  try {
+    sc.exe query $_serviceName 2>\$null | Out-Null
+    if (\$LASTEXITCODE -eq 0) {
+      & \$nssmPath remove $_serviceName confirm 2>\$null | Out-Null
+      Start-Sleep -Seconds 2
+    }
+
+    \$r = & \$nssmPath install $_serviceName \$appPath 2>&1
+    if (\$LASTEXITCODE -ne 0) { Fail "install" (\$r -join " ") }
+
+    Start-Sleep -Seconds 5
+
+    Set-NssmKeyWithRetry -KeyName "AppParameters" -Values @("--mode=server --minimized --run-as-service")
+    Set-NssmKeyWithRetry -KeyName "AppDirectory" -Values @(\$appDir)
+    Set-NssmKeyWithRetry -KeyName "AppEnvironmentExtra" -Values @("SERVICE_MODE=server")
+    Set-NssmKeyWithRetry -KeyName "AppStdout" -Values @("\$logPath\\service_stdout.log")
+    Set-NssmKeyWithRetry -KeyName "AppStderr" -Values @("\$logPath\\service_stderr.log")
+    & \$nssmPath set $_serviceName DisplayName "$_displayName" | Out-Null
+    & \$nssmPath set $_serviceName Description "$_description" | Out-Null
+    & \$nssmPath set $_serviceName Start SERVICE_AUTO_START | Out-Null
+    & \$nssmPath set $_serviceName AppNoConsole 1 | Out-Null
+    & \$nssmPath set $_serviceName AppExit Default Restart | Out-Null
+    & \$nssmPath set $_serviceName AppExit 77 Exit | Out-Null
+    & \$nssmPath set $_serviceName AppExit 78 Exit | Out-Null
+    & \$nssmPath set $_serviceName AppRestartDelay 60000 | Out-Null
+    if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
+      & \$nssmPath set $_serviceName ObjectName \$serviceUser \$servicePassword | Out-Null
+    } else {
+      & \$nssmPath set $_serviceName ObjectName $_localSystemAccount | Out-Null
+    }
+
+    exit 0
+  } catch {
+    Fail "geral" \$_.Exception.Message
   }
-
-  \$r = & \$nssmPath install $_serviceName \$appPath 2>&1
-  if (\$LASTEXITCODE -ne 0) { Fail "install" (\$r -join " ") }
-
-  Start-Sleep -Seconds 5
-
-  \$configErr = \$null
-  foreach (\$attempt in 1..3) {
-    \$r = & \$nssmPath set $_serviceName AppParameters "--minimized --mode=server --run-as-service" 2>&1
-    if (\$LASTEXITCODE -eq 0) { \$configErr = \$null; break }
-    \$configErr = \$r -join " "
-    if (\$configErr -notmatch "Can't open service") { Fail "AppParameters" \$configErr }
-    Start-Sleep -Seconds 2
-  }
-  if (\$configErr) { Fail "AppParameters" "Can't open service após 3 tentativas: \$configErr" }
-
-  \$r = & \$nssmPath set $_serviceName AppDirectory \$appDir 2>&1
-  if (\$LASTEXITCODE -ne 0) { Fail "AppDirectory" (\$r -join " ") }
-  \$r = & \$nssmPath set $_serviceName AppEnvironmentExtra "SERVICE_MODE=server" 2>&1
-  if (\$LASTEXITCODE -ne 0) { Fail "AppEnvironmentExtra" (\$r -join " ") }
-  \$r = & \$nssmPath set $_serviceName AppStdout "\$logPath\\service_stdout.log" 2>&1
-  if (\$LASTEXITCODE -ne 0) { Fail "AppStdout" (\$r -join " ") }
-  \$r = & \$nssmPath set $_serviceName AppStderr "\$logPath\\service_stderr.log" 2>&1
-  if (\$LASTEXITCODE -ne 0) { Fail "AppStderr" (\$r -join " ") }
-  & \$nssmPath set $_serviceName DisplayName "$_displayName" | Out-Null
-  & \$nssmPath set $_serviceName Description "$_description" | Out-Null
-  & \$nssmPath set $_serviceName Start SERVICE_AUTO_START | Out-Null
-  & \$nssmPath set $_serviceName AppExit Default Restart | Out-Null
-  & \$nssmPath set $_serviceName AppExit 77 Exit | Out-Null
-  & \$nssmPath set $_serviceName AppRestartDelay 60000 | Out-Null
-  if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
-    & \$nssmPath set $_serviceName ObjectName \$serviceUser \$servicePassword | Out-Null
-  } else {
-    & \$nssmPath set $_serviceName ObjectName $_localSystemAccount | Out-Null
-  }
-
-  exit 0
-} catch {
-  Fail "geral" \$_.Exception.Message
+} finally {
+  # Self-destruct: garante que o script com a senha não sobreviva mesmo
+  # se o caller Dart crashar antes do delete best-effort.
+  try { if (Test-Path \$selfScript) { Remove-Item -Force \$selfScript } } catch {}
 }
 ''';
 
@@ -1432,7 +1635,7 @@ try {
         '-Command',
         elevatedCommand,
       ],
-      timeout: _timing.longTimeout,
+      timeout: _timing.elevatedInstallTimeout,
     );
 
     String? logContent;
@@ -1443,8 +1646,13 @@ try {
         await logFile.delete();
       }
     } on Object catch (_) {}
+    // Defesa-em-profundidade: o próprio script faz self-delete num bloco
+    // `finally` PowerShell, mas se o `Start-Process` nunca executou (UAC
+    // negado, PowerShell ausente), o arquivo ainda existe aqui.
     try {
-      await scriptFile.delete();
+      if (await scriptFile.exists()) {
+        await scriptFile.delete();
+      }
     } on Object catch (_) {}
 
     return result.fold(
@@ -1865,13 +2073,7 @@ try {
     if (processResult.exitCode == _accessDeniedWinError) {
       return true;
     }
-    final output = _getProcessOutput(processResult);
-    // Mantém a forma original (que incluía "access is denied" além das
-    // 4 variantes de `_textContainsAccessDenied`) — esta function é
-    // consumida só por `getStatus`, que historicamente tratava ambas
-    // as variações (e há teste cobrindo o caminho com "Access is denied").
-    return _textContainsAccessDenied(output) ||
-        output.toLowerCase().contains('access is denied');
+    return _textContainsAccessDenied(_getProcessOutput(processResult));
   }
 
   /// Detector case-insensitive de "access denied" em mensagens do `sc.exe`,
@@ -1884,22 +2086,19 @@ try {
   /// primitiva usada por `_isAccessDeniedResponse` (que mantém o
   /// short-circuit pelo `exitCode == _accessDeniedWinError`).
   ///
-  /// **Importante — assimetria preservada**: o `_startService` faz um check
-  /// **adicional** in-line por `"access is denied"` (com "is" entre as
-  /// palavras), porque algumas builds do `sc.exe` imprimem essa variação
-  /// e os testes do start path validam o caminho de elevação para essa
-  /// variação. Outros sites (install/configure/uninstall/stop) **não**
-  /// matchaval esta variação na implementação original — manter a mesma
-  /// semântica aqui evita acionar `_<...>WithElevation` em paths onde os
-  /// callers de teste contam com o failure direto.
-  ///
-  /// Comparado às cadeias antigas, este helper é case-insensitive (antes
-  /// `'Acesso negado'`/`'Access denied'` eram case-sensitive) — uma
-  /// melhoria defensiva sem regressões observadas nos testes.
+  /// **Histórico (S13 da auditoria)**: este helper antes excluía a variante
+  /// `"access is denied"` (com "is"), que ficava como check in-line apenas
+  /// no `_startService`. Algumas builds do `sc.exe` imprimem essa variação,
+  /// e a assimetria foi mantida quando o helper foi extraído para preservar
+  /// backwards-compat com os outros caminhos. Após validação de testes
+  /// (todos os existentes seguem passando com a inclusão), agora cobrimos
+  /// todas as variantes em um único lugar — eliminando o foot-gun para
+  /// próximos refactors.
   static bool _textContainsAccessDenied(String text) {
     final lower = text.toLowerCase();
     return lower.contains('acesso negado') ||
         lower.contains('access denied') ||
+        lower.contains('access is denied') ||
         lower.contains('falha 5') ||
         lower.contains('failure 5');
   }
@@ -1959,31 +2158,147 @@ try {
     );
   }
 
-  void _appendControlDiagnostics(String message, {String? output}) {
-    try {
-      final logDir = Directory(_logPath);
-      if (!logDir.existsSync()) {
-        logDir.createSync(recursive: true);
-      }
-      final file = File(_controlDiagnosticsPath);
-      final ts = DateTime.now().toIso8601String();
-      final buffer = StringBuffer('[$ts] $message');
-      if (output != null && output.trim().isNotEmpty) {
-        final trimmed = output.trim();
-        const maxChars = 3000;
-        final safeOutput = trimmed.length > maxChars
-            ? '${trimmed.substring(0, maxChars)}...'
-            : trimmed;
-        buffer.write('\noutput: $safeOutput');
-      }
-      buffer.write('\n');
-      file.writeAsStringSync(
-        buffer.toString(),
-        mode: FileMode.append,
-        flush: true,
-      );
-    } on Object {
-      // best-effort diagnostics only
-    }
+  /// Helper de testes — expõe os comandos NSSM que `_configureService`
+  /// emitiria para uma combinação de `appDir`/`logPath`. Permite verificar
+  /// (sem precisar mockar 11 chamadas separadas a `ProcessService`) que
+  /// o plan declarativo cobre todas as chaves críticas — em particular,
+  /// que `AppExit 78 Exit` e `AppNoConsole 1` não regrediram (S17).
+  @visibleForTesting
+  static List<List<String>> nssmInstallCommandsForTesting({
+    required String appDir,
+    required String logPath,
+  }) {
+    final plan = _NssmConfigPlan.build(appDir: appDir, logPath: logPath);
+    return plan.entries.map((e) => e.arguments(_serviceName)).toList();
   }
+
+  void _appendControlDiagnostics(String message, {String? output}) {
+    final ts = DateTime.now().toIso8601String();
+    final buffer = StringBuffer('[$ts] $message');
+    if (output != null && output.trim().isNotEmpty) {
+      final trimmed = output.trim();
+      const maxChars = 3000;
+      final safeOutput = trimmed.length > maxChars
+          ? '${trimmed.substring(0, maxChars)}...'
+          : trimmed;
+      buffer.write('\noutput: $safeOutput');
+    }
+    // Delegado ao sink: enfileirado em ordem, gravado em background com
+    // rotação por tamanho. Não há race de interleaving entre callers
+    // concorrentes nem bloqueio do event loop.
+    _diagnosticsSink.append(buffer.toString());
+  }
+
+  /// Aguarda o sink de diagnostics drenar a fila atual. Usar em testes
+  /// que validam o conteúdo escrito no log.
+  @visibleForTesting
+  Future<void> flushDiagnosticsForTesting() => _diagnosticsSink.flush();
+}
+
+/// Plano declarativo das chaves NSSM que o serviço precisa configurar.
+///
+/// Centraliza a configuração para evitar divergência entre os 3 caminhos
+/// de instalação (`_configureService` na UI direta, `_installWithElevation`
+/// via UAC, e `installer/install_service.ps1`). Antes da extração, a
+/// instalação via UI esquecia `AppExit 78 Exit` e `AppNoConsole 1`,
+/// quebrando o auto-update silencioso (issue §2.1 da auditoria).
+class _NssmConfigPlan {
+  const _NssmConfigPlan(this.entries);
+
+  final List<_NssmConfigEntry> entries;
+
+  factory _NssmConfigPlan.build({
+    required String appDir,
+    required String logPath,
+  }) {
+    return _NssmConfigPlan([
+      // Critical: --run-as-service triggers headless mode; without it the
+      // service process opens a (invisible) window and the SCM times out.
+      const _NssmConfigEntry(
+        key: 'AppParameters',
+        values: ['--mode=server --minimized --run-as-service'],
+        critical: true,
+      ),
+      // Critical: working dir is still needed for assets and helper scripts.
+      _NssmConfigEntry(
+        key: 'AppDirectory',
+        values: [appDir],
+        critical: true,
+      ),
+      // Critical: env var é o sinal primário de service-mode (layer 3 de
+      // ServiceModeDetector).
+      const _NssmConfigEntry(
+        key: 'AppEnvironmentExtra',
+        values: ['SERVICE_MODE=server'],
+        critical: true,
+      ),
+      const _NssmConfigEntry(
+        key: 'DisplayName',
+        values: [WindowsServiceService._displayName],
+      ),
+      const _NssmConfigEntry(
+        key: 'Description',
+        values: [WindowsServiceService._description],
+      ),
+      const _NssmConfigEntry(
+        key: 'Start',
+        values: ['SERVICE_AUTO_START'],
+      ),
+      // AppNoConsole evita o flash de cmd.exe ao iniciar o serviço sob
+      // LocalSystem em alguns hosts.
+      const _NssmConfigEntry(
+        key: 'AppNoConsole',
+        values: ['1'],
+      ),
+      _NssmConfigEntry(
+        key: 'AppStdout',
+        values: ['$logPath\\service_stdout.log'],
+        critical: true,
+      ),
+      _NssmConfigEntry(
+        key: 'AppStderr',
+        values: ['$logPath\\service_stderr.log'],
+        critical: true,
+      ),
+      const _NssmConfigEntry(
+        key: 'AppExit',
+        values: ['Default', 'Restart'],
+      ),
+      // 77 = lockDenied (single-instance). Não reiniciar.
+      const _NssmConfigEntry(
+        key: 'AppExit',
+        values: ['77', 'Exit'],
+      ),
+      // 78 = handoffForInstaller (auto-update silencioso). NSSM precisa
+      // sair em vez de tentar reiniciar enquanto o setup.iss substitui
+      // os binários — evita race com AppRestartDelay.
+      const _NssmConfigEntry(
+        key: 'AppExit',
+        values: ['78', 'Exit'],
+      ),
+      const _NssmConfigEntry(
+        key: 'AppRestartDelay',
+        values: ['60000'],
+      ),
+    ]);
+  }
+}
+
+class _NssmConfigEntry {
+  const _NssmConfigEntry({
+    required this.key,
+    required this.values,
+    this.critical = false,
+  });
+
+  final String key;
+  final List<String> values;
+  final bool critical;
+
+  List<String> arguments(String serviceName) => [
+    'set',
+    serviceName,
+    key,
+    ...values,
+  ];
 }

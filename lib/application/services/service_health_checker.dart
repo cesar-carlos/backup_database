@@ -71,17 +71,25 @@ class ServiceHealthChecker {
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
+    /// S1 da auditoria: paths que devem ser checados pelo `_checkDiskSpace`.
+    /// Antes usávamos `Directory.current` cegamente, que em service mode
+    /// (Session 0) costumava resolver para `C:\Windows\System32\` —
+    /// avaliando o disco errado. Agora aceitamos uma lista explícita; se
+    /// vazia, mantemos o comportamento legado (retrocompatibilidade).
+    List<String> diskCheckPaths = const [],
   }) : _backupHistoryRepository = backupHistoryRepository,
        _processService = processService,
        _postgresConfigRepository = postgresConfigRepository,
        _logService = logService,
-       _alertService = alertService;
+       _alertService = alertService,
+       _diskCheckPaths = diskCheckPaths;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final ProcessService _processService;
   final IPostgresConfigRepository _postgresConfigRepository;
   final LogService? _logService;
   final AlertService? _alertService;
+  final List<String> _diskCheckPaths;
 
   final Duration checkInterval;
 
@@ -379,82 +387,128 @@ class ServiceHealthChecker {
       return _CheckResult(issues, metrics);
     }
 
-    try {
-      final currentDir = Directory.current;
+    // S1: paths a checar. Se config não foi fornecida, usa Directory.current
+    // como fallback retrocompat (mas registra em metric para detecção no
+    // monitoring). O ideal é o caller passar paths explícitos:
+    // [appDir, programDataPath, ...activeBackupDestinationPaths].
+    final pathsToCheck = _diskCheckPaths.isNotEmpty
+        ? _diskCheckPaths
+        : <String>[Directory.current.path];
 
-      final result = await _processService.run(
-        executable: 'fsutil',
-        arguments: ['volume', 'diskfree', currentDir.path],
-        timeout: const Duration(seconds: 10),
-      );
+    if (_diskCheckPaths.isEmpty) {
+      metrics['disk_check_used_fallback_cwd'] = true;
+    }
 
-      result.fold(
-        (processResult) {
-          if (processResult.exitCode != 0) {
-            LoggerService.warning(
-              'fsutil falhou (exit code: ${processResult.exitCode}): '
-              '${processResult.stderr}',
-            );
-            metrics['disk_check_performed'] = false;
-            metrics['disk_check_error'] = processResult.stderr;
-            return;
-          }
+    final perPath = <String, double>{};
+    var anyChecked = false;
 
-          final output = processResult.stdout.trim();
+    for (final pathToCheck in _uniqueDriveRoots(pathsToCheck)) {
+      try {
+        final result = await _processService.run(
+          executable: 'fsutil',
+          arguments: ['volume', 'diskfree', pathToCheck],
+          timeout: const Duration(seconds: 10),
+        );
 
-          final lines = output.split('\n');
-          double totalFreeSpaceGB = 0;
-
-          for (final line in lines) {
-            if (line.contains('Total free bytes')) {
-              final parts = line.split(':');
-              if (parts.length >= 2) {
-                final bytesStr = parts[1].trim();
-                final commasRemoved = bytesStr.replaceAll(',', '');
-                final totalFreeBytes = int.tryParse(commasRemoved);
-
-                if (totalFreeBytes != null) {
-                  totalFreeSpaceGB = totalFreeBytes / (1024 * 1024 * 1024);
-                }
-              }
+        result.fold(
+          (processResult) {
+            if (processResult.exitCode != 0) {
+              LoggerService.warning(
+                'fsutil falhou para $pathToCheck '
+                '(exit ${processResult.exitCode}): ${processResult.stderr}',
+              );
+              return;
             }
-          }
 
-          metrics['disk_check_performed'] = true;
-          metrics['free_disk_gb'] = totalFreeSpaceGB;
+            final freeGB = _parseFsutilFreeBytes(processResult.stdout);
+            if (freeGB == null) return;
 
-          if (totalFreeSpaceGB < minFreeDiskGB) {
-            issues.add(
-              HealthIssue(
-                severity: totalFreeSpaceGB < 1.0
-                    ? HealthStatus.critical
-                    : HealthStatus.warning,
-                category: 'disk',
-                message:
-                    'Espaço em disco baixo: ${totalFreeSpaceGB.toStringAsFixed(2)} GB livre '
-                    '(mínimo: ${minFreeDiskGB.toStringAsFixed(1)} GB)',
-                details: 'Diretório verificado: ${currentDir.path}',
-              ),
+            perPath[pathToCheck] = freeGB;
+            anyChecked = true;
+
+            if (freeGB < minFreeDiskGB) {
+              issues.add(
+                HealthIssue(
+                  severity: freeGB < 1.0
+                      ? HealthStatus.critical
+                      : HealthStatus.warning,
+                  category: 'disk',
+                  message:
+                      'Espaço em disco baixo em $pathToCheck: '
+                      '${freeGB.toStringAsFixed(2)} GB livre '
+                      '(mínimo: ${minFreeDiskGB.toStringAsFixed(1)} GB)',
+                  details: 'Diretório verificado: $pathToCheck',
+                ),
+              );
+            } else {
+              LoggerService.debug(
+                'Espaço OK em $pathToCheck: ${freeGB.toStringAsFixed(2)} GB livre',
+              );
+            }
+          },
+          (failure) {
+            LoggerService.warning(
+              'Erro ao executar fsutil para $pathToCheck: $failure',
             );
-          } else {
-            LoggerService.debug(
-              'Espaço em disco OK: ${totalFreeSpaceGB.toStringAsFixed(2)} GB livre',
-            );
-          }
-        },
-        (failure) {
-          LoggerService.warning('Erro ao executar fsutil: $failure');
-          metrics['disk_check_performed'] = false;
-          metrics['disk_check_error'] = failureUserMessage(failure);
-        },
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning('Exceção ao verificar espaço em disco', e, s);
-      metrics['disk_check_performed'] = false;
-      metrics['disk_check_exception'] = e.toString();
+          },
+        );
+      } on Object catch (e, s) {
+        LoggerService.warning(
+          'Exceção ao verificar espaço em disco em $pathToCheck',
+          e,
+          s,
+        );
+      }
+    }
+
+    metrics['disk_check_performed'] = anyChecked;
+    metrics['free_disk_gb_per_path'] = perPath;
+    if (perPath.isNotEmpty) {
+      // Métrica legada para retrocompatibilidade com dashboards antigos:
+      // o menor `free_disk_gb` dentre os paths checados.
+      metrics['free_disk_gb'] = perPath.values.reduce((a, b) => a < b ? a : b);
     }
 
     return _CheckResult(issues, metrics);
+  }
+
+  /// Reduz uma lista de paths ao conjunto de **drive roots** únicos.
+  /// `fsutil volume diskfree` opera no volume, então checar
+  /// `C:\foo` e `C:\bar` produz a mesma resposta — economiza I/O.
+  Iterable<String> _uniqueDriveRoots(List<String> paths) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final p in paths) {
+      final root = _extractDriveRoot(p);
+      if (seen.add(root)) {
+        result.add(root);
+      }
+    }
+    return result;
+  }
+
+  String _extractDriveRoot(String path) {
+    if (path.length >= 2 && path[1] == ':') {
+      return '${path[0].toUpperCase()}:\\';
+    }
+    return path;
+  }
+
+  double? _parseFsutilFreeBytes(String output) {
+    final lines = output.split('\n');
+    for (final line in lines) {
+      if (line.contains('Total free bytes')) {
+        final parts = line.split(':');
+        if (parts.length >= 2) {
+          final bytesStr = parts[1].trim().replaceAll(',', '');
+          final totalFreeBytes = int.tryParse(bytesStr);
+          if (totalFreeBytes != null) {
+            return totalFreeBytes / (1024 * 1024 * 1024);
+          }
+        }
+      }
+    }
+    return null;
   }
 
   Future<_CheckResult> _checkPostgresWalSlots() async {

@@ -1,4 +1,6 @@
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/core/constants/observability_metrics.dart';
+import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:flutter/foundation.dart';
@@ -14,9 +16,11 @@ enum WindowsServiceOperation {
 }
 
 class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
-  WindowsServiceProvider(this._service, this._eventLog);
+  WindowsServiceProvider(this._service, this._eventLog, {IMetricsCollector? metricsCollector})
+    : _metrics = metricsCollector;
   final IWindowsServiceService _service;
   final IWindowsServiceEventLogger _eventLog;
+  final IMetricsCollector? _metrics;
 
   WindowsServiceStatus? _status;
   WindowsServiceOperation _operation = WindowsServiceOperation.none;
@@ -25,6 +29,12 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   DateTime? _statusCacheTimestamp;
   static const _statusCacheTtl = Duration(seconds: 2);
 
+  // S15: dispose-aware. Embora o provider não possua timers nem
+  // subscriptions explícitas, operações async em curso (`installService`,
+  // etc.) podem completar após dispose se o usuário fechar a tela. Sem
+  // este guard, `notifyListeners` post-dispose lança em produção.
+  bool _isDisposed = false;
+
   WindowsServiceStatus? get status => _status;
   bool get isStarting =>
       _operation == WindowsServiceOperation.start ||
@@ -32,6 +42,18 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   WindowsServiceOperation get operation => _operation;
   bool get isInstalled => _status?.isInstalled ?? false;
   bool get isRunning => _status?.isRunning ?? false;
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
 
   Future<void> checkStatus({bool forceRefresh = false}) async {
     if (isLoading) return;
@@ -75,6 +97,11 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     if (isLoading) return false;
     await _eventLog.logInstallStarted();
 
+    // S16: medir tempo total install → RUNNING. Este stopwatch difere
+    // do `windowsServiceStartConvergenceSeconds` (que só mede o polling
+    // do start). Representa UX real do clique "Instalar".
+    final installToRunningWatch = Stopwatch()..start();
+
     final success = await _runOperation<bool>(
       WindowsServiceOperation.install,
       () async {
@@ -94,6 +121,15 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
       await _eventLog.logInstallSucceeded();
       _invalidateStatusCache();
       await checkStatus(forceRefresh: true);
+      // Após install bem-sucedido, o status já reflete o RUNNING (NSSM
+      // faz auto-start). Registramos a métrica end-to-end.
+      if (_status?.isRunning ?? false) {
+        installToRunningWatch.stop();
+        _metrics?.recordHistogram(
+          ObservabilityMetrics.windowsServiceInstallToRunningSeconds,
+          installToRunningWatch.elapsedMilliseconds / 1000,
+        );
+      }
     } else {
       await _eventLog.logInstallFailed(error: error ?? 'Erro desconhecido');
     }
@@ -145,25 +181,36 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     if (ok) {
       await _eventLog.logStartSucceeded();
     } else {
-      final err = error ?? '';
-      if (_isTimeoutMessage(err)) {
-        await _eventLog.logStartTimeout(
-          timeout: const Duration(seconds: 60),
-        );
-      } else {
-        await _eventLog.logStartFailed(error: err);
-      }
+      await _logStartFailureOrTimeout();
     }
 
     _invalidateStatusCache();
     await _refreshStatusSilently();
-    notifyListeners();
     return ok;
   }
 
-  static bool _isTimeoutMessage(String msg) =>
-      msg.toLowerCase().contains('timeout') ||
-      msg.toLowerCase().contains('tempo esgotado');
+  Future<void> _logStartFailureOrTimeout() async {
+    final err = error ?? '';
+    if (_isTimeoutMessage(err)) {
+      await _eventLog.logStartTimeout(timeout: const Duration(seconds: 60));
+    } else {
+      await _eventLog.logStartFailed(error: err);
+    }
+  }
+
+  Future<void> _logStopFailureOrTimeout() async {
+    final err = error ?? '';
+    if (_isTimeoutMessage(err)) {
+      await _eventLog.logStopTimeout(timeout: const Duration(seconds: 60));
+    } else {
+      await _eventLog.logStopFailed(error: err);
+    }
+  }
+
+  static bool _isTimeoutMessage(String msg) {
+    final lower = msg.toLowerCase();
+    return lower.contains('timeout') || lower.contains('tempo esgotado');
+  }
 
   Future<bool> stopService() async {
     if (isLoading) return false;
@@ -184,19 +231,11 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     if (ok) {
       await _eventLog.logStopSucceeded();
     } else {
-      final err = error ?? '';
-      if (_isTimeoutMessage(err)) {
-        await _eventLog.logStopTimeout(
-          timeout: const Duration(seconds: 60),
-        );
-      } else {
-        await _eventLog.logStopFailed(error: err);
-      }
+      await _logStopFailureOrTimeout();
     }
 
     _invalidateStatusCache();
     await _refreshStatusSilently();
-    notifyListeners();
     return ok;
   }
 
@@ -221,19 +260,11 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
       await _eventLog.logStopSucceeded();
       await _eventLog.logStartSucceeded();
     } else {
-      final err = error ?? '';
-      if (_isTimeoutMessage(err)) {
-        await _eventLog.logStartTimeout(
-          timeout: const Duration(seconds: 60),
-        );
-      } else {
-        await _eventLog.logStartFailed(error: err);
-      }
+      await _logStartFailureOrTimeout();
     }
 
     _invalidateStatusCache();
     await _refreshStatusSilently();
-    notifyListeners();
     return ok;
   }
 
@@ -254,13 +285,29 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     }
   }
 
+  /// Atualiza `_status` consultando o SCM e notifica listeners se houve
+  /// mudança real. Usado após operações `start`/`stop`/`restart` para
+  /// refletir o estado convergido sem disparar nova flag de loading.
+  ///
+  /// Antes desse método terminar com `notifyListeners()` explícito no
+  /// caller, cada operação chamava `notifyListeners()` 3-5x: `_runOperation`
+  /// no início e fim + `runAsync` interno + um extra após o refresh
+  /// (issue §3.7). Agora consolidamos em uma única notificação aqui,
+  /// disparada **só se o status realmente mudou**.
   Future<void> _refreshStatusSilently() async {
     final result = await _service.getStatus();
     result.fold(
       (status) {
+        final changed =
+            _status?.isInstalled != status.isInstalled ||
+            _status?.isRunning != status.isRunning ||
+            _status?.stateCode != status.stateCode;
         _status = status;
         _statusCache = status;
         _statusCacheTimestamp = DateTime.now();
+        if (changed) {
+          notifyListeners();
+        }
       },
       (_) {},
     );
