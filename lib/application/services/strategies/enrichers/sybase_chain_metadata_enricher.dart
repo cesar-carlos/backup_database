@@ -5,6 +5,18 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/services/backup_execution_result.dart';
 
+/// Injeta metadados de cadeia de backup Sybase em `BackupMetrics`.
+///
+/// Após um backup de log bem-sucedido, anexa em `metrics.sybaseOptions`:
+///
+/// - `baseFullId`: id do full base usado para a cadeia
+/// - `chainStartAt`: timestamp do full base
+/// - `logSequence`: posição (1-based) do log atual na cadeia
+///
+/// Esses dados permitem reconstruir a sequência exata de aplicação de
+/// logs num restore (full → log #1 → log #2 → ...) sem depender de
+/// inspeção do filesystem. O enricher é no-op quando o preflight não
+/// produziu base/sequência (ex.: backup full ou primeiro log).
 class SybaseChainMetadataEnricher extends BackupResultEnricher<SybaseConfig> {
   @override
   Future<BackupExecutionResult> enrich(

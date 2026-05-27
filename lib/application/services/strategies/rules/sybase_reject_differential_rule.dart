@@ -8,6 +8,13 @@ import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// Bloqueia agendamentos Sybase configurados como `differential`.
+///
+/// Sybase SQL Anywhere não tem backup diferencial nativo (apenas FULL e
+/// TRANSACTION LOG). Esta regra existe para falhar o pipeline cedo, antes
+/// que o `SybaseBackupService` mapeie internamente `differential` para
+/// `log` (comportamento legado de compatibilidade) e produza um backup
+/// diferente do esperado pelo usuário.
 class SybaseRejectDifferentialRule extends BackupValidationRule<SybaseConfig> {
   @override
   Future<rd.Result<void>> validate(

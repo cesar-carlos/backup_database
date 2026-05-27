@@ -98,6 +98,35 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
       return;
     }
 
+    // M4: pré-check do estado das ferramentas Sybase. Sem isso, o probe
+    // dispara o `dbisql` e — se ele estiver ausente do PATH — o usuário
+    // recebe uma mensagem genérica do `ProcessService` em vez do diagnóstico
+    // claro do `SybaseToolsStatusCard`.
+    final provider = context.read<SybaseConfigProvider>();
+    final toolsStatus = provider.toolsStatus;
+    if (toolsStatus != null && !toolsStatus.canRunBackup) {
+      unawaited(
+        MessageModal.showError(
+          context,
+          title: appLocaleString(
+            context,
+            'Ferramentas Sybase indisponíveis',
+            'Sybase tools unavailable',
+          ),
+          message: appLocaleString(
+            context,
+            'dbisql ou dbbackup não foram encontrados no PATH do sistema. '
+                'Verifique a página de configuração Sybase e instale/configure '
+                'o SQL Anywhere antes de testar a conexão.',
+            'dbisql or dbbackup were not found in the system PATH. Check '
+                'the Sybase configuration page and install/configure '
+                'SQL Anywhere before testing the connection.',
+          ),
+        ),
+      );
+      return;
+    }
+
     try {
       var probeStarted = false;
       final mSuccess = appLocaleString(

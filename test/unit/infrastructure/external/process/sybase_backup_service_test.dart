@@ -9,6 +9,7 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/process/sybase_backup_service.dart';
+import 'package:backup_database/infrastructure/external/process/sybase_connection_strategy_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -32,7 +33,11 @@ void main() {
     // mocks possam inspecionar diretamente os argumentos passados ao
     // ProcessService. Em produção, o arquivo é usado por padrão para
     // evitar expor a senha em `tasklist /v`.
-    service = SybaseBackupService(processService, useCredentialsFile: false);
+    service = SybaseBackupService(
+      processService,
+      strategyCache: SybaseConnectionStrategyCache(),
+      useCredentialsFile: false,
+    );
     tempDir = await Directory.systemTemp.createTemp('sybase_backup_test_');
     config = SybaseConfig(
       id: 'cfg-1',

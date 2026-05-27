@@ -1,6 +1,6 @@
 import 'package:backup_database/application/services/strategies/postgres_backup_strategy.dart';
 import 'package:backup_database/application/services/strategies/sql_server_backup_strategy.dart';
-import 'package:backup_database/application/services/strategies/sybase_backup_strategy.dart';
+import 'package:backup_database/application/services/strategies/sybase_backup_strategy_factory.dart';
 import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/entities/sql_server_config.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
@@ -98,24 +98,27 @@ void main() {
     ).called(1);
   });
 
-  test('SybaseBackupStrategy forwards getDatabaseSizeBytes', () async {
-    final mock = _MockSybaseBackupService();
-    final preflight = _MockValidatePreflight();
-    final strategy = SybaseBackupStrategy(
-      service: mock,
-      validatePreflight: preflight,
-    );
-    when(
-      () => mock.getDatabaseSizeBytes(config: syCfg),
-    ).thenAnswer((_) async => const Success(42));
+  test(
+    'GenericDatabaseBackupStrategy<Sybase> forwards getDatabaseSizeBytes',
+    () async {
+      final mock = _MockSybaseBackupService();
+      final preflight = _MockValidatePreflight();
+      final strategy = SybaseBackupStrategyFactory.create(
+        service: mock,
+        validatePreflight: preflight,
+      );
+      when(
+        () => mock.getDatabaseSizeBytes(config: syCfg),
+      ).thenAnswer((_) async => const Success(42));
 
-    final result = await strategy.getDatabaseSizeBytes(
-      databaseConfig: syCfg,
-    );
+      final result = await strategy.getDatabaseSizeBytes(
+        databaseConfig: syCfg,
+      );
 
-    expect(result.getOrNull(), 42);
-    verify(
-      () => mock.getDatabaseSizeBytes(config: syCfg),
-    ).called(1);
-  });
+      expect(result.getOrNull(), 42);
+      verify(
+        () => mock.getDatabaseSizeBytes(config: syCfg),
+      ).called(1);
+    },
+  );
 }

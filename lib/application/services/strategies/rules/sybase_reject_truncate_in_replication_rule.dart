@@ -9,6 +9,13 @@ import 'package:backup_database/domain/entities/sybase_backup_options.dart';
 import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// Impede backup de log com modo `TRUNCATE` em ambientes de replicação.
+///
+/// Em ambientes SQL Remote / MobiLink, truncar o transaction log pode
+/// quebrar a sincronização de réplicas que ainda não consumiram esse
+/// trecho do log. Esta regra força modo `RENAME` ou `ONLY` quando
+/// `config.isReplicationEnvironment=true`, evitando inconsistência de
+/// dados em produção.
 class SybaseRejectTruncateInReplicationRule
     extends BackupValidationRule<SybaseConfig> {
   @override

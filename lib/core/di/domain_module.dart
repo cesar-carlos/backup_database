@@ -68,6 +68,9 @@ Future<void> setupDomainModule(GetIt getIt) async {
       getIt<IBackupHistoryRepository>(),
     ),
   );
+  getIt.registerLazySingleton<GetSybaseBackupHealth>(
+    () => GetSybaseBackupHealth(getIt<IBackupHistoryRepository>()),
+  );
 
   // Scheduling Use Cases
   getIt.registerLazySingleton<CreateSchedule>(

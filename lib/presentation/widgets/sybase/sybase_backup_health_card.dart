@@ -1,16 +1,12 @@
 import 'dart:async';
 
-import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
-import 'package:backup_database/domain/entities/backup_type.dart';
-import 'package:backup_database/domain/repositories/i_backup_history_repository.dart';
+import 'package:backup_database/domain/use_cases/backup/get_sybase_backup_health.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get_it/get_it.dart';
 import 'package:intl/intl.dart';
-
-enum SybaseChainStatus { ok, warning, broken }
 
 class SybaseBackupHealthCard extends StatefulWidget {
   const SybaseBackupHealthCard({super.key});
@@ -39,81 +35,16 @@ class _SybaseBackupHealthCardState extends State<SybaseBackupHealthCard> {
     });
 
     try {
-      final repo = GetIt.instance<IBackupHistoryRepository>();
-      final result = await repo.getAll(limit: 200);
+      final useCase = GetIt.instance<GetSybaseBackupHealth>();
+      final result = await useCase();
 
       result.fold(
-        (backups) {
-          final sybase = backups
-              .where((b) => b.databaseType.toLowerCase() == 'sybase')
-              .toList();
-
-          final successfulFulls = sybase
-              .where(
-                (b) =>
-                    (b.backupType == BackupType.full.name ||
-                        b.backupType == BackupType.fullSingle.name) &&
-                    b.status == BackupStatus.success,
-              )
-              .toList();
-          successfulFulls.sort(
-            (a, b) => (b.finishedAt ?? b.startedAt).compareTo(
-              a.finishedAt ?? a.startedAt,
-            ),
-          );
-          final lastFull = successfulFulls.isNotEmpty
-              ? successfulFulls.first
-              : null;
-
-          final successfulLogs = sybase
-              .where(
-                (b) =>
-                    b.backupType == BackupType.log.name &&
-                    b.status == BackupStatus.success,
-              )
-              .toList();
-          successfulLogs.sort(
-            (a, b) => (b.finishedAt ?? b.startedAt).compareTo(
-              a.finishedAt ?? a.startedAt,
-            ),
-          );
-          final lastLog = successfulLogs.isNotEmpty
-              ? successfulLogs.first
-              : null;
-
-          final lastBackup = sybase.isNotEmpty
-              ? sybase.reduce(
-                  (a, b) =>
-                      (a.finishedAt ?? a.startedAt).isAfter(
-                        b.finishedAt ?? b.startedAt,
-                      )
-                      ? a
-                      : b,
-                )
-              : null;
-
-          var status = SybaseChainStatus.ok;
-          if (lastFull == null && lastLog != null) {
-            status = SybaseChainStatus.broken;
-          } else if (lastFull != null) {
-            final daysSinceFull = DateTime.now()
-                .difference(lastFull.finishedAt ?? lastFull.startedAt)
-                .inDays;
-            if (daysSinceFull > BackupConstants.maxDaysForLogBackupBaseFull) {
-              status = SybaseChainStatus.warning;
-            }
-            if (lastBackup?.status == BackupStatus.error) {
-              status = status == SybaseChainStatus.ok
-                  ? SybaseChainStatus.warning
-                  : status;
-            }
-          }
-
+        (health) {
           if (mounted) {
             setState(() {
-              _lastFull = lastFull;
-              _lastLog = lastLog;
-              _chainStatus = status;
+              _lastFull = health.lastFull;
+              _lastLog = health.lastLog;
+              _chainStatus = health.chainStatus;
               _isLoading = false;
             });
           }

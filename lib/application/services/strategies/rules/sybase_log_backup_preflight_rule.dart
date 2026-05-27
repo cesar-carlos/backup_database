@@ -9,6 +9,14 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/use_cases/backup/validate_sybase_log_backup_preflight.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// Executa o preflight de backup de log Sybase no pipeline.
+///
+/// Garante que existe um backup full base e que ele não está expirado
+/// antes de tentar gerar o transaction log (sem full base, o `.trn`
+/// gerado seria inutilizável para restore). O resultado do preflight
+/// (incluindo `baseFull` e `nextLogSequence`) fica no
+/// `BackupPipelineContext` para o `SybaseChainMetadataEnricher` injetar
+/// em `BackupMetrics.sybaseOptions`.
 class SybaseLogBackupPreflightRule extends BackupValidationRule<SybaseConfig> {
   SybaseLogBackupPreflightRule(this._validatePreflight);
 
@@ -27,7 +35,16 @@ class SybaseLogBackupPreflightRule extends BackupValidationRule<SybaseConfig> {
 
     final preflightResult = await _validatePreflight(schedule);
     if (preflightResult.isError()) {
-      return rd.Failure(preflightResult.exceptionOrNull()!);
+      // Defensive null: em teoria `isError() == true` garante que
+      // `exceptionOrNull()` não é null, mas extrair com fallback evita
+      // crash em caso de implementações divergentes do `result_dart`.
+      final ex = preflightResult.exceptionOrNull();
+      return rd.Failure(
+        ex ??
+            const ValidationFailure(
+              message: 'Preflight Sybase retornou erro sem mensagem',
+            ),
+      );
     }
     final preflight = preflightResult.getOrNull();
     if (preflight == null) {

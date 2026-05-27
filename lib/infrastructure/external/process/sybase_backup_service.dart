@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
@@ -19,13 +20,32 @@ import 'package:backup_database/infrastructure/external/process/sybase_connectio
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// Extrai mensagem amigável de qualquer Object usado em `result.fold`.
+///
+/// Substitui o padrão `failure is Failure ? failure.message : failure.toString()`
+/// repetido em vários `fold` deste serviço, evitando expor `Failure(...)` no
+/// stdout/UI (§5.6 de `architectural_patterns.mdc`) e o cast inseguro §5.2.
+String _failureMessage(Object failure) {
+  if (failure is Failure) {
+    return failure.message;
+  }
+  return failure.toString();
+}
+
 class SybaseBackupService implements ISybaseBackupService {
   SybaseBackupService(
     this._processService, {
-    SybaseConnectionStrategyCache? strategyCache,
+    required SybaseConnectionStrategyCache strategyCache,
     bool useCredentialsFile = true,
-  }) : _strategyCache = strategyCache ?? SybaseConnectionStrategyCache(),
-       _useCredentialsFile = useCredentialsFile;
+  }) : _strategyCache = strategyCache,
+       _useCredentialsFile = useCredentialsFile {
+    // A6: limpa eventuais diretórios `sybase_backup_*` deixados em
+    // `Directory.systemTemp` por execuções anteriores que foram mortas
+    // antes do `finally` do `_runSybaseToolWithCredentials`. Cada um
+    // contém um `args.txt` com `PWD=...` em texto plano. O cleanup é
+    // best-effort e roda em background — falhas são logadas em debug.
+    unawaited(_cleanupOrphanCredentialDirs());
+  }
 
   final ps.ProcessService _processService;
   final SybaseConnectionStrategyCache _strategyCache;
@@ -72,6 +92,21 @@ class SybaseBackupService implements ISybaseBackupService {
     String? cancelTag,
   }) async {
     final options = sybaseBackupOptions ?? SybaseBackupOptions.safeDefaults;
+
+    // C7: validação early-return das opções (CHECKPOINT LOG AUTO exige
+    // server-side, blockSize dentro dos limites). Antes dessa checagem,
+    // um schedule inválido só falhava no momento do disparo com erro
+    // críptico do dbisql/dbbackup.
+    final validation = options.validate();
+    if (!validation.isValid) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Opções de backup Sybase inválidas: ${validation.errorMessage}',
+        ),
+      );
+    }
+
     final effectiveLogMode = options.effectiveLogMode(truncateLog: truncateLog);
     // Tag canônica vinda do orchestrator (geralmente `backup-<historyId>`).
     // Quando ausente, mantemos o comportamento legado baseado em `config.id`.
@@ -99,7 +134,12 @@ class SybaseBackupService implements ISybaseBackupService {
           ? BackupType.log
           : backupType;
 
-      final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      // M3: substitui também `.` (microssegundos) para evitar nomes de
+      // diretório como `mydb_log_2026-05-27T09-26-11.123456` que alguns
+      // utilitários no Windows interpretam como tendo extensão.
+      final timestamp = DateTime.now()
+          .toIso8601String()
+          .replaceAll(RegExp('[:.]'), '-');
       final typeSlug = effectiveType.name;
 
       // Agora todos os tipos (inclusive FULL) recebem timestamp único no
@@ -128,43 +168,24 @@ class SybaseBackupService implements ISybaseBackupService {
 
       final escapedBackupPath = backupPath.replaceAll(r'\', r'\\');
 
-      final dbisqlConnections = <String>[
-        'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-
-        'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
-
-        'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-      ];
+      // Lista única de estratégias dbisql (nome + conn). Substitui o par
+      // `dbisqlConnections` + `_dbisqlStrategyNames` que vivia em locais
+      // distintos e exigia manter a ordem em sincronia manualmente.
+      final dbisqlStrategies = _buildDbisqlStrategies(config, databaseName);
 
       final cacheKey = effectiveType.name;
       final cached = _strategyCache.get(config.id, cacheKey);
 
       var sqlBackupSuccess = false;
-      var dbisqlStrategyIndex = 0;
+      // Índices sempre 0-based internamente. O `+1` aparece só nas
+      // mensagens de log/strings.
+      var dbisqlStrategyIndex = -1;
       var dbbackupStrategyIndex = -1;
 
-      final connectionStrategies = <Map<String, String>>[
-        {
-          'name': 'ENG+DBN (serverName + databaseName)',
-          'conn':
-              'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-        },
-        {
-          'name': 'ENG+DBN (databaseName como ambos)',
-          'conn':
-              'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-        },
-        {
-          'name': 'Apenas ENG por serverName',
-          'conn':
-              'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
-        },
-        {
-          'name': 'Conexão via TCPIP',
-          'conn':
-              'HOST=localhost:${config.port};DBN=$databaseName;UID=${config.username};PWD=${config.password};LINKS=TCPIP',
-        },
-      ];
+      final connectionStrategies = _buildDbbackupStrategies(
+        config,
+        databaseName,
+      );
 
       // Se a estratégia que funcionou da última vez foi dbbackup, tentamos
       // ela primeiro. As ferramentas SA recebem argumentos via arquivo
@@ -181,7 +202,7 @@ class SybaseBackupService implements ISybaseBackupService {
           options: options,
           effectiveType: effectiveType,
           effectiveLogMode: effectiveLogMode,
-          connectionString: strategy['conn']!,
+          connectionString: strategy.conn,
           backupPath: backupPath,
         );
 
@@ -212,8 +233,8 @@ class SybaseBackupService implements ISybaseBackupService {
 
       if (cached != null &&
           cached.method == SybaseConnectionMethod.dbisql &&
-          cached.strategyIndex < dbisqlConnections.length) {
-        final connStr = dbisqlConnections[cached.strategyIndex];
+          cached.strategyIndex < dbisqlStrategies.length) {
+        final connStr = dbisqlStrategies[cached.strategyIndex].conn;
         LoggerService.debug(
           'Tentando estratégia cacheada dbisql ${cached.strategyIndex + 1}',
         );
@@ -236,7 +257,7 @@ class SybaseBackupService implements ISybaseBackupService {
             (processResult) {
               if (processResult.isSuccess) {
                 sqlBackupSuccess = true;
-                dbisqlStrategyIndex = cached.strategyIndex + 1;
+                dbisqlStrategyIndex = cached.strategyIndex;
                 LoggerService.info(
                   'Backup SQL bem-sucedido com estratégia cacheada '
                   '${cached.strategyIndex + 1}',
@@ -252,12 +273,12 @@ class SybaseBackupService implements ISybaseBackupService {
       }
 
       if (!sqlBackupSuccess) {
-        for (var i = 0; i < dbisqlConnections.length; i++) {
-          final connStr = dbisqlConnections[i];
-          dbisqlStrategyIndex = i + 1;
+        for (var i = 0; i < dbisqlStrategies.length; i++) {
+          final connStr = dbisqlStrategies[i].conn;
+          dbisqlStrategyIndex = i;
           LoggerService.debug(
             'Tentando dbisql com estratégia '
-            '$dbisqlStrategyIndex/${dbisqlConnections.length}',
+            '${i + 1}/${dbisqlStrategies.length}',
           );
 
           final backupSql = _buildBackupSql(
@@ -267,6 +288,7 @@ class SybaseBackupService implements ISybaseBackupService {
             options,
           );
           if (backupSql == null) {
+            await BackupArtifactUtils.safeDeletePartial(backupPath);
             return const rd.Failure(
               BackupFailure(
                 message:
@@ -290,7 +312,7 @@ class SybaseBackupService implements ISybaseBackupService {
               if (processResult.isSuccess) {
                 sqlBackupSuccess = true;
                 LoggerService.info(
-                  'Backup SQL bem-sucedido com estratégia $dbisqlStrategyIndex',
+                  'Backup SQL bem-sucedido com estratégia ${i + 1}',
                 );
               } else {
                 lastError = processResult.stderr;
@@ -298,11 +320,7 @@ class SybaseBackupService implements ISybaseBackupService {
               }
             },
             (failure) {
-              if (failure is Failure) {
-                lastError = failure.message;
-              } else {
-                lastError = failure.toString();
-              }
+              lastError = _failureMessage(failure);
             },
           );
 
@@ -315,13 +333,13 @@ class SybaseBackupService implements ISybaseBackupService {
 
         for (var i = 0; i < connectionStrategies.length; i++) {
           final strategy = connectionStrategies[i];
-          LoggerService.debug('Tentando dbbackup: ${strategy['name']}');
+          LoggerService.debug('Tentando dbbackup: ${strategy.name}');
 
           final args = _buildDbbackupArgs(
             options: options,
             effectiveType: effectiveType,
             effectiveLogMode: effectiveLogMode,
-            connectionString: strategy['conn']!,
+            connectionString: strategy.conn,
             backupPath: backupPath,
           );
 
@@ -339,21 +357,17 @@ class SybaseBackupService implements ISybaseBackupService {
                 success = true;
                 dbbackupStrategyIndex = i;
                 LoggerService.info(
-                  'Backup bem-sucedido com: ${strategy['name']}',
+                  'Backup bem-sucedido com: ${strategy.name}',
                 );
               } else {
                 lastError = processResult.stderr;
                 LoggerService.debug(
-                  'Estratégia "${strategy['name']}" falhou: ${processResult.stderr}',
+                  'Estratégia "${strategy.name}" falhou: ${processResult.stderr}',
                 );
               }
             },
             (failure) {
-              if (failure is Failure) {
-                lastError = failure.message;
-              } else {
-                lastError = failure.toString();
-              }
+              lastError = _failureMessage(failure);
             },
           );
 
@@ -364,6 +378,7 @@ class SybaseBackupService implements ISybaseBackupService {
       backupStopwatch.stop();
 
       if (result == null) {
+        await BackupArtifactUtils.safeDeletePartial(backupPath);
         final message = _buildNoStrategyWorkedMessage(lastError, config);
         return rd.Failure(BackupFailure(message: message));
       }
@@ -375,7 +390,7 @@ class SybaseBackupService implements ISybaseBackupService {
               config.id,
               cacheKey,
               SybaseConnectionMethod.dbisql,
-              dbisqlStrategyIndex - 1,
+              dbisqlStrategyIndex,
             );
           } else if (dbbackupStrategyIndex >= 0) {
             _strategyCache.put(
@@ -446,6 +461,7 @@ class SybaseBackupService implements ISybaseBackupService {
         }
 
         if (!backupFound) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
           return rd.Failure(
             BackupFailure(
               message: _buildBackupNotCreatedMessage(backupPath),
@@ -517,145 +533,41 @@ class SybaseBackupService implements ISybaseBackupService {
           'Backup Sybase concluído: $actualBackupPath (${ByteFormat.format(totalSize)})',
         );
 
-        final verifyStopwatch = Stopwatch();
-        var verifySuccess = false;
-        var verificationMethodUsed = 'dbvalid';
-        if (verifyAfterBackup) {
-          LoggerService.info('Verificando integridade do backup Sybase...');
-          verifyStopwatch.start();
+        final verification = await _runVerification(
+          config: config,
+          actualBackupPath: actualBackupPath,
+          effectiveType: effectiveType,
+          verifyAfterBackup: verifyAfterBackup,
+          verifyPolicy: verifyPolicy,
+          verifyTimeout: verifyTimeout,
+          verifyCancelTag: verifyCancelTag,
+        );
 
-          var lastVerifyError = '';
-
-          if (effectiveType == BackupType.full) {
-            final dir = Directory(actualBackupPath);
-            if (await dir.exists()) {
-              final backupDbFile = await _tryFindBackupDbFile(dir);
-              if (backupDbFile != null) {
-                final connStr =
-                    'UID=${config.username};PWD=${config.password};DBF=${backupDbFile.path}';
-                LoggerService.debug(
-                  'Tentando dbvalid no arquivo: ${backupDbFile.path}',
-                );
-
-                final verifyResult = await _runSybaseToolWithCredentials(
-                  executable: 'dbvalid',
-                  arguments: ['-c', connStr],
-                  timeout: verifyTimeout ?? const Duration(minutes: 30),
-                  tag: verifyCancelTag,
-                );
-
-                verifyResult.fold(
-                  (processResult) {
-                    if (processResult.isSuccess) {
-                      verifySuccess = true;
-                      LoggerService.info(
-                        'Verificação de integridade concluída com sucesso (dbvalid)',
-                      );
-                    } else {
-                      lastVerifyError = processResult.stderr.isNotEmpty
-                          ? processResult.stderr
-                          : processResult.stdout;
-                      LoggerService.debug(
-                        'dbvalid falhou: $lastVerifyError',
-                      );
-                    }
-                  },
-                  (failure) {
-                    lastVerifyError = failure is Failure
-                        ? failure.message
-                        : failure.toString();
-                  },
-                );
-
-                if (!verifySuccess) {
-                  LoggerService.debug(
-                    'Tentando fallback dbverify no arquivo: ${backupDbFile.path}',
-                  );
-                  final dbverifyResult = await _runSybaseToolWithCredentials(
-                    executable: 'dbverify',
-                    arguments: ['-c', connStr],
-                    timeout: verifyTimeout ?? const Duration(minutes: 30),
-                    tag: verifyCancelTag,
-                  );
-                  dbverifyResult.fold(
-                    (processResult) {
-                      if (processResult.isSuccess) {
-                        verifySuccess = true;
-                        verificationMethodUsed = 'dbverify';
-                        LoggerService.info(
-                          'Verificação de integridade concluída com sucesso (dbverify fallback)',
-                        );
-                      } else {
-                        lastVerifyError = processResult.stderr.isNotEmpty
-                            ? processResult.stderr
-                            : processResult.stdout;
-                      }
-                    },
-                    (failure) {
-                      lastVerifyError = failure is Failure
-                          ? failure.message
-                          : failure.toString();
-                    },
-                  );
-                }
-              } else {
-                lastVerifyError =
-                    'Não foi possível localizar um arquivo .db no diretório do backup';
-              }
-            }
-          }
-
-          if (effectiveType == BackupType.log) {
-            LoggerService.info(
-              'Verificação não disponível para backup de log; '
-              'resultado registrado como indisponível',
-            );
-            lastVerifyError = 'Verificação não disponível para backup de log';
-          } else if (!verifySuccess) {
-            LoggerService.warning(
-              'Verificação de integridade falhou (dbvalid e dbverify): $lastVerifyError',
-            );
-            if (verifyPolicy == VerifyPolicy.strict) {
-              verifyStopwatch.stop();
-              return rd.Failure(
-                BackupFailure(
-                  message:
-                      'Verificação de integridade falhou (modo estrito). '
-                      '$lastVerifyError',
-                ),
-              );
-            }
-          }
-          verifyStopwatch.stop();
+        final strictFailure = verification.strictFailureMessage;
+        if (strictFailure != null) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+          return rd.Failure(BackupFailure(message: strictFailure));
         }
 
         final backupDuration = backupStopwatch.elapsed;
-        final verifyDuration = verifyAfterBackup
-            ? verifyStopwatch.elapsed
-            : Duration.zero;
+        final verifyDuration = verification.duration;
         final totalDuration = backupDuration + verifyDuration;
 
-        final verifyPolicyLabel = !verifyAfterBackup
-            ? 'none'
-            : effectiveType == BackupType.log
-            ? 'log_unavailable'
-            : verifySuccess
-            ? verificationMethodUsed
-            : 'dbvalid_falhou';
+        final verifyPolicyLabel = _resolveVerifyPolicyLabel(
+          verifyAfterBackup: verifyAfterBackup,
+          effectiveType: effectiveType,
+          verifySuccess: verification.success,
+          verificationMethodUsed: verification.methodUsed,
+        );
 
-        final sybaseOptionsJson = Map<String, dynamic>.from(options.toJson());
-        sybaseOptionsJson['verificationMethod'] = verifyPolicyLabel;
-        if (dbbackupStrategyIndex >= 0) {
-          sybaseOptionsJson['backupMethod'] = 'dbbackup';
-          sybaseOptionsJson['connectionStrategy'] =
-              connectionStrategies[dbbackupStrategyIndex]['name'] ??
-              'dbbackup #${dbbackupStrategyIndex + 1}';
-        } else {
-          sybaseOptionsJson['backupMethod'] = 'dbisql';
-          sybaseOptionsJson['connectionStrategy'] = _dbisqlStrategyName(
-            dbisqlStrategyIndex,
-          );
-        }
+        final sybaseOptionsJson = _buildSybaseOptionsJson(
+          options: options,
+          verifyPolicyLabel: verifyPolicyLabel,
+          dbbackupStrategyIndex: dbbackupStrategyIndex,
+          dbisqlStrategyIndex: dbisqlStrategyIndex,
+          dbbackupStrategies: connectionStrategies,
+          dbisqlStrategies: dbisqlStrategies,
+        );
 
         final metrics = BackupMetrics(
           totalDuration: totalDuration,
@@ -698,6 +610,204 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
+  /// Roda a verificação pós-backup (dbvalid + fallback dbverify) ou
+  /// determina que verificação não é aplicável (log).
+  ///
+  /// Para `effectiveType == log`, retorna `_VerifyOutcome.logUnavailable` e
+  /// (em strict) sinaliza falha via `strictFailureMessage` para o caller
+  /// abortar antes de montar métricas.
+  Future<_VerifyOutcome> _runVerification({
+    required SybaseConfig config,
+    required String actualBackupPath,
+    required BackupType effectiveType,
+    required bool verifyAfterBackup,
+    required VerifyPolicy verifyPolicy,
+    required Duration? verifyTimeout,
+    required String verifyCancelTag,
+  }) async {
+    if (!verifyAfterBackup) {
+      return const _VerifyOutcome(
+        success: false,
+        methodUsed: 'dbvalid',
+        duration: Duration.zero,
+      );
+    }
+
+    if (effectiveType == BackupType.log) {
+      // C6: strict + log = decisão explícita de "não há verificação real
+      // disponível para log". Em strict, sinalizamos falha via mensagem.
+      if (verifyPolicy == VerifyPolicy.strict) {
+        return const _VerifyOutcome(
+          success: false,
+          methodUsed: 'dbvalid',
+          duration: Duration.zero,
+          strictFailureMessage:
+              'Verificação de integridade não disponível para backup '
+              'de log Sybase, e modo estrito (strict) foi solicitado. '
+              'Use VerifyPolicy.bestEffort para backups de log ou '
+              'desabilite "Verificar após backup".',
+        );
+      }
+      LoggerService.info(
+        'Verificação não disponível para backup de log; '
+        'resultado registrado como indisponível',
+      );
+      return const _VerifyOutcome(
+        success: false,
+        methodUsed: 'dbvalid',
+        duration: Duration.zero,
+      );
+    }
+
+    // M2: stopwatch só roda quando há verificação real (full).
+    final stopwatch = Stopwatch()..start();
+    LoggerService.info('Verificando integridade do backup Sybase...');
+
+    var verifySuccess = false;
+    var methodUsed = 'dbvalid';
+    var lastVerifyError = '';
+
+    final dir = Directory(actualBackupPath);
+    if (await dir.exists()) {
+      final backupDbFile = await _tryFindBackupDbFile(dir);
+      if (backupDbFile != null) {
+        final connStr =
+            'UID=${config.username};PWD=${config.password};'
+            'DBF=${backupDbFile.path}';
+
+        final dbvalidOutcome = await _runVerifyTool(
+          executable: 'dbvalid',
+          connectionString: connStr,
+          timeout: verifyTimeout,
+          tag: verifyCancelTag,
+        );
+        verifySuccess = dbvalidOutcome.success;
+        lastVerifyError = dbvalidOutcome.errorMessage;
+
+        if (!verifySuccess) {
+          LoggerService.debug(
+            'Tentando fallback dbverify no arquivo: ${backupDbFile.path}',
+          );
+          final dbverifyOutcome = await _runVerifyTool(
+            executable: 'dbverify',
+            connectionString: connStr,
+            timeout: verifyTimeout,
+            tag: verifyCancelTag,
+          );
+          if (dbverifyOutcome.success) {
+            verifySuccess = true;
+            methodUsed = 'dbverify';
+          } else {
+            lastVerifyError = dbverifyOutcome.errorMessage;
+          }
+        }
+      } else {
+        lastVerifyError =
+            'Não foi possível localizar um arquivo .db no diretório do backup';
+      }
+    }
+
+    if (!verifySuccess) {
+      LoggerService.warning(
+        'Verificação de integridade falhou (dbvalid e dbverify): '
+        '$lastVerifyError',
+      );
+      if (verifyPolicy == VerifyPolicy.strict) {
+        stopwatch.stop();
+        return _VerifyOutcome(
+          success: false,
+          methodUsed: methodUsed,
+          duration: stopwatch.elapsed,
+          strictFailureMessage:
+              'Verificação de integridade falhou (modo estrito). '
+              '$lastVerifyError',
+        );
+      }
+    }
+    stopwatch.stop();
+    return _VerifyOutcome(
+      success: verifySuccess,
+      methodUsed: methodUsed,
+      duration: stopwatch.elapsed,
+    );
+  }
+
+  /// Executa um único utilitário de verificação (`dbvalid` ou `dbverify`)
+  /// e devolve sucesso + mensagem de erro consolidada.
+  Future<_VerifyToolOutcome> _runVerifyTool({
+    required String executable,
+    required String connectionString,
+    required Duration? timeout,
+    required String tag,
+  }) async {
+    final result = await _runSybaseToolWithCredentials(
+      executable: executable,
+      arguments: ['-c', connectionString],
+      timeout: timeout ?? const Duration(minutes: 30),
+      tag: tag,
+    );
+    return result.fold(
+      (processResult) {
+        if (processResult.isSuccess) {
+          LoggerService.info(
+            'Verificação de integridade concluída com sucesso ($executable)',
+          );
+          return const _VerifyToolOutcome(success: true, errorMessage: '');
+        }
+        final msg = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+        LoggerService.debug('$executable falhou: $msg');
+        return _VerifyToolOutcome(success: false, errorMessage: msg);
+      },
+      (failure) => _VerifyToolOutcome(
+        success: false,
+        errorMessage: _failureMessage(failure),
+      ),
+    );
+  }
+
+  /// Resolve a etiqueta exibida em `flags.verifyPolicy` /
+  /// `sybaseOptions.verificationMethod` na ordem: `none`,
+  /// `log_unavailable`, método usado (dbvalid/dbverify) ou `dbvalid_falhou`.
+  static String _resolveVerifyPolicyLabel({
+    required bool verifyAfterBackup,
+    required BackupType effectiveType,
+    required bool verifySuccess,
+    required String verificationMethodUsed,
+  }) {
+    if (!verifyAfterBackup) return 'none';
+    if (effectiveType == BackupType.log) return 'log_unavailable';
+    return verifySuccess ? verificationMethodUsed : 'dbvalid_falhou';
+  }
+
+  /// Monta o mapa `sybaseOptions` que vai para `BackupMetrics`, embutindo
+  /// `verificationMethod`, `backupMethod` e `connectionStrategy`.
+  Map<String, dynamic> _buildSybaseOptionsJson({
+    required SybaseBackupOptions options,
+    required String verifyPolicyLabel,
+    required int dbbackupStrategyIndex,
+    required int dbisqlStrategyIndex,
+    required List<_SybaseConnectionStrategy> dbbackupStrategies,
+    required List<_SybaseConnectionStrategy> dbisqlStrategies,
+  }) {
+    final json = Map<String, dynamic>.from(options.toJson());
+    json['verificationMethod'] = verifyPolicyLabel;
+    if (dbbackupStrategyIndex >= 0) {
+      json['backupMethod'] = 'dbbackup';
+      json['connectionStrategy'] =
+          dbbackupStrategies[dbbackupStrategyIndex].name;
+    } else {
+      json['backupMethod'] = 'dbisql';
+      json['connectionStrategy'] =
+          dbisqlStrategyIndex >= 0 &&
+                  dbisqlStrategyIndex < dbisqlStrategies.length
+              ? dbisqlStrategies[dbisqlStrategyIndex].name
+              : 'dbisql #${dbisqlStrategyIndex + 1}';
+    }
+    return json;
+  }
+
   /// Monta a lista de argumentos do `dbbackup` para uma dada estratégia.
   /// Centralizado para eliminar duplicação entre cache hit e fallback loop.
   List<String> _buildDbbackupArgs({
@@ -717,6 +827,51 @@ class SybaseBackupService implements ISybaseBackupService {
     }
     args.addAll(['-c', connectionString, '-y', backupPath]);
     return args;
+  }
+
+  /// Prefixo dos diretórios temporários criados em
+  /// [_runSybaseToolWithCredentials]. Específico o suficiente para não
+  /// colidir com dirs criados por testes (que tipicamente usam prefixos
+  /// como `sybase_backup_test_`) ou outros consumidores de
+  /// `Directory.systemTemp`.
+  static const String _credentialsTempDirPrefix = 'sybase_backup_creds_';
+
+  /// Remove diretórios `sybase_backup_creds_*` órfãos em `systemTemp`.
+  ///
+  /// Quando o processo Dart é morto (Task Manager, BSOD, watchdog) antes
+  /// do `finally` do [_runSybaseToolWithCredentials] rodar, o diretório
+  /// temporário (com o `args.txt` contendo `PWD=...` em texto puro) fica
+  /// no disco indefinidamente. Este método varre `systemTemp` no boot do
+  /// service e remove diretórios com o prefixo conhecido.
+  Future<void> _cleanupOrphanCredentialDirs() async {
+    try {
+      final tempDir = Directory.systemTemp;
+      if (!await tempDir.exists()) return;
+      await for (final entity in tempDir.list(followLinks: false)) {
+        if (entity is! Directory) continue;
+        final name = p.basename(entity.path);
+        if (!name.startsWith(_credentialsTempDirPrefix)) continue;
+        try {
+          await entity.delete(recursive: true);
+          LoggerService.debug(
+            'Removido diretório órfão de credenciais Sybase: ${entity.path}',
+          );
+        } on Object catch (e) {
+          // Outro processo (talvez outro backup em execução) pode estar
+          // segurando o diretório. Skip silencioso — pegaremos no próximo
+          // boot.
+          LoggerService.debug(
+            'Não foi possível remover ${entity.path} (em uso?): $e',
+          );
+        }
+      }
+    } on Object catch (e, stackTrace) {
+      LoggerService.debug(
+        'Cleanup de diretórios órfãos Sybase falhou: $e',
+        e,
+        stackTrace,
+      );
+    }
   }
 
   /// Executa um utilitário Sybase (dbisql/dbbackup) escrevendo a lista de
@@ -748,7 +903,9 @@ class SybaseBackupService implements ISybaseBackupService {
     }
     File? credentialsFile;
     try {
-      final tempDir = await Directory.systemTemp.createTemp('sybase_backup_');
+      final tempDir = await Directory.systemTemp.createTemp(
+        _credentialsTempDirPrefix,
+      );
       credentialsFile = File(p.join(tempDir.path, 'args.txt'));
       // Cada argumento em uma linha; valores com espaços já vêm sem aspas
       // (a Sybase Tools faz parsing de uma linha por argumento neste modo).
@@ -764,9 +921,14 @@ class SybaseBackupService implements ISybaseBackupService {
       );
       return result;
     } on Object catch (e, stackTrace) {
-      LoggerService.warning(
+      // M1: degradação de segurança — quando o arquivo de credenciais
+      // falha, a senha acaba indo no `arguments` do processo filho
+      // (visível em `tasklist /v` no Windows). Logamos como ERRO para
+      // garantir visibilidade no painel de logs do app, não warning.
+      LoggerService.error(
         'Falha ao usar arquivo de credenciais para $executable; '
-        'fazendo fallback para execução direta. Erro: $e',
+        'fazendo fallback para execução direta — a senha pode ficar '
+        'visível em `tasklist /v`/`ps -ef` durante a execução. Erro: $e',
         e,
         stackTrace,
       );
@@ -795,18 +957,66 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
-  static const List<String> _dbisqlStrategyNames = [
-    'ENG+DBN (serverName + databaseName)',
-    'Apenas ENG por serverName',
-    'ENG+DBN (databaseName como ambos)',
-  ];
+  /// Constrói lista de estratégias dbisql na ordem cronológica de tentativa.
+  ///
+  /// A ordem aqui define o índice usado pelo cache (`SybaseConnectionStrategyCache`)
+  /// e o `connectionStrategy` reportado em `BackupMetrics.sybaseOptions`.
+  static List<_SybaseConnectionStrategy> _buildDbisqlStrategies(
+    SybaseConfig config,
+    String databaseName,
+  ) {
+    return [
+      _SybaseConnectionStrategy(
+        name: 'ENG+DBN (serverName + databaseName)',
+        conn:
+            'ENG=${config.serverName};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      _SybaseConnectionStrategy(
+        name: 'Apenas ENG por serverName',
+        conn:
+            'ENG=${config.serverName};'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      _SybaseConnectionStrategy(
+        name: 'ENG+DBN (databaseName como ambos)',
+        conn:
+            'ENG=$databaseName;DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+    ];
+  }
 
-  static String _dbisqlStrategyName(int strategyIndex1Based) {
-    final i = strategyIndex1Based - 1;
-    if (i >= 0 && i < _dbisqlStrategyNames.length) {
-      return _dbisqlStrategyNames[i];
-    }
-    return 'dbisql #$strategyIndex1Based';
+  static List<_SybaseConnectionStrategy> _buildDbbackupStrategies(
+    SybaseConfig config,
+    String databaseName,
+  ) {
+    return [
+      _SybaseConnectionStrategy(
+        name: 'ENG+DBN (serverName + databaseName)',
+        conn:
+            'ENG=${config.serverName};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      _SybaseConnectionStrategy(
+        name: 'ENG+DBN (databaseName como ambos)',
+        conn:
+            'ENG=$databaseName;DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      _SybaseConnectionStrategy(
+        name: 'Apenas ENG por serverName',
+        conn:
+            'ENG=${config.serverName};'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      _SybaseConnectionStrategy(
+        name: 'Conexão via TCPIP',
+        conn:
+            'HOST=localhost:${config.port};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password};LINKS=TCPIP',
+      ),
+    ];
   }
 
   static const String _pathInstructionsHint =
@@ -941,23 +1151,29 @@ class SybaseBackupService implements ISybaseBackupService {
   /// ordenados pelo mais recente primeiro. Quando não há candidatos `.trn`
   /// ou `.log`, retorna todos os arquivos do diretório (também ordenados),
   /// preservando o comportamento anterior de fallback.
+  ///
+  /// A7: a ordenação consulta `stat()` async em vez de `statSync()` no
+  /// comparador (que executava bloqueante ~N·log(N) vezes em diretórios
+  /// com muitos arquivos, em filesystems lentos / network shares).
   Future<List<File>> _findLogFiles(Directory backupDir) async {
     try {
       final entities = await backupDir.list().toList();
-      final files = entities.whereType<File>().toList()
-        ..sort(
-          (a, b) => b.statSync().modified.compareTo(a.statSync().modified),
-        );
-
+      final files = entities.whereType<File>().toList();
       if (files.isEmpty) return const [];
 
-      final logCandidates = files.where((f) {
+      final pairs = await Future.wait(
+        files.map((f) async => (f, await f.stat())),
+      );
+      pairs.sort((a, b) => b.$2.modified.compareTo(a.$2.modified));
+      final sorted = pairs.map((pair) => pair.$1).toList();
+
+      final logCandidates = sorted.where((f) {
         final ext = p.extension(f.path).toLowerCase();
         return ext == '.trn' || ext == '.log';
       }).toList();
 
       if (logCandidates.isNotEmpty) return logCandidates;
-      return files;
+      return sorted;
     } on Object catch (_) {
       return const [];
     }
@@ -966,12 +1182,18 @@ class SybaseBackupService implements ISybaseBackupService {
   Future<File?> _tryFindBackupDbFile(Directory backupDir) async {
     try {
       final entities = await backupDir.list().toList();
-      final dbFiles = entities.whereType<File>().where((f) {
-        return p.extension(f.path).toLowerCase() == '.db';
-      }).toList()..sort((a, b) => b.lengthSync().compareTo(a.lengthSync()));
-
+      final dbFiles = entities
+          .whereType<File>()
+          .where((f) => p.extension(f.path).toLowerCase() == '.db')
+          .toList();
       if (dbFiles.isEmpty) return null;
-      return dbFiles.first;
+
+      // A7: `length()` async em vez de `lengthSync()` no comparador.
+      final pairs = await Future.wait(
+        dbFiles.map((f) async => (f, await f.length())),
+      );
+      pairs.sort((a, b) => b.$2.compareTo(a.$2));
+      return pairs.first.$1;
     } on Object catch (_) {
       return null;
     }
@@ -1007,23 +1229,22 @@ class SybaseBackupService implements ISybaseBackupService {
       }
 
       final databaseName = config.databaseNameValue;
-      final connectionStrategies = <String>[
-        'ENG=${config.serverName};DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-
-        'ENG=$databaseName;DBN=$databaseName;UID=${config.username};PWD=${config.password}',
-
-        'ENG=${config.serverName};UID=${config.username};PWD=${config.password}',
-      ];
+      // C4: reusa a mesma fonte de estratégias do backup (sem duplicação
+      // da composição de connection string).
+      final strategies = _buildDbisqlStrategies(config, databaseName);
+      // Tag de processo para permitir que o orchestrator/painel de
+      // diagnóstico identifique probes de teste de conexão e os agrupe
+      // separadamente dos backups de produção.
+      final probeTag = 'sybase-test-conn-${config.id}';
 
       var lastError = '';
 
-      var testStrategyIndex = 0;
-      for (final connStr in connectionStrategies) {
-        testStrategyIndex++;
+      for (var i = 0; i < strategies.length; i++) {
+        final connStr = strategies[i].conn;
         try {
           LoggerService.debug(
             'Tentando teste de conexão com estratégia '
-            '$testStrategyIndex/${connectionStrategies.length}',
+            '${i + 1}/${strategies.length}',
           );
 
           final arguments = ['-c', connStr, '-q', 'SELECT 1', '-nogui'];
@@ -1032,6 +1253,7 @@ class SybaseBackupService implements ISybaseBackupService {
             executable: 'dbisql',
             arguments: arguments,
             timeout: const Duration(seconds: 10),
+            tag: probeTag,
           );
 
           final success = result.fold(
@@ -1054,9 +1276,7 @@ class SybaseBackupService implements ISybaseBackupService {
               LoggerService.debug('Estratégia falhou: $lastError');
             },
             (failure) {
-              lastError = failure is Failure
-                  ? failure.message
-                  : failure.toString();
+              lastError = _failureMessage(failure);
               LoggerService.debug('Estratégia falhou: $lastError');
             },
           );
@@ -1131,6 +1351,7 @@ class SybaseBackupService implements ISybaseBackupService {
       executable: 'dbisql',
       arguments: ['-c', connStr, '-nogui', '-q', sql],
       timeout: timeout ?? const Duration(seconds: 15),
+      tag: 'sybase-size-${config.id}',
     );
 
     return result.fold(
@@ -1166,4 +1387,44 @@ class SybaseBackupService implements ISybaseBackupService {
       rd.Failure.new,
     );
   }
+}
+
+/// Par (nome, conn-string) de uma estratégia de conexão Sybase.
+///
+/// Substitui o par desalinhado `dbisqlConnections` (`List<String>`) +
+/// `_dbisqlStrategyNames` (`List<String>`), garantindo que adicionar uma
+/// nova estratégia exige editar **um único lugar**.
+class _SybaseConnectionStrategy {
+  const _SybaseConnectionStrategy({required this.name, required this.conn});
+
+  final String name;
+  final String conn;
+}
+
+/// Resultado consolidado da fase de verificação pós-backup.
+///
+/// Substitui um conjunto de variáveis locais (`verifySuccess`,
+/// `verificationMethodUsed`, `verifyDuration`, `lastVerifyError`) que
+/// poluíam o frame do `_executeBackupCore`. O caller só lê o tipo aqui.
+class _VerifyOutcome {
+  const _VerifyOutcome({
+    required this.success,
+    required this.methodUsed,
+    required this.duration,
+    this.strictFailureMessage,
+  });
+
+  final bool success;
+  final String methodUsed;
+  final Duration duration;
+
+  /// Quando preenchido, indica que o pipeline deve abortar com este
+  /// texto em `BackupFailure` (modo strict).
+  final String? strictFailureMessage;
+}
+
+class _VerifyToolOutcome {
+  const _VerifyToolOutcome({required this.success, required this.errorMessage});
+  final bool success;
+  final String errorMessage;
 }
