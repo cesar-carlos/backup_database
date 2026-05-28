@@ -440,7 +440,11 @@ void main() {
           exitProcess: (code) {},
         );
         service.installReadinessCheck = (release, source) async {
-          return 'Atualizacao bloqueada: existe um backup em andamento na UI.';
+          return const AppUpdateBlockOutcome(
+            reason: AppUpdateBlockReason.localBackupRunning,
+            message:
+                'Atualizacao bloqueada: existe um backup em andamento na UI.',
+          );
         };
 
         await service.initialize();

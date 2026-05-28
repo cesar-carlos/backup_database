@@ -64,7 +64,7 @@ class ServiceAutoUpdateConfigurator {
     );
   }
 
-  Future<String?> _checkInstallReadiness(
+  Future<AppUpdateBlockOutcome?> _checkInstallReadiness(
     AppcastRelease release,
     AppUpdateSource source,
   ) async {
@@ -72,8 +72,13 @@ class ServiceAutoUpdateConfigurator {
     // pelo `ServiceAccountProbe`). UAC só importa para o caminho UI;
     // por isso o checador de elevação **não** é chamado aqui.
     final serviceAccount = await accountProbe.probeInstalledAccount();
-    return ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
+    final message = ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
       serviceAccount,
+    );
+    if (message == null) return null;
+    return AppUpdateBlockOutcome(
+      message: message,
+      reason: AppUpdateBlockReason.serviceAccountUnsupported,
     );
   }
 }

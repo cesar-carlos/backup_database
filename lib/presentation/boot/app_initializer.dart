@@ -109,7 +109,7 @@ class AppInitializer {
           createdAt: DateTime.now(),
         );
       };
-      autoUpdateService.installReadinessCheck = (release, source) async {
+      autoUpdateService.installReadinessCheck = (release, source) {
         // §audit-2026-05-28: antes so checavamos `BackupProgressProvider`
         // (backup LOCAL na UI), mas em modo cliente o backup roda no
         // SERVIDOR e o que o cliente vê é uma execução remota +
@@ -193,8 +193,8 @@ class LaunchConfig {
 
 enum _LogLevel { debug, warning }
 
-/// Returns a non-null user-facing message when ANY long-running task that
-/// would be disrupted by an in-place app update is currently active:
+/// Returns a non-null [AppUpdateBlockOutcome] when ANY long-running task
+/// that would be disrupted by an in-place app update is currently active:
 ///
 /// 1. **Local backup running in the UI** (`BackupProgressProvider`).
 /// 2. **Remote backup executing on the server** (`RemoteSchedulesProvider`)
@@ -214,7 +214,7 @@ enum _LogLevel { debug, warning }
 /// Encapsulado como função top-level (em vez de método estático privado)
 /// para permitir teste unitário com um `GetIt` isolado.
 @visibleForTesting
-Future<String?> checkInstallReadiness({
+Future<AppUpdateBlockOutcome?> checkInstallReadiness({
   required GetIt getIt,
   AppUpdateSource source = AppUpdateSource.manual,
 }) async {
@@ -223,26 +223,37 @@ Future<String?> checkInstallReadiness({
       final backupProgress = getIt<BackupProgressProvider>();
       if (backupProgress.isRunning) {
         final backupName = backupProgress.currentBackupName;
-        return backupName == null
-            ? 'Atualização bloqueada: existe um backup em andamento na UI. '
-                  'Aguarde a conclusão e tente novamente.'
-            : 'Atualização bloqueada: o backup "$backupName" ainda está em '
-                  'execução. Aguarde a conclusão e tente novamente.';
+        return AppUpdateBlockOutcome(
+          reason: AppUpdateBlockReason.localBackupRunning,
+          message: backupName == null
+              ? 'Atualização bloqueada: existe um backup em andamento na UI. '
+                    'Aguarde a conclusão e tente novamente.'
+              : 'Atualização bloqueada: o backup "$backupName" ainda está em '
+                    'execução. Aguarde a conclusão e tente novamente.',
+        );
       }
     }
     if (getIt.isRegistered<RemoteSchedulesProvider>()) {
       final remote = getIt<RemoteSchedulesProvider>();
       if (remote.isExecuting) {
-        return 'Atualização bloqueada: existe um backup remoto em '
-            'execução. Aguarde a conclusão e tente novamente.';
+        return const AppUpdateBlockOutcome(
+          reason: AppUpdateBlockReason.remoteBackupRunning,
+          message:
+              'Atualização bloqueada: existe um backup remoto em '
+              'execução. Aguarde a conclusão e tente novamente.',
+        );
       }
     }
     if (getIt.isRegistered<RemoteFileTransferProvider>()) {
       final transfer = getIt<RemoteFileTransferProvider>();
       if (transfer.isTransferring) {
-        return 'Atualização bloqueada: existe uma transferência de '
-            'arquivo do servidor em andamento. Aguarde a conclusão '
-            'e tente novamente.';
+        return const AppUpdateBlockOutcome(
+          reason: AppUpdateBlockReason.fileTransferActive,
+          message:
+              'Atualização bloqueada: existe uma transferência de '
+              'arquivo do servidor em andamento. Aguarde a conclusão '
+              'e tente novamente.',
+        );
       }
     }
     // §audit-2026-05-28 wave 4: gate UAC. Só vale para checagens
@@ -258,9 +269,14 @@ Future<String?> checkInstallReadiness({
           'não-elevado (source=${source.name}). Operador deve iniciar '
           'manualmente.',
         );
-        return 'Atualização automática pausada: o Windows pediria '
-            'aprovação UAC para instalar a nova versão. Abra "Atualizações" '
-            'no app e use "Atualizar agora" para autorizar manualmente.';
+        return const AppUpdateBlockOutcome(
+          reason: AppUpdateBlockReason.uacPolicy,
+          message:
+              'Atualização automática pausada: o Windows pediria '
+              'aprovação UAC para instalar a nova versão. Abra '
+              '"Atualizações" no app e use "Atualizar agora" para '
+              'autorizar manualmente.',
+        );
       }
     }
     return null;

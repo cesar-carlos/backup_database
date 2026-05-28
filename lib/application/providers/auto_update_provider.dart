@@ -44,6 +44,17 @@ class AutoUpdateProvider extends ChangeNotifier {
   String? get statusMessage => _snapshot.message;
   bool get isDisabled => status == AppUpdateStatus.disabled;
   AppUpdateDisabledReason? get disabledReason => _snapshot.disabledReason;
+
+  /// §audit-2026-05-28 wave 4 (UI banner): razão semântica do último
+  /// bloqueio (UI usa para escolher banner + ações inline). Só faz
+  /// sentido olhar quando `status == blockedByActiveBackup`.
+  AppUpdateBlockReason? get blockReason => _snapshot.blockReason;
+
+  /// `true` quando o último bloqueio veio do gate UAC (UI mostra
+  /// botão "Atualizar agora" embutido — `manual` passa pelo gate).
+  bool get isBlockedByUacPolicy =>
+      status == AppUpdateStatus.blockedByActiveBackup &&
+      blockReason == AppUpdateBlockReason.uacPolicy;
   AppUpdateStage? get currentStage => _snapshot.stage;
   AppUpdateStage? get lastFailureStage => _snapshot.lastFailureStage;
   AppUpdateSource? get lastSource => _snapshot.lastSource;

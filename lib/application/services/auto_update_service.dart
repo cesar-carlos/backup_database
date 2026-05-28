@@ -68,6 +68,53 @@ enum AppUpdateDisabledReason {
   initializationException,
 }
 
+/// Por que o updater bloqueou um ciclo de install (status
+/// `blockedByActiveBackup`). Diferente de [AppUpdateDisabledReason]
+/// porque o updater **está** funcional — só não pode tocar agora.
+///
+/// §audit-2026-05-28 wave 4 (UI banner): antes a UI mostrava o mesmo
+/// texto "Ha um backup ativo" para qualquer bloqueio, mascarando
+/// causas distintas (incluindo UAC, que tem ação corretiva direta).
+/// Esse enum dá ao banner um caminho semântico por causa.
+enum AppUpdateBlockReason {
+  /// `BackupProgressProvider.isRunning` — backup local na UI.
+  localBackupRunning,
+
+  /// `RemoteSchedulesProvider.isExecuting` — backup remoto orquestrado
+  /// pelo cliente. Aguardar conclusão é a única ação.
+  remoteBackupRunning,
+
+  /// `RemoteFileTransferProvider.isTransferring` — download do
+  /// artefato em curso.
+  fileTransferActive,
+
+  /// UAC ativo + processo não-elevado + check `periodic`/`startup`.
+  /// **Único reason com ação imediata**: clicar "Atualizar agora"
+  /// (source `manual`) ignora o gate e dispara o prompt UAC visível.
+  uacPolicy,
+
+  /// Modo serviço: Windows Service rodando em conta diferente de
+  /// `LocalSystem` (ver `ServiceAccountProbe`). Bloqueio permanente
+  /// até reinstalar o serviço; ação manual exige reinstall.
+  serviceAccountUnsupported,
+}
+
+/// Resultado tipado da checagem de readiness. Antes a função devolvia
+/// só `String?`, e qualquer bloqueio virava a mesma `InfoBar` na UI.
+class AppUpdateBlockOutcome {
+  const AppUpdateBlockOutcome({
+    required this.message,
+    required this.reason,
+  });
+
+  /// Texto amigável (pt-BR) já formatado para exibir ao usuário.
+  final String message;
+
+  /// Categoria semântica do bloqueio — UI usa para escolher o tom da
+  /// InfoBar, mostrar/esconder o botão "Atualizar agora", etc.
+  final AppUpdateBlockReason reason;
+}
+
 enum AppUpdateStage {
   blockedByOtherInstance,
   blockedByActiveBackup,
@@ -155,6 +202,7 @@ class AppUpdateSnapshot {
     this.lastDownloadDuration,
     this.lastCheckDuration,
     this.disabledReason,
+    this.blockReason,
   });
 
   final AppUpdateStatus status;
@@ -178,6 +226,12 @@ class AppUpdateSnapshot {
   /// para distinguir feed faltando vs. compatibilidade de OS vs. exceção.
   final AppUpdateDisabledReason? disabledReason;
 
+  /// §audit-2026-05-28 wave 4 (UI banner): razão do último bloqueio
+  /// (preenchido junto com `status == blockedByActiveBackup`). UI usa
+  /// para distinguir backup local vs. remoto vs. file transfer vs.
+  /// UAC vs. account do serviço — cada um demanda UX diferente.
+  final AppUpdateBlockReason? blockReason;
+
   static const _unset = Object();
 
   String? get targetVersion => release?.targetVersion;
@@ -199,6 +253,7 @@ class AppUpdateSnapshot {
     Object? lastDownloadDuration = _unset,
     Object? lastCheckDuration = _unset,
     Object? disabledReason = _unset,
+    Object? blockReason = _unset,
   }) {
     return AppUpdateSnapshot(
       status: status ?? this.status,
@@ -238,6 +293,9 @@ class AppUpdateSnapshot {
       disabledReason: identical(disabledReason, _unset)
           ? this.disabledReason
           : disabledReason as AppUpdateDisabledReason?,
+      blockReason: identical(blockReason, _unset)
+          ? this.blockReason
+          : blockReason as AppUpdateBlockReason?,
     );
   }
 }
@@ -271,8 +329,16 @@ typedef BeforeInstallHook = Future<void> Function();
 /// SO vai disparar prompt UAC sem usuário olhar) e deixar passar
 /// quando for `manual` (usuário sabe que vai aparecer o prompt e está
 /// disposto a confirmar).
+///
+/// §audit-2026-05-28 wave 4 (UI banner): retorna agora
+/// [AppUpdateBlockOutcome] (mensagem + razão tipada) em vez de só
+/// `String?` — UI usa o `reason` para escolher o tom da banner e
+/// renderizar o botão "Atualizar agora" embutido quando aplicável.
 typedef InstallReadinessCheck =
-    Future<String?> Function(AppcastRelease release, AppUpdateSource source);
+    Future<AppUpdateBlockOutcome?> Function(
+      AppcastRelease release,
+      AppUpdateSource source,
+    );
 typedef UpdateInstallContextProvider =
     Future<AppUpdateInstallContext> Function(AppcastRelease release);
 typedef FreeDiskSpaceProbe = Future<int?> Function(Directory directory);
@@ -348,11 +414,17 @@ class AppUpdateBlockedException implements Exception {
     required this.message,
     required this.status,
     required this.stage,
+    this.reason,
   });
 
   final String message;
   final AppUpdateStatus status;
   final AppUpdateStage stage;
+
+  /// §audit-2026-05-28 wave 4 (UI banner): razão semântica do
+  /// bloqueio, vinda do [InstallReadinessCheck]. `null` para legacy
+  /// callers que ainda usam só `String message`.
+  final AppUpdateBlockReason? reason;
 
   @override
   String toString() => message;
@@ -1070,12 +1142,13 @@ class AutoUpdateService {
         ),
       );
 
-      final blockReason = await installReadinessCheck?.call(release, source);
-      if (blockReason != null) {
+      final blockOutcome = await installReadinessCheck?.call(release, source);
+      if (blockOutcome != null) {
         throw AppUpdateBlockedException(
-          message: blockReason,
+          message: blockOutcome.message,
           status: AppUpdateStatus.blockedByActiveBackup,
           stage: AppUpdateStage.blockedByActiveBackup,
+          reason: blockOutcome.reason,
         );
       }
 
@@ -1174,6 +1247,10 @@ class AutoUpdateService {
           lastAttemptNumber: attemptNumber,
           lastDownloadDuration: downloadDuration,
           lastCheckDuration: checkStopwatch.elapsed,
+          // §audit-2026-05-28 wave 4 (UI banner): propaga o motivo
+          // semantico do bloqueio para a UI poder renderizar a
+          // InfoBar e o botao "Atualizar agora" correto.
+          blockReason: e.reason,
         ),
       );
       await _removeInstallContextOnEarlyFailure(e.stage);

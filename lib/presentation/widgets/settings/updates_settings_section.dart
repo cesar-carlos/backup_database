@@ -140,11 +140,43 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
           'Another instance is already processing the auto update.',
         );
       case AppUpdateStatus.blockedByActiveBackup:
-        return appLocaleString(
-          context,
-          'Ha um backup ativo. Aguarde a conclusao antes de atualizar.',
-          'There is an active backup. Wait for it to finish before updating.',
-        );
+        // §audit-2026-05-28 wave 4 (UI banner): texto diferenciado por
+        // motivo. Quando o reason é `uacPolicy`, o banner dedicado
+        // abaixo (com botão "Atualizar agora") explica em detalhe e
+        // dá ação — aqui só damos um resumo curto pro chip de status.
+        switch (provider.blockReason) {
+          case AppUpdateBlockReason.uacPolicy:
+            return appLocaleString(
+              context,
+              'Auto-update pausado: aprovacao UAC necessaria.',
+              'Auto-update paused: UAC approval required.',
+            );
+          case AppUpdateBlockReason.remoteBackupRunning:
+            return appLocaleString(
+              context,
+              'Backup remoto em execucao. Aguarde a conclusao.',
+              'Remote backup running. Wait for it to finish.',
+            );
+          case AppUpdateBlockReason.fileTransferActive:
+            return appLocaleString(
+              context,
+              'Transferencia de arquivo em curso. Aguarde a conclusao.',
+              'File transfer in progress. Wait for it to finish.',
+            );
+          case AppUpdateBlockReason.serviceAccountUnsupported:
+            return appLocaleString(
+              context,
+              'Servico Windows precisa estar em LocalSystem.',
+              'Windows Service must run as LocalSystem.',
+            );
+          case AppUpdateBlockReason.localBackupRunning:
+          case null:
+            return appLocaleString(
+              context,
+              'Ha um backup ativo. Aguarde a conclusao antes de atualizar.',
+              'There is an active backup. Wait for it to finish before updating.',
+            );
+        }
       case AppUpdateStatus.handoffCompleted:
         return appLocaleString(
           context,
@@ -243,6 +275,24 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
         return 'os_incompatible';
       case AppUpdateDisabledReason.initializationException:
         return 'initialization_exception';
+    }
+  }
+
+  /// §audit-2026-05-28 wave 4 (UI banner): label snake_case do
+  /// motivo de bloqueio, exibido no expander técnico para mapear
+  /// contra logs (`[auto-update] silencioso bloqueado: ...`).
+  String _blockReasonLabel(AppUpdateBlockReason reason) {
+    switch (reason) {
+      case AppUpdateBlockReason.localBackupRunning:
+        return 'local_backup_running';
+      case AppUpdateBlockReason.remoteBackupRunning:
+        return 'remote_backup_running';
+      case AppUpdateBlockReason.fileTransferActive:
+        return 'file_transfer_active';
+      case AppUpdateBlockReason.uacPolicy:
+        return 'uac_policy';
+      case AppUpdateBlockReason.serviceAccountUnsupported:
+        return 'service_account_unsupported';
     }
   }
 
@@ -484,6 +534,69 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                 ),
             ],
           ),
+          // §audit-2026-05-28 wave 4 (UI banner): banner dedicado
+          // quando o auto-update foi bloqueado pelo gate UAC. Inclui
+          // botao "Atualizar agora" inline — `manual` ignora o gate
+          // (operador esta ciente do prompt UAC).
+          if (autoUpdateProvider.isBlockedByUacPolicy) ...[
+            const SizedBox(height: AppSpacing.md),
+            InfoBar(
+              title: Text(
+                appLocaleString(
+                  context,
+                  'Aprovacao UAC necessaria',
+                  'UAC approval required',
+                ),
+              ),
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    autoUpdateProvider.statusMessage ??
+                        appLocaleString(
+                          context,
+                          'O Windows pediria aprovacao UAC para instalar a '
+                              'nova versao. Auto-update silencioso esta '
+                              'pausado para nao quebrar a sua tela do nada. '
+                              'Clique abaixo para iniciar manualmente e '
+                              'confirmar o prompt.',
+                          'Windows would request UAC approval to install the '
+                              'new version. Silent auto-update is paused so '
+                              'it does not interrupt you. Click below to '
+                              'start it manually and confirm the prompt.',
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      FilledButton(
+                        onPressed: autoUpdateProvider.isChecking
+                            ? null
+                            : autoUpdateProvider.checkForUpdates,
+                        child: autoUpdateProvider.isChecking
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: ProgressRing(strokeWidth: 2),
+                              )
+                            : Text(
+                                appLocaleString(
+                                  context,
+                                  'Atualizar agora',
+                                  'Update now',
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              severity: InfoBarSeverity.warning,
+              isLong: true,
+            ),
+          ],
           if (autoUpdateProvider.error != null) ...[
             const SizedBox(height: AppSpacing.md),
             InfoBar(
@@ -603,6 +716,29 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                           'mapear contra logs.',
                       'Root cause of the "unavailable" state. Map against '
                           'logs.',
+                    ),
+                  ),
+                ],
+                // §audit-2026-05-28 wave 4 (UI banner): label técnico do
+                // último motivo de bloqueio — útil para correlacionar
+                // com logs `[auto-update] silencioso bloqueado: ...`.
+                if (autoUpdateProvider.blockReason != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  SettingsTechnicalItem(
+                    title: appLocaleString(
+                      context,
+                      'Motivo do bloqueio',
+                      'Block reason',
+                    ),
+                    value: _blockReasonLabel(autoUpdateProvider.blockReason!),
+                    description: appLocaleString(
+                      context,
+                      'Causa do ultimo ciclo bloqueado. Use para mapear '
+                          'contra logs e decidir se o ciclo proximo vai '
+                          'destravar sozinho.',
+                      'Cause of the last blocked cycle. Use to map against '
+                          'logs and decide whether the next cycle will '
+                          'unblock on its own.',
                     ),
                   ),
                 ],

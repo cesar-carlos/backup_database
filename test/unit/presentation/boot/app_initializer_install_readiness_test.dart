@@ -52,11 +52,12 @@ void main() {
         when(() => backup.currentBackupName).thenReturn('Daily Production');
         locator.registerSingleton<BackupProgressProvider>(backup);
 
-        final message = await checkInstallReadiness(getIt: locator);
+        final outcome = await checkInstallReadiness(getIt: locator);
 
-        expect(message, isNotNull);
-        expect(message, contains('Daily Production'));
-        expect(message, contains('Aguarde'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.localBackupRunning);
+        expect(outcome.message, contains('Daily Production'));
+        expect(outcome.message, contains('Aguarde'));
       },
     );
 
@@ -68,10 +69,11 @@ void main() {
         when(() => backup.currentBackupName).thenReturn(null);
         locator.registerSingleton<BackupProgressProvider>(backup);
 
-        final message = await checkInstallReadiness(getIt: locator);
+        final outcome = await checkInstallReadiness(getIt: locator);
 
-        expect(message, isNotNull);
-        expect(message, contains('na UI'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.localBackupRunning);
+        expect(outcome.message, contains('na UI'));
       },
     );
 
@@ -91,10 +93,11 @@ void main() {
           ..registerSingleton<BackupProgressProvider>(backup)
           ..registerSingleton<RemoteSchedulesProvider>(remote);
 
-        final message = await checkInstallReadiness(getIt: locator);
+        final outcome = await checkInstallReadiness(getIt: locator);
 
-        expect(message, isNotNull);
-        expect(message, contains('backup remoto'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.remoteBackupRunning);
+        expect(outcome.message, contains('backup remoto'));
       },
     );
 
@@ -115,10 +118,11 @@ void main() {
           ..registerSingleton<RemoteSchedulesProvider>(remote)
           ..registerSingleton<RemoteFileTransferProvider>(transfer);
 
-        final message = await checkInstallReadiness(getIt: locator);
+        final outcome = await checkInstallReadiness(getIt: locator);
 
-        expect(message, isNotNull);
-        expect(message, contains('transferência'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.fileTransferActive);
+        expect(outcome.message, contains('transferência'));
       },
     );
 
@@ -144,9 +148,10 @@ void main() {
         ..registerSingleton<BackupProgressProvider>(backup)
         ..registerSingleton<RemoteSchedulesProvider>(remote);
 
-      final message = await checkInstallReadiness(getIt: locator);
+      final outcome = await checkInstallReadiness(getIt: locator);
 
-      expect(message, contains('Local'));
+      expect(outcome!.reason, AppUpdateBlockReason.localBackupRunning);
+      expect(outcome.message, contains('Local'));
     });
   });
 
@@ -176,14 +181,15 @@ void main() {
         );
         locator.registerSingleton<IElevationProbe>(probe);
 
-        final message = await checkInstallReadiness(
+        final outcome = await checkInstallReadiness(
           getIt: locator,
           source: AppUpdateSource.periodic,
         );
 
-        expect(message, isNotNull);
-        expect(message, contains('UAC'));
-        expect(message, contains('Atualizar agora'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.uacPolicy);
+        expect(outcome.message, contains('UAC'));
+        expect(outcome.message, contains('Atualizar agora'));
         verify(probe.probe).called(1);
       },
     );
@@ -200,13 +206,14 @@ void main() {
         );
         locator.registerSingleton<IElevationProbe>(probe);
 
-        final message = await checkInstallReadiness(
+        final outcome = await checkInstallReadiness(
           getIt: locator,
           source: AppUpdateSource.startup,
         );
 
-        expect(message, isNotNull);
-        expect(message, contains('UAC'));
+        expect(outcome, isNotNull);
+        expect(outcome!.reason, AppUpdateBlockReason.uacPolicy);
+        expect(outcome.message, contains('UAC'));
       },
     );
 
@@ -229,9 +236,9 @@ void main() {
         // disparar o gate UAC. Usamos o default da função
         // (`AppUpdateSource.manual`) — mudar o default no futuro deve
         // **quebrar** este teste explicitamente.
-        final message = await checkInstallReadiness(getIt: locator);
+        final outcome = await checkInstallReadiness(getIt: locator);
 
-        expect(message, isNull);
+        expect(outcome, isNull);
         verifyNever(probe.probe);
       },
     );
@@ -337,12 +344,13 @@ void main() {
           ..registerSingleton<BackupProgressProvider>(backup)
           ..registerSingleton<IElevationProbe>(probe);
 
-        final message = await checkInstallReadiness(
+        final outcome = await checkInstallReadiness(
           getIt: locator,
           source: AppUpdateSource.periodic,
         );
 
-        expect(message, contains('Critical'));
+        expect(outcome!.reason, AppUpdateBlockReason.localBackupRunning);
+        expect(outcome.message, contains('Critical'));
         verifyNever(probe.probe);
       },
     );
