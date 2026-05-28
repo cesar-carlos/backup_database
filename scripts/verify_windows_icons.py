@@ -2,16 +2,22 @@
 """Verify Windows icon artifacts are present and in sync (CI / pre-release).
 
 Default behaviour stays Linux-friendly (no `.exe` required): the script
-checks the PNG source, the generated `.ico`, the tray artifact and the
-sidecar hash. The optional `--require-exe` flag adds a final check that
-asserts the PNG embedded in `windows/runner/resources/app_icon.ico`
-shows up inside the freshly built `backup_database.exe` — used by
-`installer/build_installer.py` after `flutter build windows --release`.
+checks the PNG source, the generated `.ico`, the tray artifact, the
+sibling Widgetbook icon and the sidecar hash. The optional
+`--require-exe` flag adds a final check that asserts the PNG embedded in
+`windows/runner/resources/app_icon.ico` shows up inside the freshly
+built `backup_database.exe` — used by `installer/build_installer.py`
+after `flutter build windows --release`.
+
+`--json` emits a machine-parseable summary for workflow integration
+(PR comments, Slack, etc.) — the human report is suppressed when this
+flag is active.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -39,18 +45,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip the .exe check entirely, even when the binary exists.",
     )
+    parser.add_argument(
+        "--json",
+        dest="emit_json",
+        action="store_true",
+        help=(
+            "Emit a JSON report on stdout instead of the human-readable "
+            "summary (useful for CI integrations). Exit code is unchanged."
+        ),
+    )
     return parser.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv)
-    root = PROJECT_ROOT
-
+def _collect_errors(args: argparse.Namespace, root: Path) -> list[str]:
     png = wiu.icon_source_path(root)
     app_icon = wiu.app_icon_path(root)
     tray = wiu.tray_icon_path(root)
     custom_marker = wiu.tray_custom_marker_path(root)
     source_hash_file = wiu.recorded_png_hash_path(root)
+    widgetbook_icon = wiu.widgetbook_app_icon_path(root)
     exe = wiu.release_exe_path(root)
 
     errors: list[str] = []
@@ -87,6 +100,24 @@ def main(argv: list[str] | None = None) -> int:
             "(run python installer/build_installer.py or add .tray_icon_custom)",
         )
 
+    # Widgetbook usa o mesmo .ico do app — drift aqui indica que alguem
+    # rodou `dart run flutter_launcher_icons` sem o `build_installer.py`,
+    # que e quem sincroniza essa copia.
+    if widgetbook_icon.parent.is_dir():
+        if not widgetbook_icon.is_file():
+            errors.append(
+                "missing widgetbook/windows/runner/resources/app_icon.ico "
+                "(run python installer/build_installer.py to sync)",
+            )
+        elif (
+            app_icon.is_file()
+            and wiu.sha256_file(app_icon) != wiu.sha256_file(widgetbook_icon)
+        ):
+            errors.append(
+                "widgetbook app_icon.ico out of sync with primary app_icon.ico "
+                "(run python installer/build_installer.py to sync)",
+            )
+
     should_check_exe = not args.skip_exe and (args.require_exe or exe.is_file())
     if should_check_exe:
         if not exe.is_file():
@@ -108,6 +139,28 @@ def main(argv: list[str] | None = None) -> int:
                     "app_icon.ico (rebuild via "
                     "python installer/build_installer.py)",
                 )
+
+    return errors
+
+
+def _emit_json(errors: list[str], args: argparse.Namespace) -> None:
+    payload = {
+        "ok": not errors,
+        "errors": errors,
+        "require_exe": args.require_exe,
+        "skip_exe": args.skip_exe,
+    }
+    json.dump(payload, sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    errors = _collect_errors(args, PROJECT_ROOT)
+
+    if args.emit_json:
+        _emit_json(errors, args)
+        return 1 if errors else 0
 
     if errors:
         print("Windows icon verification failed:")

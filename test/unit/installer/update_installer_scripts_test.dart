@@ -4,6 +4,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'setup_iss_parser.dart';
+
+Future<SetupIssParser> _loadSetupIssParser() async {
+  return SetupIssParser.fromFile(_repoFile(p.join('installer', 'setup.iss')));
+}
+
 void main() {
   group('installer static startup contract', () {
     test(
@@ -54,63 +60,65 @@ void main() {
     test(
       'setup.iss refreshes Windows icon cache after install',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
+        final iss = await _loadSetupIssParser();
 
-        expect(setup, contains('RefreshWindowsIconCache'));
-        expect(setup, contains('ie4uinit.exe'));
-        expect(setup, contains('-show'));
+        expect(iss.hasForwardDeclaration('RefreshWindowsIconCache'), isTrue);
+        expect(
+          iss.routineContains('RefreshWindowsIconCache', 'ie4uinit.exe'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('RefreshWindowsIconCache', '-show'),
+          isTrue,
+        );
       },
     );
 
     test(
       'setup.iss desktop shortcut uses executable icon',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
+        final iss = await _loadSetupIssParser();
 
+        final entry = iss.iconEntry(r'{autodesktop}\{#MyAppName}');
+        expect(entry, isNotNull);
         expect(
-          setup,
-          contains(
-            'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon',
-          ),
+          entry,
+          contains(r'IconFilename: "{app}\{#MyAppExeName}"'),
         );
+        expect(entry, contains('Tasks: desktopicon'));
       },
     );
 
     test(
       'setup.iss creates desktop icon task checked by default',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
-
-        expect(
-          setup,
-          contains(
-            'Name: "desktopicon"; Description: "Create a desktop icon"; '
-            'GroupDescription: "Additional Icons"; Flags: checked',
-          ),
-        );
+        final iss = await _loadSetupIssParser();
+        expect(iss.hasTask('desktopicon', hasFlag: 'checked'), isTrue);
       },
     );
 
     test(
       'setup.iss removes legacy desktop shortcut before recreating it',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
+        final iss = await _loadSetupIssParser();
 
-        expect(setup, contains('RemoveExistingDesktopShortcut'));
-        expect(setup, contains(r'{autodesktop}\{#MyAppName}.lnk'));
+        expect(iss.hasForwardDeclaration('RemoveExistingDesktopShortcut'), isTrue);
         expect(
-          setup,
-          contains(
+          iss.routineContains(
+            'RemoveExistingDesktopShortcut',
+            r'{autodesktop}\{#MyAppName}.lnk',
+          ),
+          isTrue,
+        );
+        // O delete tem que rodar no ssInstall — antes da secao [Icons] do
+        // Inno criar o novo .lnk — e somente quando a task desktopicon
+        // estiver ativa.
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
             "if (CurStep = ssInstall) and WizardIsTaskSelected('desktopicon')",
           ),
+          isTrue,
         );
       },
     );
@@ -118,45 +126,61 @@ void main() {
     test(
       'setup.iss touches desktop shortcut to flush icon cache',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
+        final iss = await _loadSetupIssParser();
 
-        expect(setup, contains('TouchDesktopShortcut'));
-        expect(setup, contains('LastWriteTime'));
-        expect(setup, contains('powershell.exe'));
+        expect(iss.hasForwardDeclaration('TouchDesktopShortcut'), isTrue);
+        expect(iss.routineContains('TouchDesktopShortcut', 'LastWriteTime'), isTrue);
+        // Tenta powershell.exe primeiro e pwsh.exe (PowerShell 7) como
+        // fallback para cobrir SKUs reduzidos / policy restritiva.
+        expect(
+          iss.routineContains('TouchDesktopShortcut', "'powershell.exe'"),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('TouchDesktopShortcut', "'pwsh.exe'"),
+          isTrue,
+        );
+        expect(iss.contains('function TryTouchShortcutWith'), isTrue);
       },
     );
 
     test(
       'setup.iss prompts user when app stays running on interactive install',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
+        final iss = await _loadSetupIssParser();
 
-        expect(setup, contains('MB_DEFBUTTON2'));
-        expect(setup, contains('Instalacao cancelada pelo usuario'));
-        expect(setup, contains('icone do atalho pode permanecer desatualizado'));
+        expect(iss.routineContains('PrepareToInstall', 'MB_DEFBUTTON2'), isTrue);
+        expect(
+          iss.routineContains(
+            'PrepareToInstall',
+            'Instalacao cancelada pelo usuario',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'PrepareToInstall',
+            'icone do atalho pode permanecer desatualizado',
+          ),
+          isTrue,
+        );
       },
     );
 
     test(
       'setup.iss re-stops Windows service in PrepareToInstall before copying files',
       () async {
-        final setup = await _repoFile(
-          p.join('installer', 'setup.iss'),
-        ).readAsString();
-
         // O servico ja e parado em InitializeSetup. Reforco em
         // PrepareToInstall cobre o caso de o NSSM reiniciar entre as fases
         // (usuario passou tempo no wizard) — sem isso, o .exe antigo pode
         // ficar travado em uso e o icone novo nao chega ao disco.
-        final prepareSection = setup
-            .substring(setup.indexOf('function PrepareToInstall'));
+        final iss = await _loadSetupIssParser();
         expect(
-          prepareSection,
-          contains("StopService('BackupDatabaseService')"),
+          iss.routineContains(
+            'PrepareToInstall',
+            "StopService('BackupDatabaseService')",
+          ),
+          isTrue,
         );
       },
     );

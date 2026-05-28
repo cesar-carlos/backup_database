@@ -36,6 +36,22 @@ O script sincroniza `app_icon.ico` (exe, atalho, barra de tarefas) e recompila o
 
 Icones: `database_512px.png` alimenta o `.exe` (`flutter_launcher_icons`); `app_tray.ico` e copiado do mesmo ICO para a bandeja pelo `build_installer.py` (salvo marcador `.tray_icon_custom`). O CI valida com `python scripts/verify_windows_icons.py`.
 
+### Gate de icones embutidos no `.exe`
+
+A partir da release 3.4.0, `build_installer.py` roda
+`scripts/verify_windows_icons.py --require-exe` em dois pontos:
+
+1. logo apos `flutter build windows --release` (passo 3)
+2. imediatamente antes do `ISCC` empacotar o instalador (passo 7)
+
+A flag `--require-exe` exige que o PNG de `windows/runner/resources/app_icon.ico`
+apareca dentro do `backup_database.exe`. Falha de verify aqui significa que o
+binario foi compilado com o icone antigo — abortar a release e investigar antes
+de continuar.
+
+Para integracoes externas (PR comments, dashboards), `verify_windows_icons.py`
+aceita `--json` e devolve `{"ok": bool, "errors": [...]}` em stdout.
+
 Artefatos esperados:
 
 ```text

@@ -51,6 +51,18 @@ def recorded_png_hash_path(project_root: Path) -> Path:
     return project_root / "windows" / "runner" / "resources" / ".app_icon_source_sha256"
 
 
+def widgetbook_app_icon_path(project_root: Path) -> Path:
+    """Sibling Widgetbook catalog reuses the same launcher icon."""
+    return (
+        project_root
+        / "widgetbook"
+        / "windows"
+        / "runner"
+        / "resources"
+        / "app_icon.ico"
+    )
+
+
 def release_exe_path(project_root: Path) -> Path:
     return (
         project_root

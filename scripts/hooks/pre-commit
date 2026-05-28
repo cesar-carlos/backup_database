@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Backup Database — pre-commit hook (opt-in).
+#
+# Instale com:  python scripts/install_git_hooks.py
+#
+# Roda `scripts/verify_windows_icons.py` automaticamente quando um commit
+# toca o PNG fonte do icone, o app_icon.ico, o tray ou o sidecar de hash.
+# Evita publicar PRs com artefatos dessincronizados.
+
+set -eu
+
+ICON_PATHS=(
+  "assets/image/new/database_512px.png"
+  "assets/image/new/app_tray.ico"
+  "windows/runner/resources/app_icon.ico"
+  "windows/runner/resources/.app_icon_source_sha256"
+  "widgetbook/windows/runner/resources/app_icon.ico"
+)
+
+# Lista arquivos staged (Added/Copied/Modified/Renamed/Type-changed)
+staged="$(git diff --cached --name-only --diff-filter=ACMRT)"
+
+needs_verify=0
+for path in "${ICON_PATHS[@]}"; do
+  if printf '%s\n' "$staged" | grep -Fxq "$path"; then
+    needs_verify=1
+    break
+  fi
+done
+
+if [ "$needs_verify" -eq 0 ]; then
+  exit 0
+fi
+
+echo "[pre-commit] icone Windows alterado — rodando verify_windows_icons.py"
+if ! python scripts/verify_windows_icons.py; then
+  echo
+  echo "[pre-commit] Verificacao falhou. Para regenerar artefatos:"
+  echo "  python installer/build_installer.py"
+  echo "Para pular este hook (apenas para emergencia):"
+  echo "  git commit --no-verify"
+  exit 1
+fi

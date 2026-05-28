@@ -76,7 +76,20 @@ Ao final:
 
 ## Icone antigo no atalho ou na barra de tarefas
 
-Se, apos atualizar o app, o atalho ou a barra ainda mostrarem o icone antigo:
+A partir da versao 3.4.0, o instalador ja faz o seguinte automaticamente
+no pos-install:
+
+- remove o `.lnk` antigo da area de trabalho antes de recriar o atalho
+- atualiza `LastWriteTime` do `.lnk` para o Explorer reavaliar o icone
+- executa `ie4uinit.exe -show` para limpar o cache de shell icons
+
+Alem disso, se o app continuar em execucao durante a instalacao
+interativa, o instalador pergunta antes de prosseguir — confirmar com
+"Nao" e fechar o app primeiro evita que o `.exe` antigo fique travado
+em uso e o icone novo nao chegue ao disco.
+
+Se mesmo assim apos uma atualizacao o atalho ou a barra ainda mostrarem
+o icone antigo:
 
 1. remova o atalho da area de trabalho e crie outro pelo menu Iniciar, ou
 2. reinstale com o instalador mais recente, ou

@@ -134,6 +134,18 @@ class WindowsIconUtilsTest(unittest.TestCase):
     def test_app_icon_png_payload_missing_ico_returns_none(self) -> None:
         self.assertIsNone(wiu.app_icon_png_payload(self.root))
 
+    def test_widgetbook_app_icon_path_resolves_to_sibling_catalog(self) -> None:
+        path = wiu.widgetbook_app_icon_path(self.root)
+        self.assertEqual(
+            path,
+            self.root
+            / "widgetbook"
+            / "windows"
+            / "runner"
+            / "resources"
+            / "app_icon.ico",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

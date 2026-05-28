@@ -16,6 +16,8 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `update_appcast_manual.py` | Python | **DEPRECATED** — manutencao emergencial; o fluxo oficial usa `update-appcast`. Exige `--sha256` para nao gerar feed silenciosamente invalido. |
 | `verify_windows_icons.py` | Python | Valida `app_icon.ico`, `app_tray.ico` e hash da fonte PNG (CI / pre-release) |
 | `windows_icon_utils.py` | Python | Modulo compartilhado: hashing, sidecar e checagem do PNG embutido no `.exe` |
+| `install_git_hooks.py` | Python | Instala hooks opt-in de `scripts/hooks/` em `.git/hooks/` |
+| `hooks/pre-commit` | Bash | Hook opt-in: roda `verify_windows_icons.py` quando assets de icone sao staged |
 
 ## Icones Windows
 
@@ -44,6 +46,20 @@ Modulo Python compartilhado entre `verify_windows_icons.py` e `installer/build_i
 - `exe_embeds_icon_png(exe_path, png_bytes)` — confere se o PNG aparece dentro do `.exe`
 
 Testes unitarios sem artefatos reais: `python test/scripts/test_windows_icon_utils.py`.
+
+### Git hooks opt-in
+
+Para ativar o hook local que valida automaticamente os artefatos de icone
+em cada `git commit`:
+
+```bash
+python scripts/install_git_hooks.py
+```
+
+Use `--force` para sobrescrever hooks existentes ou `--uninstall` para
+remover. O hook so dispara quando o commit toca `database_512px.png`,
+`app_icon.ico`, `app_tray.ico` ou o sidecar de hash; commits que nao
+afetam icones passam sem custo.
 
 ## Banco de Dados
 

@@ -89,6 +89,7 @@ Apontamentos pragmaticos para quem for implementar.
 | [ADR-012](012-wcag-2-1-aa-accessibility-baseline.md) | Baseline de acessibilidade alinhado a WCAG 2.1 AA (desktop Fluent) | accepted | 2026-05-18 |
 | [ADR-013](013-windows-mica-and-system-accent.md) | Mica nativo no Windows e accent color do sistema (Fluent) | accepted | 2026-05-18 |
 | [ADR-014](014-firebird-cli-assumptions.md) | Suposicoes validas sobre CLIs Firebird (gbak/nbackup/gstat/isql) — sem `-PROVIDER`/nbackup `-SE`/`gbak -key` | accepted | 2026-05-27 |
+| [ADR-015](015-windows-icon-pipeline-and-shortcut-refresh.md) | Pipeline de icones Windows e refresh do atalho de desktop (hash gate + setup.iss procedures + CI) | accepted | 2026-05-28 |
 
 ## Convencoes
 - **Slug**: kebab-case curto (`001-runid-no-contrato`).

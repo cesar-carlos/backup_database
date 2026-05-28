@@ -1,0 +1,97 @@
+name: Build Installer (Verification)
+
+# Dispara em duas situacoes:
+# - workflow_dispatch: validacao manual antes de publicar uma release
+# - tag push v*.*.*: confirma que o tag aponta para uma arvore que
+#   compila o instalador limpo end-to-end (gate antes do release fisico)
+#
+# Esse workflow NAO publica release. Apenas executa
+# `python installer/build_installer.py` e sobe o `.exe` + `.sha256`
+# como artefato para download manual. A publicacao em si segue o
+# fluxo descrito em docs/install/release_guide.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch ou tag para validar (default: ref do dispatch)"
+        required: false
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-installer:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Create minimal .env (build only)
+        shell: pwsh
+        run: |
+          if (Test-Path ".env.example") {
+            Copy-Item ".env.example" ".env" -Force
+          } else {
+            @(
+              "APP_NAME=Backup Database"
+              "SINGLE_INSTANCE_ENABLED=true"
+            ) | Set-Content ".env"
+          }
+
+      - name: Verify Inno Setup is available
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          )
+          $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) {
+            throw "Inno Setup 6 nao encontrado. Instale antes de rodar este workflow."
+          }
+          Write-Host "OK: $found"
+
+      - name: Run build_installer.py end-to-end
+        shell: pwsh
+        run: python installer/build_installer.py
+
+      - name: Locate installer artifact
+        id: locate
+        shell: pwsh
+        run: |
+          $latest = Get-ChildItem -Path installer/dist -Filter "BackupDatabase-Setup-*.exe" `
+            | Sort-Object LastWriteTime -Descending `
+            | Select-Object -First 1
+          if (-not $latest) {
+            throw "Nenhum instalador encontrado em installer/dist/"
+          }
+          $sidecar = "$($latest.FullName).sha256"
+          if (-not (Test-Path $sidecar)) {
+            throw "Sidecar .sha256 ausente para $($latest.Name)"
+          }
+          "installer_path=$($latest.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "sidecar_path=$sidecar"            | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "installer_name=$($latest.Name)"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload installer + sidecar as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.locate.outputs.installer_name }}
+          path: |
+            ${{ steps.locate.outputs.installer_path }}
+            ${{ steps.locate.outputs.sidecar_path }}
+          if-no-files-found: error
+          retention-days: 14

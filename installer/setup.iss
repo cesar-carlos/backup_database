@@ -613,63 +613,11 @@ begin
   end;
 end;
 
-procedure RemoveExistingDesktopShortcut();
-var
-  ShortcutPath: String;
-begin
-  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
-  if FileExists(ShortcutPath) then
-  begin
-    if DeleteFile(ShortcutPath) then
-      Log('Removed legacy desktop shortcut before recreate: ' + ShortcutPath)
-    else
-      Log('Warning: failed to remove legacy desktop shortcut: ' + ShortcutPath);
-  end;
-end;
-
-procedure TouchDesktopShortcut();
-var
-  ShortcutPath: String;
-  ResultCode: Integer;
-  PsCommand: String;
-begin
-  // Tocar o LastWriteTime do .lnk forca o Explorer a reavaliar o icone na
-  // proxima atualizacao do desktop, complementando ie4uinit -show em
-  // cenarios de cache mais agressivo.
-  if not WizardIsTaskSelected('desktopicon') then Exit;
-  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
-  if not FileExists(ShortcutPath) then Exit;
-
-  PsCommand := '(Get-Item -LiteralPath ''' + ShortcutPath + ''').LastWriteTime = Get-Date';
-  if Exec(
-    'powershell.exe',
-    '-NoProfile -ExecutionPolicy Bypass -Command "' + PsCommand + '"',
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode
-  ) and (ResultCode = 0) then
-    Log('Touched desktop shortcut to refresh icon cache: ' + ShortcutPath)
-  else
-    Log('Warning: failed to touch desktop shortcut (' + ShortcutPath + '), exit=' + IntToStr(ResultCode));
-end;
-
-procedure RefreshWindowsIconCache();
-var
-  ResultCode: Integer;
-begin
-  if Exec(
-    ExpandConstant('{sys}\ie4uinit.exe'),
-    '-show',
-    '',
-    SW_HIDE,
-    ewWaitUntilTerminated,
-    ResultCode
-  ) then
-    Log('Refreshed Windows icon cache (ie4uinit.exe -show)')
-  else
-    Log('Warning: failed to refresh Windows icon cache (ie4uinit.exe)');
-end;
+// Icon helpers (RemoveExistingDesktopShortcut, TryTouchShortcutWith,
+// TouchDesktopShortcut, RefreshWindowsIconCache) sao incluidos a partir
+// de code/icons.iss para manter este arquivo focado na orquestracao
+// macro. Veja ADR-015 para o racional do conjunto.
+#include "code/icons.iss"
 
 // Check if server mode was selected (used to conditionally create service icons)
 function IsServerMode(): Boolean;
