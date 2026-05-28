@@ -5,6 +5,86 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.4.0</title>
+      <pubDate>Thu, 28 May 2026 14:28:21 +0000</pubDate>
+      <description>## Highlights
+
+**Auto-update hardening + observability** — auditoria 2026-05-28 disparada por incidente real: o pipeline de auto-update ficou silenciosamente quebrado por ~8 dias na maquina de produção (Settings mostrava "indisponíveis neste ambiente" + "Nunca verificado" sem qualquer pista). Investigação revelou múltiplos failure modes mascarados pela mesma mensagem genérica e falta de observabilidade do boot. Esta release fecha todos eles + adiciona testes de regressão.
+
+## P0 — Correctness fixes
+
+- **`EnvironmentLoader`** agora devolve `EnvironmentLoadOutcome` com chaves obrigatórias validadas + fallback automático para asset bundled quando `ProgramData/.env` está incompleto. `requiredKeys = {AUTO_UPDATE_FEED_URL}`.
+- **`AutoUpdateService.initialize`** captura exceções do `feedUrlReader` e emite snapshot com novo `AppUpdateDisabledReason` (`feedReaderException`, `feedUrlMissing`, `nonWindowsPlatform`, `dotenvLoadFailed`, `osIncompatible`, `initializationException`) em vez de cair em `idle` silenciosamente.
+- **`LoggerService.health`** expõe diagnóstico (`fileLoggingEnabled`, `sentinel` write) para detectar "logs silenciados" — causa raiz do bug original (app rodou 8 dias sem gerar nenhum `app_*.log` e ninguém percebeu).
+- **`merge_env.ps1`** com 2 mudanças: `APP_VERSION` agora é *system-managed* (sempre sobrescrito a partir do `.env.example`, elimina valor stale tipo `2.1.3` permanente) + gate de chaves críticas com `exit 2` quando `AUTO_UPDATE_FEED_URL` está ausente após merge.
+- **`AppBootstrap`** loga `EnvironmentLoadOutcome` como `error` (não `warning`) quando init falha — garante visibilidade em logs filtrados por severidade.
+
+## P1 — Observabilidade
+
+- **Logs estruturados** `[auto-update] phase=initialize_done status=disabled reason=...` alinhados com `bootstrap_timing`.
+- **`auto_update_history.jsonl`** adiciona campos `origin` (`ui|service`) + `processPid` para correlação em máquinas com UI + service ativos simultaneamente.
+- **`service_control_diagnostics.log`** reduzido de `5MB×5 = 25MB` para `1MB×3 = 3MB` total.
+
+## P2 — Instalador
+
+- **`setup.iss`**: `UninstallDelete dirifempty` para `{app}` (resolve resíduo de pasta vazia em `C:\Program Files\Backup Database\` que causava ambiguidade `unins000/001/002`).
+- **`restore_update_state.ps1`**: helper `Write-RestoreError` grava em `restore_update_state.error.log` (visível no painel Updates da UI) **E** em stderr (compat com Inno Setup logs + tests). Trap global captura exceções não tratadas. Exit code 2 semântico para config incompatível.
+- **Bug-fixes do pipeline de release**:
+  - `[Tasks] Flags: checked` removido — flag não existe no Inno Setup 6.6.1 (`ISCC` rejeita). Tasks vêm checadas por default.
+  - `code/icons.iss`: comentários `;` (estilo Inno section) trocados por `//` (Pascal). Arquivo é incluído na seção `[Code]`; `;` no início de linha era tratado como statement separator.
+
+## P3 — UX
+
+- Botão "Verificar atualizações" desabilitado quando `isDisabled` + tooltip explicativo (antes ficava clicável mas no-op).
+- Ação corretiva inline "Abrir pasta de configuração" quando `disabledReason ∈ {feedUrlMissing, dotenvLoadFailed, feedReaderException}`.
+- Painel técnico mostra `disabledReason` como label semântico (`feed_url_missing`, etc.) para mapeamento contra logs.
+
+## P4 — Testes (+12 novos)
+
+- 4 testes para `AppUpdateDisabledReason` (cada reason gera snapshot correto).
+- 3 testes para `LoggerHealth` (sentinel write, init failure, invalid path).
+- 3 testes para `EnvironmentLoadOutcome` (healthy, missing key, whitespace).
+- 2 testes para `merge_env.ps1` (exit 2 + APP_VERSION overwrite).
+
+## Validação
+
+- **`flutter analyze`**: 0 issues
+- **`flutter test test/unit/`**: 1904 passam (2 skipped, 0 falhas)
+- **Build do instalador**: OK (3.4.0)
+- **Auto-update**: testado localmente — UI mostra `disabledReason` corretamente quando feed/dotenv falha
+
+## Instalação
+
+Baixe `BackupDatabase-Setup-3.4.0.exe` e o sidecar `.sha256` para validação.
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.4.0.exe -Algorithm SHA256
+# deve coincidir com o conteudo de BackupDatabase-Setup-3.4.0.exe.sha256
+```
+
+A instalação é silenciosa (`/SILENT` ou `/VERYSILENT`) e o auto-update busca esta versão automaticamente para clientes em `&gt;= 3.0.0`.
+
+## Compatibilidade
+
+- **Windows 8.1 / Server 2012 R2** ou superior
+- **WebView2 Runtime** (auto-update silencioso requer Windows 10/11)
+- Atualização in-place a partir de `3.x.x` é segura — config preservada via `restore_update_state.ps1`
+- **Bonus desta release**: clientes em `3.3.x` com `APP_VERSION=2.1.3` (ou qualquer valor stale) terão o valor corrigido automaticamente no próximo install/update.
+
+## Changelog técnico
+
+Para detalhes implementação, veja docstrings com tag `audit-2026-05-28` em:
+- `lib/core/config/environment_loader.dart`
+- `lib/application/services/auto_update_service.dart`
+- `lib/core/utils/logger_service.dart`
+- `installer/merge_env.ps1`
+- `installer/restore_update_state.ps1`
+- `lib/presentation/widgets/settings/updates_settings_section.dart`
+
+Commits: `fe5e064` (audit) + `ed763d2` (release bump).</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.4.0/BackupDatabase-Setup-3.4.0.exe" sparkle:version="3.4.0" sparkle:os="windows" length="38439923" type="application/octet-stream" sha256="ca5718512e1c232ca2a7aceebfa90f0155dfd7711ece006742fc043b73e16156" />
+    </item>
+    <item>
       <title>Version 3.3.1</title>
       <pubDate>Thu, 28 May 2026 00:20:01 +0000</pubDate>
       <description>## Highlights
