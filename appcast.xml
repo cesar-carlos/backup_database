@@ -5,6 +5,79 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.3.1</title>
+      <pubDate>Thu, 28 May 2026 00:20:01 +0000</pubDate>
+      <description>## Highlights
+
+**AUDIT-16: Hardening do modo serviço Windows** — auditoria do fluxo de instalação/start/stop + bootstrap headless, com aplicação de 16 sugestões adicionais de robustez. **+19 testes novos**, zero regressões.
+
+### Correções de correctness
+
+- **Auto-update silencioso quebrado em UI install** (`AppExit 78` + `AppNoConsole 1` ausentes): serviços instalados pela tela de Settings entravam em loop de restart durante todo update silencioso. Agora os 4 caminhos de instalação (UI direta, UAC fallback, `install_service.ps1`, `restore_update_state.ps1`) compartilham o mesmo `_NssmConfigPlan` declarativo.
+- **Race no uninstall** (`STOP_PENDING` + delay fixo 2s): substituído por `_pollUntilStopped` real com timeout configurável.
+- **`.env` faltando levava a loop silencioso de restart**: preflight agora copia `.env`/`.env.example` automaticamente ou retorna `ValidationFailure` bloqueante com instrução acionável.
+- **`_appendControlDiagnostics` bloqueava event loop** (30+ writes síncronas com fsync por start/stop): substituído por `AppendingFileSink` async com fila serializada — sem race de interleaving.
+- **Retry policy distingue `TimeoutException` por tipo** (não só por string).
+- **`elevatedInstallTimeout = 90s`** separado de `longTimeout = 30s` (script PS elevado fazia ~10 chamadas NSSM).
+- **Consolidação de `"access is denied"`** (com "is") no `_textContainsAccessDenied` — antes apenas o start path tratava essa variante.
+
+### Segurança
+
+- **Script PowerShell elevado em `%ProgramData%\BackupDatabase\install\`** (não mais `%TEMP%`):
+  - ACL restrita (`SYSTEM` + `Administrators`) aplicada **antes** de qualquer credencial ser usada.
+  - **Self-destruct** em bloco `finally` PowerShell — sobrevive a crash do caller Dart.
+  - Sufixo aleatório (`&lt;ts&gt;_&lt;rand&gt;.ps1`) elimina race entre instalações concorrentes.
+- **Redactor para `nssm set ObjectName &lt;user&gt; &lt;password&gt;`** — antes o stderr do NSSM podia ecoar a linha de comando inteira (incluindo a senha) em logs.
+- **`WindowsEventLogService.isEnabled` privado** + `setEnabled(enabled, reason)` auditado — antes era `bool` público mutável (foot-gun).
+- **`ServiceAccountProbe`** agora usa `ProcessService` (timeout, redaction, output cap, telemetria).
+
+### Arquitetura
+
+- **`_NssmConfigPlan`** declarativo compartilhado entre 4 caminhos de instalação (Dart UI direta, Dart UAC, PS1 installer, PS1 restore).
+- **`ServiceShutdownHandler` migrado de singleton estático para DI** lazy + `dispose()` — antes não tinha reset, `_isShuttingDown` nunca voltava a `false`.
+- **Bootstrap steps via `_ServiceBootstrapStep` enum** — 11 etapas hardcoded substituídas por enum auto-incremental.
+- **`SingleInstanceService` re-registrado no DI** após aquisição do lock — antes consumidores via `getIt` recebiam outro objeto sem o lock.
+- **`WindowsServiceConstants`** centraliza `serviceName`/`displayName`/`description`/`logPath` (eliminadas 6 duplicações).
+- **`WindowsServiceProvider` dispose-aware** — `notifyListeners` é no-op pós-dispose.
+
+### Observabilidade
+
+- **`AppendingFileSink`** reutilizável com rotação por tamanho (5MB × 5) — eliminado crescimento ilimitado de `service_bootstrap.log` e `service_control_diagnostics.log` em loops de restart.
+- **Métrica `windows_service_install_to_running_seconds`** end-to-end no provider (UX real do clique "Instalar").
+- **Health check disk space configurável** via `diskCheckPaths` injetável — antes usava `Directory.current` cegamente, que em Session 0 virava `System32` (verificava drive errado).
+- **`capture_update_context.ps1`** captura `AppExit Default/77/78`; `restore_update_state.ps1` usa valores capturados com fallback nos defaults.
+
+### Testes (+19 novos)
+
+- **`WindowsServiceProvider` (13 testes)**: cache TTL, métricas install→running, dispose-aware, race UI, log de timeout vs failure (PT-BR + EN).
+- **`_ensureServiceEnvFile` (6 testes)**: no-op, copia `.env`, fallback `.env.example`, preferência, sem template, criação de `configDir`.
+- `@visibleForTesting` em `startServiceWithTimeout`, `ensureServiceEnvFileForTesting`, `nssmInstallCommandsForTesting`, `flushDiagnosticsForTesting`.
+
+### Validações
+
+- **`flutter analyze`**: 0 issues
+- **Suíte completa**: **2028 testes passam** (13 skipped, 0 falhas)
+- **Build do instalador**: OK
+
+## Instalação
+
+Baixe `BackupDatabase-Setup-3.3.1.exe` e o sidecar `.sha256` para validação.
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.3.1.exe -Algorithm SHA256
+# deve coincidir com o conteúdo de BackupDatabase-Setup-3.3.1.exe.sha256
+```
+
+A instalação é silenciosa (`/SILENT` ou `/VERYSILENT`) e o auto-update busca esta versão automaticamente para clientes em `&gt;= 3.0.0`.
+
+## Compatibilidade
+
+- **Windows 8.1 / Server 2012 R2** ou superior
+- **WebView2 Runtime** (auto-update silencioso requer Windows 10/11)
+- Atualização in-place a partir de `3.x.x` é segura — config preservada via `restore_update_state.ps1`.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.3.1/BackupDatabase-Setup-3.3.1.exe" sparkle:version="3.3.1" sparkle:os="windows" length="38418631" type="application/octet-stream" sha256="199941f672ef99615bf63cfe8af74268d67ebe4af030cb6746d382f8a9a17702" />
+    </item>
+    <item>
       <title>Version 3.3.0</title>
       <pubDate>Wed, 27 May 2026 21:56:14 +0000</pubDate>
       <description>## Highlights
