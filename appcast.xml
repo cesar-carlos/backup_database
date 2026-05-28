@@ -5,6 +5,83 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.5.1</title>
+      <pubDate>Thu, 28 May 2026 18:21:51 +0000</pubDate>
+      <description>## Highlights
+
+**Refinamento UX do gate UAC** introduzido na 3.5.0 — agora o usuário tem um banner dedicado na aba **Configurações → Atualizações** quando o auto-update foi bloqueado por UAC, com botão **Atualizar agora** embutido que ignora o gate e dispara o prompt UAC visível.
+
+## Antes vs. depois
+
+| Cenário | 3.5.0 | 3.5.1 |
+|---|---|---|
+| UAC bloqueou auto-update | Texto cru: *"Ha um backup ativo. Aguarde a conclusao..."* (falso/confuso) | InfoBar warning dedicada: *"Aprovacao UAC necessaria"* + botão **Atualizar agora** que ignora o gate |
+| Backup remoto bloqueou | Mesmo texto genérico | Chip: *"Backup remoto em execucao. Aguarde a conclusao."* |
+| File transfer bloqueou | Mesmo texto genérico | Chip: *"Transferencia de arquivo em curso. Aguarde a conclusao."* |
+| Serviço em conta errada | Mesmo texto genérico | Chip: *"Servico Windows precisa estar em LocalSystem."* |
+| Backup local bloqueou | Texto original | Texto original (compat preservada) |
+
+## Mudanças técnicas
+
+### Domínio
+
+- Novo enum **`AppUpdateBlockReason`** (`localBackupRunning`, `remoteBackupRunning`, `fileTransferActive`, `uacPolicy`, `serviceAccountUnsupported`), paralelo ao `AppUpdateDisabledReason` que já existia.
+- Novo struct **`AppUpdateBlockOutcome`** substituindo `String?` no typedef `InstallReadinessCheck`.
+- `AppUpdateBlockedException` ganha campo opcional `reason`.
+- `AppUpdateSnapshot` ganha campo `blockReason` + `copyWith` + propagação no `_runCheck`.
+
+### Provider
+
+- `AutoUpdateProvider.blockReason` (passthrough) + `isBlockedByUacPolicy` — gate único que a UI consulta para decidir mostrar o banner dedicado.
+
+### Callers
+
+- `checkInstallReadiness` (`app_initializer.dart`) retorna o `AppUpdateBlockOutcome` correto para cada caminho.
+- `service_auto_update_configurator` retorna `serviceAccountUnsupported` quando o probe do serviço falha.
+
+### UI (`updates_settings_section.dart`)
+
+- InfoBar `warning` dedicada quando `isBlockedByUacPolicy == true`: título *"Aprovacao UAC necessaria"*, explicação completa, e `FilledButton` *"Atualizar agora"* inline que chama `checkForUpdates()` (`source: manual` ignora o gate UAC — wave 4 da 3.5.0).
+- Texto do chip de status diferenciado por reason (fim do genérico *"Ha um backup ativo"* para todos os casos).
+- Novo item técnico **"Motivo do bloqueio"** no expander com label snake_case para mapear contra logs (`[auto-update] silencioso bloqueado: ...`).
+
+## Validação
+
+- **`flutter analyze`**: 0 issues
+- **`flutter test test/unit test/widget`**: **2029 testes passando** (+6 vs. 3.5.0)
+- **Build do instalador**: OK (3.5.1, 36.69 MB)
+- **6 testes novos** em `auto_update_provider_block_reason_test.dart` cobrindo matriz status × blockReason (incluindo defesa contra `blockReason` stale)
+- **10 testes existentes** em `app_initializer_install_readiness_test.dart` adaptados para asserir `outcome.reason` além de `outcome.message`
+
+## Compatibilidade
+
+- **Não é breaking** para snapshots legacy (`blockReason: null` cai no caminho do banner genérico antigo).
+- Clientes em 3.5.0 podem fazer upgrade direto — sem mudança de behavior, só ganham a UX nova.
+- Atualização in-place desde `3.x.x` continua segura.
+
+## Instalação
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.5.1.exe -Algorithm SHA256
+# deve coincidir com o conteudo de BackupDatabase-Setup-3.5.1.exe.sha256
+```
+
+Instalação silenciosa (`/SILENT` ou `/VERYSILENT`); auto-update entrega esta versão automaticamente para clientes em `&gt;= 3.0.0`.
+
+## Changelog técnico
+
+Procure docstrings com tag `§audit-2026-05-28 wave 4 (UI banner)` em:
+
+- `lib/application/services/auto_update_service.dart` (enum, outcome, snapshot.blockReason)
+- `lib/application/providers/auto_update_provider.dart` (`isBlockedByUacPolicy`)
+- `lib/presentation/boot/app_initializer.dart` (`checkInstallReadiness` retorna outcome)
+- `lib/presentation/boot/service_auto_update_configurator.dart`
+- `lib/presentation/widgets/settings/updates_settings_section.dart` (banner + chip diferenciado)
+
+Commits: `7b5f524` (feature) + `d209ea4` (bump 3.5.1).</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.5.1/BackupDatabase-Setup-3.5.1.exe" sparkle:version="3.5.1" sparkle:os="windows" length="38467507" type="application/octet-stream" sha256="be99049693edc9861ba43c6f8248ec58414574c310b9195f48d57a8896293eb8" />
+    </item>
+    <item>
       <title>Version 3.4.0</title>
       <pubDate>Thu, 28 May 2026 14:28:21 +0000</pubDate>
       <description>## Highlights
