@@ -1,4 +1,5 @@
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/presentation/boot/boot.dart';
@@ -215,6 +216,14 @@ AppBootstrapDependencies _buildDependencies({
     },
     loadEnvironmentIfNeeded: ({String? logPrefix}) async {
       events.add('env');
+      return const EnvironmentLoadOutcome(
+        source: EnvironmentSource.bundledAsset,
+        sourceDescription: 'test',
+        loadedKeyCount: 1,
+        missingRequiredKeys: <String>{},
+        attemptedFallback: false,
+        dotenvInitialized: true,
+      );
     },
     resolveBootstrapConfig: ({required rawArgs}) {
       events.add('config');

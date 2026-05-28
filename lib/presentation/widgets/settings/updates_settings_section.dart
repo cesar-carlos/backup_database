@@ -164,11 +164,85 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
           'The last attempt failed. Review the error below.',
         );
       case AppUpdateStatus.disabled:
+        return _disabledReasonText(provider.disabledReason);
+    }
+  }
+
+  /// Mensagem semântica por reason de disable — substitui a string
+  /// genérica "indisponiveis neste ambiente" que escondia a causa real
+  /// (audit 2026-05-28).
+  String _disabledReasonText(AppUpdateDisabledReason? reason) {
+    switch (reason) {
+      case AppUpdateDisabledReason.nonWindowsPlatform:
+        return appLocaleString(
+          context,
+          'Atualizacoes automaticas disponiveis apenas no Windows.',
+          'Automatic updates only available on Windows.',
+        );
+      case AppUpdateDisabledReason.feedUrlMissing:
+        return appLocaleString(
+          context,
+          'Configuracao ausente: AUTO_UPDATE_FEED_URL nao definida em '
+              r'C:\ProgramData\BackupDatabase\config\.env.',
+          'Configuration missing: AUTO_UPDATE_FEED_URL not set in '
+              r'C:\ProgramData\BackupDatabase\config\.env.',
+        );
+      case AppUpdateDisabledReason.dotenvLoadFailed:
+        return appLocaleString(
+          context,
+          'Falha ao carregar o arquivo de configuracao (.env). Verifique '
+              'permissoes e formato do arquivo.',
+          'Failed to load configuration file (.env). Check file '
+              'permissions and format.',
+        );
+      case AppUpdateDisabledReason.feedReaderException:
+        return appLocaleString(
+          context,
+          'Erro inesperado ao ler a configuracao do feed. Veja os logs '
+              'para detalhes.',
+          'Unexpected error reading feed configuration. See logs for '
+              'details.',
+        );
+      case AppUpdateDisabledReason.osIncompatible:
+        return appLocaleString(
+          context,
+          'Atualizacoes automaticas nao suportadas nesta versao do '
+              'Windows.',
+          'Automatic updates not supported on this Windows version.',
+        );
+      case AppUpdateDisabledReason.initializationException:
+        return appLocaleString(
+          context,
+          'Falha na inicializacao do updater. Veja os logs e o item '
+              '"Telemetria do updater" abaixo.',
+          'Updater initialization failed. See logs and "Updater '
+              'telemetry" item below.',
+        );
+      case null:
         return appLocaleString(
           context,
           'Atualizacoes automaticas indisponiveis neste ambiente.',
-          'Automatic updates are unavailable in this environment.',
+          'Automatic updates unavailable in this environment.',
         );
+    }
+  }
+
+  /// Label curto do reason, usado em copy/diagnostics e no expander
+  /// técnico.
+  String _disabledReasonLabel(AppUpdateDisabledReason reason) {
+    switch (reason) {
+      case AppUpdateDisabledReason.nonWindowsPlatform:
+        return 'non_windows_platform';
+      case AppUpdateDisabledReason.feedUrlMissing:
+        return 'feed_url_missing';
+      case AppUpdateDisabledReason.dotenvLoadFailed:
+        return 'dotenv_load_failed';
+      case AppUpdateDisabledReason.feedReaderException:
+        return 'feed_reader_exception';
+      case AppUpdateDisabledReason.osIncompatible:
+        return 'os_incompatible';
+      case AppUpdateDisabledReason.initializationException:
+        return 'initialization_exception';
     }
   }
 
@@ -324,24 +398,61 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
             children: [
-              FilledButton(
-                onPressed: autoUpdateProvider.isChecking
-                    ? null
-                    : autoUpdateProvider.checkForUpdates,
-                child: autoUpdateProvider.isChecking
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: ProgressRing(strokeWidth: 2),
+              // P3#13: botão desabilitado quando o serviço está
+              // disabled — checkNow no-op em disabled levava a UX
+              // "clico e nada acontece, nem logs novos".
+              Tooltip(
+                message: autoUpdateProvider.isDisabled
+                    ? appLocaleString(
+                        context,
+                        'Updater indisponivel. Resolva o motivo no '
+                            'painel acima antes de tentar novamente.',
+                        'Updater unavailable. Resolve the reason in the '
+                            'panel above before retrying.',
                       )
-                    : Text(
-                        appLocaleString(
-                          context,
-                          'Verificar atualizacoes',
-                          'Check for updates',
+                    : '',
+                child: FilledButton(
+                  onPressed:
+                      autoUpdateProvider.isChecking ||
+                          autoUpdateProvider.isDisabled
+                      ? null
+                      : autoUpdateProvider.checkForUpdates,
+                  child: autoUpdateProvider.isChecking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: ProgressRing(strokeWidth: 2),
+                        )
+                      : Text(
+                          appLocaleString(
+                            context,
+                            'Verificar atualizacoes',
+                            'Check for updates',
+                          ),
                         ),
-                      ),
+                ),
               ),
+              // P3#14: ação corretiva inline quando faltam chaves de
+              // config — abre a pasta do .env direto, sem o usuário
+              // ter que decifrar o path no painel técnico.
+              if (autoUpdateProvider.disabledReason ==
+                      AppUpdateDisabledReason.feedUrlMissing ||
+                  autoUpdateProvider.disabledReason ==
+                      AppUpdateDisabledReason.dotenvLoadFailed ||
+                  autoUpdateProvider.disabledReason ==
+                      AppUpdateDisabledReason.feedReaderException)
+                Button(
+                  onPressed: () => unawaited(
+                    _openParentDirectory(autoUpdateProvider.configFilePath),
+                  ),
+                  child: Text(
+                    appLocaleString(
+                      context,
+                      'Abrir pasta de configuracao',
+                      'Open config folder',
+                    ),
+                  ),
+                ),
               if (autoUpdateProvider.feedUrl != null)
                 Button(
                   onPressed: () => unawaited(
@@ -472,6 +583,29 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                     'Summary of the latest flow observed by the provider.',
                   ),
                 ),
+                // P3#15: estado do dotenv (sempre visível). Ajuda
+                // diagnosticar misconfig em segundos vs. a sessão de
+                // detective que motivou a auditoria.
+                if (autoUpdateProvider.disabledReason != null) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  SettingsTechnicalItem(
+                    title: appLocaleString(
+                      context,
+                      'Motivo do disable',
+                      'Disabled reason',
+                    ),
+                    value: _disabledReasonLabel(
+                      autoUpdateProvider.disabledReason!,
+                    ),
+                    description: appLocaleString(
+                      context,
+                      'Causa raiz do estado "indisponivel". Use para '
+                          'mapear contra logs.',
+                      'Root cause of the "unavailable" state. Map against '
+                          'logs.',
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.lg),
                 SettingsTechnicalItem(
                   title: appLocaleString(

@@ -13,6 +13,8 @@ import 'package:pub_semver/pub_semver.dart';
 const _sparkleNs = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
 
 void main() {
+  _registerDisabledReasonTests();
+
   group('AutoUpdateService.parseAppcast', () {
     test('parses a valid Windows release with sha256 and length', () {
       final releases = AutoUpdateService.parseAppcast(
@@ -892,6 +894,165 @@ AppcastRelease _release({required String version}) {
     title: 'Version $version',
     description: 'Automatic update via GitHub Release.',
   );
+}
+
+/// §audit-2026-05-28: cobertura para os snapshots `disabled` com
+/// `disabledReason` semântico. Antes desses testes, qualquer falha de
+/// init virava `disabled+completed+null lastCheck` indistinguível —
+/// motivo da sessão de "detective" que originou esta auditoria.
+void _registerDisabledReasonTests() {
+  group('AutoUpdateService.initialize disabledReason', () {
+    test(
+      'emits feedReaderException when feedUrlReader throws',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_feed_reader_throws_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => throw StateError('dotenv not initialized'),
+          checkIntervalReader: () => '0',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+
+        expect(service.snapshot.status, AppUpdateStatus.disabled);
+        expect(
+          service.snapshot.disabledReason,
+          AppUpdateDisabledReason.feedReaderException,
+        );
+        expect(service.snapshot.stage, AppUpdateStage.completed);
+        expect(service.snapshot.errorMessage, isNotNull);
+      },
+    );
+
+    test(
+      'emits feedUrlMissing when feedUrlReader returns null',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_feed_url_missing_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => null,
+          checkIntervalReader: () => '0',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+
+        expect(service.snapshot.status, AppUpdateStatus.disabled);
+        expect(
+          service.snapshot.disabledReason,
+          AppUpdateDisabledReason.feedUrlMissing,
+        );
+        expect(service.snapshot.stage, AppUpdateStage.completed);
+      },
+    );
+
+    test(
+      'emits feedUrlMissing when feedUrlReader returns empty string',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_feed_url_empty_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => '   ',
+          checkIntervalReader: () => '0',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+
+        expect(service.snapshot.status, AppUpdateStatus.disabled);
+        expect(
+          service.snapshot.disabledReason,
+          AppUpdateDisabledReason.feedUrlMissing,
+        );
+      },
+    );
+
+    test(
+      'idle status has no disabledReason when feed configured correctly',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_healthy_test',
+        );
+        addTearDown(() => tempDir.delete(recursive: true));
+
+        final service = AutoUpdateService(
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => 'https://example.com/appcast.xml',
+          checkIntervalReader: () => '0',
+          locksDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'locks')),
+          updatesDirectoryResolver: () async =>
+              Directory(p.join(tempDir.path, 'updates')),
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+        );
+
+        await service.initialize();
+
+        if (Platform.isWindows) {
+          expect(service.snapshot.status, AppUpdateStatus.idle);
+          expect(service.snapshot.disabledReason, isNull);
+          expect(service.feedUrl, 'https://example.com/appcast.xml');
+        } else {
+          // Em hosts não-Windows, esperamos disabled com reason
+          // nonWindowsPlatform — não confundir com feedUrlMissing.
+          expect(service.snapshot.status, AppUpdateStatus.disabled);
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.nonWindowsPlatform,
+          );
+        }
+      },
+    );
+  });
 }
 
 String _buildFeed({required List<String> items}) {

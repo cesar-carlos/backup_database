@@ -92,7 +92,31 @@ class ServiceModeInitializer {
       await stepRunner.run(
         step: _ServiceBootstrapStep.loadEnv.oneBased,
         label: 'Carregando variaveis de ambiente',
-        action: () => EnvironmentLoader.loadIfNeeded(logPrefix: '[service]'),
+        action: () async {
+          final outcome = await EnvironmentLoader.loadIfNeeded(
+            logPrefix: '[service]',
+          );
+          if (!outcome.dotenvInitialized) {
+            LoggerService.error(
+              '[service] dotenv NAO inicializado (source=${outcome.source.name},'
+              ' fallback=${outcome.attemptedFallback}); features dependentes'
+              ' (auto-update, single-instance) ficarao degradadas.',
+              outcome.loadError ?? StateError('dotenv not initialized'),
+            );
+          } else if (outcome.missingRequiredKeys.isNotEmpty) {
+            LoggerService.error(
+              '[service] env carregado mas chaves obrigatorias ausentes: '
+              '${outcome.missingRequiredKeys.toList()} '
+              '(source=${outcome.source.name}, '
+              'fallback=${outcome.attemptedFallback}).',
+            );
+          } else {
+            LoggerService.info(
+              '[service] env_outcome source=${outcome.source.name} '
+              'keys=${outcome.loadedKeyCount} ok',
+            );
+          }
+        },
       );
 
       await stepRunner.run(
@@ -145,10 +169,8 @@ class ServiceModeInitializer {
           // lock e o serviço pode tentar duplicar o IPC.
           final lockedInstance = singleInstanceService;
           if (lockedInstance != null) {
-            if (service_locator.getIt
-                .isRegistered<ISingleInstanceService>()) {
-              await service_locator.getIt
-                  .unregister<ISingleInstanceService>();
+            if (service_locator.getIt.isRegistered<ISingleInstanceService>()) {
+              await service_locator.getIt.unregister<ISingleInstanceService>();
             }
             service_locator.getIt.registerSingleton<ISingleInstanceService>(
               lockedInstance,

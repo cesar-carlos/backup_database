@@ -88,8 +88,8 @@ class MutexSecurityDescriptor {
       return null;
     }
 
-    final convertFn =
-        advapi32.lookupFunction<
+    final convertFn = advapi32
+        .lookupFunction<
           Int32 Function(
             Pointer<Utf16> stringSecurityDescriptor,
             Uint32 stringSDRevision,

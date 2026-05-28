@@ -125,8 +125,7 @@ Future<void> setupApplicationModule(GetIt getIt) async {
 /// Retorna paths a checar pelo `_checkDiskSpace`. Mantido em função
 /// separada para facilitar override em testes.
 List<String> _resolveHealthCheckDiskPaths() {
-  final programData =
-      Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+  final programData = Platform.environment['ProgramData'] ?? r'C:\ProgramData';
   return <String>[
     File(Platform.resolvedExecutable).parent.path,
     '$programData\\BackupDatabase',

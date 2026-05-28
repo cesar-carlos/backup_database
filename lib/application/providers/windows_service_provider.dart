@@ -16,8 +16,11 @@ enum WindowsServiceOperation {
 }
 
 class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
-  WindowsServiceProvider(this._service, this._eventLog, {IMetricsCollector? metricsCollector})
-    : _metrics = metricsCollector;
+  WindowsServiceProvider(
+    this._service,
+    this._eventLog, {
+    IMetricsCollector? metricsCollector,
+  }) : _metrics = metricsCollector;
   final IWindowsServiceService _service;
   final IWindowsServiceEventLogger _eventLog;
   final IMetricsCollector? _metrics;

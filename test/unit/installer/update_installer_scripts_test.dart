@@ -102,7 +102,10 @@ void main() {
       () async {
         final iss = await _loadSetupIssParser();
 
-        expect(iss.hasForwardDeclaration('RemoveExistingDesktopShortcut'), isTrue);
+        expect(
+          iss.hasForwardDeclaration('RemoveExistingDesktopShortcut'),
+          isTrue,
+        );
         expect(
           iss.routineContains(
             'RemoveExistingDesktopShortcut',
@@ -129,7 +132,10 @@ void main() {
         final iss = await _loadSetupIssParser();
 
         expect(iss.hasForwardDeclaration('TouchDesktopShortcut'), isTrue);
-        expect(iss.routineContains('TouchDesktopShortcut', 'LastWriteTime'), isTrue);
+        expect(
+          iss.routineContains('TouchDesktopShortcut', 'LastWriteTime'),
+          isTrue,
+        );
         // Tenta powershell.exe primeiro e pwsh.exe (PowerShell 7) como
         // fallback para cobrir SKUs reduzidos / policy restritiva.
         expect(
@@ -149,7 +155,10 @@ void main() {
       () async {
         final iss = await _loadSetupIssParser();
 
-        expect(iss.routineContains('PrepareToInstall', 'MB_DEFBUTTON2'), isTrue);
+        expect(
+          iss.routineContains('PrepareToInstall', 'MB_DEFBUTTON2'),
+          isTrue,
+        );
         expect(
           iss.routineContains(
             'PrepareToInstall',
@@ -208,7 +217,14 @@ void main() {
         final targetPath = p.join(tempDir.path, '.env');
         final backupPath = p.join(tempDir.path, '.env.bak');
 
-        await File(examplePath).writeAsString('A=1\nB=2\nD=4\n');
+        // `AUTO_UPDATE_FEED_URL` é chave crítica (§audit-2026-05-28).
+        // Sem ela presente em `.env.example` + após merge, o script
+        // sai com exit 2 — comportamento intencional.
+        await File(
+          examplePath,
+        ).writeAsString(
+          'A=1\nB=2\nD=4\nAUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+        );
         await File(targetPath).writeAsString('B=9\nC=3\n');
 
         final result = await _runPowerShellScript(
@@ -230,7 +246,99 @@ void main() {
         expect(merged, contains('B=9'));
         expect(merged, contains('C=3'));
         expect(merged, contains('D=4'));
+        expect(merged, contains('AUTO_UPDATE_FEED_URL=https://example.com'));
         expect(RegExp(r'^B=2$', multiLine: true).hasMatch(merged), isFalse);
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env exits with code 2 when critical key AUTO_UPDATE_FEED_URL '
+      'missing',
+      () async {
+        // §audit-2026-05-28: regressao do bug que motivou a auditoria.
+        // Sem AUTO_UPDATE_FEED_URL no merge final, o instalador
+        // DEVE sinalizar exit code 2 para o caller (setup.iss) logar
+        // warning explicito.
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_critical_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, '.env');
+
+        await File(examplePath).writeAsString('A=1\nB=2\n');
+        await File(targetPath).writeAsString('A=existing\n');
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+          ],
+        );
+
+        expect(result.exitCode, 2);
+        expect(
+          result.stderr.toString(),
+          contains('AUTO_UPDATE_FEED_URL'),
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env always overwrites APP_VERSION (system-managed key)',
+      () async {
+        // §audit-2026-05-28: regressao do bug em que `APP_VERSION=2.1.3`
+        // ficava stale no ProgramData mesmo apos varios upgrades porque
+        // o merge antigo SO adicionava chaves novas (preservava valor
+        // existente). Agora APP_VERSION e system-managed: sempre vem
+        // do .env.example, refletindo a versao real do instalador.
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_appversion_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, '.env');
+
+        await File(examplePath).writeAsString(
+          'APP_VERSION=3.3.1\nAUTO_UPDATE_FEED_URL=https://example.com/x.xml\n',
+        );
+        // .env "antigo" com versao stale + override de user
+        await File(targetPath).writeAsString(
+          'APP_VERSION=2.1.3\nAUTO_UPDATE_FEED_URL=https://example.com/x.xml\n'
+          'CUSTOM_USER_VAR=preserve_me\n',
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+          ],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+
+        final merged = await File(targetPath).readAsString();
+        expect(merged, contains('APP_VERSION=3.3.1'));
+        expect(
+          RegExp(r'^APP_VERSION=2\.1\.3$', multiLine: true).hasMatch(merged),
+          isFalse,
+          reason: 'system-managed key must be overwritten',
+        );
+        expect(
+          merged,
+          contains('CUSTOM_USER_VAR=preserve_me'),
+          reason: 'user override must be preserved',
+        );
 
         await _deleteTempDirBestEffort(tempDir);
       },

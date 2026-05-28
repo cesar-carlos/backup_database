@@ -61,12 +61,15 @@ class WindowsServiceService implements IWindowsServiceService {
     IMetricsCollector? metricsCollector,
   }) : _timing = timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
        _metrics = metricsCollector,
-       // 5 MB por arquivo × 5 arquivos (default) = ~25 MB total no pior
-       // caso. Suficiente para auditoria de horas de polling em
-       // troubleshooting.
+       // §audit-2026-05-28: reduzido de 5MB×5 (~25MB) para 1MB×3
+       // (~3MB total). Logs de polling de service são pesados em loops
+       // de restart transitórios mas raramente são revisitados além das
+       // últimas algumas centenas de eventos. Mantemos `flush=async`
+       // padrão do AppendingFileSink (sem fsync por linha).
        _diagnosticsSink = AppendingFileSink(
          path: _controlDiagnosticsPath,
-         maxFileSize: 5 * 1024 * 1024,
+         maxFileSize: 1 * 1024 * 1024,
+         maxFiles: 3,
        );
 
   final ProcessService _processService;
@@ -1490,8 +1493,9 @@ class WindowsServiceService implements IWindowsServiceService {
     // antes de qualquer dado sensível ser escrito.
     final installScriptDir = '$programData\\BackupDatabase\\install';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final randomSuffix = DateTime.now().microsecondsSinceEpoch
-        .toRadixString(16);
+    final randomSuffix = DateTime.now().microsecondsSinceEpoch.toRadixString(
+      16,
+    );
     final scriptPath = p.join(
       installScriptDir,
       'backup_db_install_${timestamp}_$randomSuffix.ps1',

@@ -162,8 +162,7 @@ void main() {
       ).called(1);
     });
 
-    test('does NOT record metric if service did not become running',
-        () async {
+    test('does NOT record metric if service did not become running', () async {
       when(
         () => service.installService(
           serviceUser: any(named: 'serviceUser'),
@@ -192,8 +191,7 @@ void main() {
           servicePassword: any(named: 'servicePassword'),
         ),
       ).thenAnswer(
-        (_) async =>
-            const rd.Failure(ServerFailure(message: 'NSSM not found')),
+        (_) async => const rd.Failure(ServerFailure(message: 'NSSM not found')),
       );
 
       final ok = await provider.installService();
@@ -302,8 +300,7 @@ void main() {
 
     test('logs StartFailed for non-timeout errors', () async {
       when(service.startService).thenAnswer(
-        (_) async =>
-            const rd.Failure(ServerFailure(message: 'access denied')),
+        (_) async => const rd.Failure(ServerFailure(message: 'access denied')),
       );
       when(service.getStatus).thenAnswer(
         (_) async => const rd.Success(_stoppedStatus),

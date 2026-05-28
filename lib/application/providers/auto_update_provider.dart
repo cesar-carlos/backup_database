@@ -43,6 +43,7 @@ class AutoUpdateProvider extends ChangeNotifier {
   String? get targetVersion => _snapshot.targetVersion;
   String? get statusMessage => _snapshot.message;
   bool get isDisabled => status == AppUpdateStatus.disabled;
+  AppUpdateDisabledReason? get disabledReason => _snapshot.disabledReason;
   AppUpdateStage? get currentStage => _snapshot.stage;
   AppUpdateStage? get lastFailureStage => _snapshot.lastFailureStage;
   AppUpdateSource? get lastSource => _snapshot.lastSource;
@@ -52,6 +53,7 @@ class AutoUpdateProvider extends ChangeNotifier {
   String get updateContextPath => AutoUpdateService.updateContextSupportPath();
   String get diagnosticsPath => AutoUpdateService.diagnosticsSupportPath();
   String get lockFilePath => AutoUpdateService.lockFileSupportPath();
+  String get configFilePath => AutoUpdateService.configFileSupportPath();
 
   Future<void> checkForUpdates() {
     return _autoUpdateService.checkNow(source: AppUpdateSource.manual);

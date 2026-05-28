@@ -71,6 +71,7 @@ class ServiceHealthChecker {
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
+
     /// S1 da auditoria: paths que devem ser checados pelo `_checkDiskSpace`.
     /// Antes usávamos `Directory.current` cegamente, que em service mode
     /// (Session 0) costumava resolver para `C:\Windows\System32\` —

@@ -1,13 +1,53 @@
 import 'dart:async';
+import 'dart:io' show pid;
 
 import 'package:backup_database/core/logging/file_logger_service.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:logger/logger.dart';
 
+/// Resultado observable da inicialização do logger — permite o bootstrap
+/// detectar falhas silenciosas (`fileLogger` nulo, write probe falhou)
+/// e expor um diagnóstico ao usuário em vez de virar uma instalação
+/// "sem logs" (audit 2026-05-28: app rodou ~8 dias sem gerar nenhum
+/// `app_*.log` e ninguém percebeu).
+class LoggerHealth {
+  const LoggerHealth({
+    required this.fileLoggingEnabled,
+    required this.lastBootSentinelWrittenAt,
+    required this.logsDirectory,
+    this.initError,
+    this.lastBootSentinelError,
+  });
+
+  /// True se o `FileLoggerService` está pronto e respondendo a writes.
+  final bool fileLoggingEnabled;
+
+  /// Quando a linha sentinel de boot foi escrita com sucesso. `null` =
+  /// nunca escreveu (degraded).
+  final DateTime? lastBootSentinelWrittenAt;
+
+  /// Diretório que o logger usa (informativo para diagnóstico na UI).
+  final String? logsDirectory;
+
+  /// Exceção do `init()`, se houver.
+  final Object? initError;
+
+  /// Exceção da escrita sentinel, se houver — distingue de [initError]
+  /// porque o `initialize` pode ter passado mas o probe write falhou.
+  final Object? lastBootSentinelError;
+
+  bool get isHealthy => fileLoggingEnabled && initError == null;
+}
+
 class LoggerService {
   static Logger? _logger;
   static FileLoggerService? _fileLogger;
   static int _silenceDepth = 0;
+  static LoggerHealth _health = const LoggerHealth(
+    fileLoggingEnabled: false,
+    lastBootSentinelWrittenAt: null,
+    logsDirectory: null,
+  );
 
   static Logger get _instance {
     _logger ??= Logger(
@@ -18,7 +58,15 @@ class LoggerService {
     return _logger!;
   }
 
-  /// Inicializa o LoggerService com suporte a arquivos
+  /// Diagnóstico do estado do file logger — útil para o bootstrap
+  /// detectar "logs silenciados" (causa de incidentes da auditoria
+  /// 2026-05-28).
+  static LoggerHealth get health => _health;
+
+  /// Inicializa o LoggerService com suporte a arquivos. Sempre escreve
+  /// uma linha sentinel `[boot] LoggerService initialized at <iso>` —
+  /// se essa linha não aparecer em nenhum `app_*.log` recente, está
+  /// claro que o file logging quebrou (vs. silêncio normal).
   static Future<void> init({String? logsDirectory}) async {
     _logger ??= Logger(
       printer: PrettyPrinter(
@@ -26,21 +74,73 @@ class LoggerService {
       ),
     );
 
-    if (logsDirectory != null) {
+    if (logsDirectory == null) {
+      _health = LoggerHealth(
+        fileLoggingEnabled: false,
+        lastBootSentinelWrittenAt: null,
+        logsDirectory: logsDirectory,
+      );
+      return;
+    }
+
+    Object? initError;
+    Object? sentinelError;
+    DateTime? sentinelWrittenAt;
+
+    try {
+      _fileLogger = FileLoggerService(logsDirectory: logsDirectory);
+      await _fileLogger!.initialize();
+    } on Object catch (e, stackTrace) {
+      initError = e;
+      _fileLogger = null;
+      _instance.w(
+        'Falha ao inicializar file logger em: $logsDirectory',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+
+    final fileLogger = _fileLogger;
+    if (fileLogger != null) {
       try {
-        _fileLogger = FileLoggerService(logsDirectory: logsDirectory);
-        await _fileLogger!.initialize();
-        await _fileLogger!.log(
-          'LoggerService inicializado com file logging em: $logsDirectory',
+        final now = DateTime.now().toUtc().toIso8601String();
+        // Linha sentinel: marcador que TEM que aparecer no log do dia.
+        // Se a auditoria perceber arquivos `app_*.log` SEM essa linha,
+        // o init foi enganoso (file existe mas writes não chegam).
+        await fileLogger.log(
+          '[boot] LoggerService sentinel '
+          'pid=$pid logsDirectory=$logsDirectory utc=$now',
         );
+        sentinelWrittenAt = DateTime.now();
       } on Object catch (e, stackTrace) {
+        sentinelError = e;
         _instance.w(
-          'Falha ao inicializar file logger em: $logsDirectory',
+          'LoggerService sentinel write falhou em: $logsDirectory',
           error: e,
           stackTrace: stackTrace,
         );
       }
     }
+
+    _health = LoggerHealth(
+      fileLoggingEnabled: _fileLogger != null && sentinelError == null,
+      lastBootSentinelWrittenAt: sentinelWrittenAt,
+      logsDirectory: logsDirectory,
+      initError: initError,
+      lastBootSentinelError: sentinelError,
+    );
+  }
+
+  /// Reseta o estado mantido para testes determinísticos.
+  static void resetForTesting() {
+    _fileLogger = null;
+    _logger = null;
+    _silenceDepth = 0;
+    _health = const LoggerHealth(
+      fileLoggingEnabled: false,
+      lastBootSentinelWrittenAt: null,
+      logsDirectory: null,
+    );
   }
 
   static FileLoggerService? get fileLogger => _fileLogger;

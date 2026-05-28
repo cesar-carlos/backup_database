@@ -26,7 +26,9 @@ class SetupIssParser {
   /// declares it. Mirrors Inno Setup's compile-time behaviour closely
   /// enough for static contract tests.
   factory SetupIssParser.fromFile(File file) {
-    return SetupIssParser(_expandIncludes(file.readAsStringSync(), file.parent));
+    return SetupIssParser(
+      _expandIncludes(file.readAsStringSync(), file.parent),
+    );
   }
 
   static String _expandIncludes(String source, Directory baseDir) {
@@ -34,7 +36,9 @@ class SetupIssParser {
       RegExp(r'^#include\s+"([^"]+)"\s*$', multiLine: true),
       (match) {
         final relative = match.group(1)!;
-        final included = File('${baseDir.path}${Platform.pathSeparator}$relative');
+        final included = File(
+          '${baseDir.path}${Platform.pathSeparator}$relative',
+        );
         if (!included.existsSync()) return match.group(0)!;
         return _expandIncludes(
           included.readAsStringSync(),
@@ -124,8 +128,9 @@ class SetupIssParser {
     if (match == null) return false;
     if (hasFlag == null) return true;
     final line = match.group(0)!;
-    return RegExp(r'Flags:\s*[^;]*\b' + RegExp.escape(hasFlag) + r'\b')
-        .hasMatch(line);
+    return RegExp(
+      r'Flags:\s*[^;]*\b' + RegExp.escape(hasFlag) + r'\b',
+    ).hasMatch(line);
   }
 
   /// Returns the first `[Icons]` entry whose `Name:` matches [name],

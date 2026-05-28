@@ -10,6 +10,7 @@ import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/machine_storage_layout.dart';
+import 'package:backup_database/core/utils/service_mode_detector.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -31,6 +32,40 @@ enum AppUpdateStatus {
   upToDate,
   error,
   disabled,
+}
+
+/// Por que o updater entrou em estado `disabled`/`idle` sem rodar — campo
+/// auxiliar de [AppUpdateSnapshot] que permite a UI mostrar mensagens
+/// distintas e ações corretivas em vez de só "indisponivel neste ambiente".
+///
+/// Antes (audit 2026-05-28) qualquer um dos casos abaixo virava
+/// `disabled+completed+null lastCheck` na UI, escondendo o motivo real.
+enum AppUpdateDisabledReason {
+  /// `Platform.isWindows == false`. Build é multiplataforma, mas o
+  /// pipeline (Inno Setup) só roda em Windows.
+  nonWindowsPlatform,
+
+  /// `AUTO_UPDATE_FEED_URL` não está em `dotenv.env` ou veio vazio.
+  /// **Acionável pelo usuário**: editar
+  /// `C:\ProgramData\BackupDatabase\config\.env`.
+  feedUrlMissing,
+
+  /// `dotenv` falhou ao carregar (asset corrompido, permissão negada,
+  /// etc.). **Acionável pelo dev/sysadmin**: ver logs.
+  dotenvLoadFailed,
+
+  /// `_feedUrlReader` lançou exceção (ex.: `NotInitializedError` do
+  /// dotenv) — distinção semântica de [feedUrlMissing] para diagnóstico.
+  feedReaderException,
+
+  /// `FeatureAvailabilityService` desativou auto-update por
+  /// incompatibilidade do SO (Server 2012/R2, OS version unresolved,
+  /// etc.). UI mostra banner do `localizeCompatibilityReason`.
+  osIncompatible,
+
+  /// Exceção genérica/inesperada durante `initialize()`. UI mostra
+  /// mensagem técnica copiável.
+  initializationException,
 }
 
 enum AppUpdateStage {
@@ -119,6 +154,7 @@ class AppUpdateSnapshot {
     this.lastAttemptNumber,
     this.lastDownloadDuration,
     this.lastCheckDuration,
+    this.disabledReason,
   });
 
   final AppUpdateStatus status;
@@ -135,6 +171,12 @@ class AppUpdateSnapshot {
   final int? lastAttemptNumber;
   final Duration? lastDownloadDuration;
   final Duration? lastCheckDuration;
+
+  /// Por que o updater está desabilitado / não rodou. Apenas relevante
+  /// quando `status == disabled` (ou quando `initialize()` falhou
+  /// catastroficamente e deixou o snapshot em `idle`). UI usa esse campo
+  /// para distinguir feed faltando vs. compatibilidade de OS vs. exceção.
+  final AppUpdateDisabledReason? disabledReason;
 
   static const _unset = Object();
 
@@ -156,6 +198,7 @@ class AppUpdateSnapshot {
     Object? lastAttemptNumber = _unset,
     Object? lastDownloadDuration = _unset,
     Object? lastCheckDuration = _unset,
+    Object? disabledReason = _unset,
   }) {
     return AppUpdateSnapshot(
       status: status ?? this.status,
@@ -192,6 +235,9 @@ class AppUpdateSnapshot {
       lastCheckDuration: identical(lastCheckDuration, _unset)
           ? this.lastCheckDuration
           : lastCheckDuration as Duration?,
+      disabledReason: identical(disabledReason, _unset)
+          ? this.disabledReason
+          : disabledReason as AppUpdateDisabledReason?,
     );
   }
 }
@@ -493,14 +539,74 @@ class AutoUpdateService {
     );
   }
 
+  /// Caminho do arquivo `.env` que o updater espera consumir (apenas
+  /// para diagnóstico na UI / mensagens corretivas). Não é uma garantia
+  /// de qual `.env` foi efetivamente carregado em runtime — esse dado
+  /// vem do `EnvironmentLoader.outcome`.
+  static String configFileSupportPath({Map<String, String>? environment}) {
+    return p.join(
+      machineRootSupportPath(environment: environment),
+      MachineStorageLayout.config,
+      '.env',
+    );
+  }
+
+  /// Emite log estruturado de fase do auto-update para correlação nos
+  /// arquivos `logs/app_YYYY-MM-DD.log`. Pattern alinhado com
+  /// `[main] bootstrap_timing phase=...` (audit 2026-05-28 — antes só
+  /// havia logs ad-hoc).
+  static void _logPhase(
+    String phase, {
+    Map<String, Object?> data = const {},
+  }) {
+    final parts = data.entries.map((e) => '${e.key}=${e.value}').join(' ');
+    LoggerService.info(
+      '[auto-update] phase=$phase${parts.isEmpty ? '' : ' $parts'}',
+    );
+  }
+
+  /// Resolve o label `origin` para o `auto_update_history.jsonl` (P1#8).
+  /// Usa o `ServiceModeDetector` cached em vez de detectar a cada call —
+  /// o boot já chamou `isServiceMode` no startup, então é apenas um
+  /// getter de cache aqui.
+  static String _resolveOriginLabel() {
+    return ServiceModeDetector.isServiceMode() ? 'service' : 'ui';
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) {
       LoggerService.warning('AutoUpdateService ja foi inicializado');
       return;
     }
+    _logPhase('initialize_begin');
 
     final currentVersion = await _resolveCurrentVersion();
-    final configuredFeedUrl = _feedUrlReader()?.trim();
+    _logPhase(
+      'initialize_version_resolved',
+      data: {
+        'currentVersion': currentVersion,
+      },
+    );
+
+    // §audit-2026-05-28: o reader pode lançar `NotInitializedError`
+    // quando o `dotenv` falhou no boot. Antes a exceção subia para o
+    // `_initializeAutoUpdate` que apenas logava warning, deixando o
+    // snapshot em `idle` silenciosamente. Agora capturamos e emitimos
+    // snapshot `disabled` com `disabledReason=feedReaderException` —
+    // a UI mostra mensagem técnica copiável em vez de "ready".
+    String? configuredFeedUrl;
+    Object? readerError;
+    try {
+      configuredFeedUrl = _feedUrlReader()?.trim();
+    } on Object catch (e, s) {
+      readerError = e;
+      LoggerService.error(
+        'AutoUpdateService: feedUrlReader lancou excecao (provavel '
+        'dotenv nao inicializado): $e',
+        e,
+        s,
+      );
+    }
 
     _isInitialized = true;
     _feedUrl = configuredFeedUrl != null && configuredFeedUrl.isNotEmpty
@@ -516,9 +622,40 @@ class AutoUpdateService {
           currentVersion: currentVersion.toString(),
           stage: AppUpdateStage.completed,
           message: 'Atualizacoes automaticas disponiveis apenas no Windows.',
+          disabledReason: AppUpdateDisabledReason.nonWindowsPlatform,
         ),
       );
-      LoggerService.info('AutoUpdateService desabilitado fora do Windows');
+      _logPhase(
+        'initialize_done',
+        data: {
+          'status': 'disabled',
+          'reason': 'non_windows_platform',
+        },
+      );
+      return;
+    }
+
+    if (readerError != null) {
+      _emitSnapshot(
+        AppUpdateSnapshot(
+          status: AppUpdateStatus.disabled,
+          currentVersion: currentVersion.toString(),
+          stage: AppUpdateStage.completed,
+          message:
+              'Configuracao indisponivel: falha ao ler AUTO_UPDATE_FEED_URL '
+              'do dotenv ($readerError).',
+          errorMessage: readerError.toString(),
+          disabledReason: AppUpdateDisabledReason.feedReaderException,
+        ),
+      );
+      _logPhase(
+        'initialize_done',
+        data: {
+          'status': 'disabled',
+          'reason': 'feed_reader_exception',
+          'error': readerError.runtimeType,
+        },
+      );
       return;
     }
 
@@ -531,11 +668,15 @@ class AutoUpdateService {
           message:
               'AUTO_UPDATE_FEED_URL nao configurada em '
               r'C:\ProgramData\BackupDatabase\config\.env.',
+          disabledReason: AppUpdateDisabledReason.feedUrlMissing,
         ),
       );
-      LoggerService.warning(
-        'AUTO_UPDATE_FEED_URL nao configurada. Atualizacoes automáticas '
-        'desabilitadas.',
+      _logPhase(
+        'initialize_done',
+        data: {
+          'status': 'disabled',
+          'reason': 'feed_url_missing',
+        },
       );
       return;
     }
@@ -550,7 +691,13 @@ class AutoUpdateService {
       ),
     );
 
-    LoggerService.info('AutoUpdateService pronto com feed $_feedUrl');
+    _logPhase(
+      'initialize_done',
+      data: {
+        'status': 'idle',
+        'feedUrlLength': _feedUrl!.length,
+      },
+    );
   }
 
   Future<void> _cleanupInitialArtifacts() async {
@@ -1525,6 +1672,12 @@ class AutoUpdateService {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
         'attemptNumber': attemptNumber,
         'source': source.name,
+        // §audit-2026-05-28: maquinas com UI + service ativos
+        // simultaneamente nao distinguiam qual processo gerou cada
+        // entry. `origin` (resolvido via installContextProvider) +
+        // `processPid` permitem correlacionar com logs do processo.
+        'origin': _resolveOriginLabel(),
+        'processPid': pid,
         'status': status.name,
         'stage': _stageToken(stage),
         'currentVersion': currentVersion,

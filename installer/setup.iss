@@ -76,6 +76,12 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 
 [UninstallDelete]
 Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
+; §audit-2026-05-28: pasta {app} ficava com diretorio vazio em
+; "C:\Program Files\Backup Database\" apos uninstall, causando ambiguidade
+; em FindUninstaller (varremos unins000/001/002 justamente por causa
+; disso). dirifempty so remove se estiver realmente vazia, entao binarios
+; nao tocados pelo Inno (downloads, plugins externos) ficam preservados.
+Name: "{app}"; Type: dirifempty
 
 [Code]
 var
@@ -559,6 +565,11 @@ begin
     AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
     NssmPath := ExpandConstant('{app}\tools\nssm.exe');
 
+    // merge_env.ps1 retorna:
+    //   0 = OK (merge feito ou no-op)
+    //   2 = chaves criticas ausentes apos merge (auto-update ficara desabilitado)
+    //   outro = falha generica
+    // Loggamos a distincao para troubleshooting pos-install.
     if RunTempPowerShellScript(
       'merge_env.ps1',
       '-ExamplePath "' + EnvExamplePath + '" ' +
@@ -568,7 +579,9 @@ begin
     ) then
       Log('Merged machine-scope .env with .env.example')
     else
-      Log('Warning: Failed to merge machine-scope .env with .env.example');
+      Log('Warning: Failed to merge machine-scope .env with .env.example ' +
+          '(possivel chave critica ausente como AUTO_UPDATE_FEED_URL; ' +
+          'auto-update ficara desabilitado ate corrigir ' + EnvPath + ')');
 
     if SelectedMode = '' then
       SelectedMode := 'server';

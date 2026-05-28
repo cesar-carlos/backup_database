@@ -14,6 +14,53 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# §audit-2026-05-28: capturar erros do script em arquivo dedicado.
+# Antes, throws subiam para o stderr do Inno Setup que ia parar em
+# logs do Setup que ninguem revisita pos-install. Agora gravamos
+# tudo em "restore_update_state.error.log" ao lado do contexto,
+# para troubleshooting facil pelo painel de Updates da app.
+$ErrorLogPath = Join-Path (Split-Path -Parent $ContextPath) `
+    'restore_update_state.error.log'
+
+function Write-RestoreError {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+        [object]$ErrorRecord = $null
+    )
+
+    $ts = (Get-Date).ToUniversalTime().ToString('o')
+    $line = "[$ts] $Message"
+    if ($null -ne $ErrorRecord) {
+        $line += "`n$($ErrorRecord | Out-String)"
+    }
+
+    # 1) Sempre tenta gravar no error log dedicado (novo: facil de
+    #    descobrir no painel Updates da UI sem caçar logs do Setup).
+    try {
+        $parent = Split-Path -Parent $ErrorLogPath
+        if (-not (Test-Path $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        Add-Content -Path $ErrorLogPath -Value $line -Encoding UTF8
+    } catch {
+        # Falha ao escrever no error log — segue para o stderr abaixo.
+    }
+
+    # 2) Sempre emite no stderr (defesa em profundidade): mantem compat
+    #    com Inno Setup logs, captura por NSSM e testes que verificam
+    #    `result.stderr` (`update_installer_scripts_test.dart`).
+    [Console]::Error.WriteLine($line)
+}
+
+# Trap global para que QUALQUER exception nao tratada chegue ao
+# error log antes do exit. Sem isso, o operador so via "exit code 1"
+# do PowerShell e o motivo se perdia.
+trap {
+    Write-RestoreError -Message "Exception nao tratada em restore_update_state.ps1" -ErrorRecord $_
+    exit 1
+}
+
 function Test-AuthenticodeSignature {
     param(
         [Parameter(Mandatory = $true)]
@@ -243,7 +290,13 @@ if ($serviceExists) {
     $normalizedAccount = $objectName.Trim().ToLowerInvariant()
     $supportedAccounts = @('localsystem', 'system', 'nt authority\system')
     if ($supportedAccounts -notcontains $normalizedAccount) {
-        throw "Restauracao automatica do Windows Service so e suportada para LocalSystem. Conta detectada: $objectName"
+        # Antes era `throw` — agora loga em arquivo dedicado para que o
+        # operador descubra o problema no painel de updates da app
+        # (audit 2026-05-28). exit 2 sinaliza "config incompativel".
+        Write-RestoreError -Message ("Restauracao automatica do Windows Service so e " +
+            "suportada para LocalSystem. Conta detectada: $objectName. " +
+            "Reinstale o servico manualmente via 'Instalar como Servico do Windows'.")
+        exit 2
     }
     Set-NssmValue -Arguments @("set", $ServiceName, "ObjectName", "LocalSystem")
 

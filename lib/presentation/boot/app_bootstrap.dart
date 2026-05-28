@@ -39,6 +39,7 @@ import 'package:backup_database/presentation/handlers/tray_menu_handler.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart' show Widget, WidgetsFlutterBinding;
 
 typedef LaunchBootstrapContextResolverFn =
@@ -46,7 +47,8 @@ typedef LaunchBootstrapContextResolverFn =
       required List<String> rawArgs,
       required Map<String, String> rawEnvironment,
     });
-typedef LoadEnvironmentFn = Future<void> Function({String? logPrefix});
+typedef LoadEnvironmentFn =
+    Future<EnvironmentLoadOutcome> Function({String? logPrefix});
 typedef ResolveBootstrapConfigFn =
     BootstrapConfig Function({
       required List<String> rawArgs,
@@ -238,7 +240,12 @@ class AppBootstrapDependencies {
         environment: () => Platform.environment,
         resolveBootstrapContext: LaunchBootstrapContextResolver.resolve,
         ensureWidgetsFlutterBinding: WidgetsFlutterBinding.ensureInitialized,
-        loadEnvironmentIfNeeded: EnvironmentLoader.loadIfNeeded,
+        loadEnvironmentIfNeeded: ({String? logPrefix}) {
+          // Liga o `EnvironmentLoader` ao `rootBundle` real apenas em
+          // runtime (não em testes Dart puros, que não têm binding).
+          EnvironmentLoader.bundledAssetReader ??= rootBundle.loadString;
+          return EnvironmentLoader.loadIfNeeded(logPrefix: logPrefix);
+        },
         resolveBootstrapConfig:
             ({
               required rawArgs,
@@ -414,9 +421,10 @@ class AppBootstrap {
     );
 
     _dependencies.environment.ensureWidgetsFlutterBinding();
-    await _dependencies.environment.loadEnvironmentIfNeeded(
+    final envOutcome = await _dependencies.environment.loadEnvironmentIfNeeded(
       logPrefix: '[main]',
     );
+    _logEnvironmentOutcome(envOutcome, prefix: '[main]');
 
     final bootstrapConfig = _dependencies.environment.resolveBootstrapConfig(
       rawArgs: rawArgs,
@@ -500,6 +508,35 @@ class AppBootstrap {
       '[main] bootstrap_timing phase=$phase '
       'elapsed_ms=${watch.elapsedMilliseconds}',
     );
+  }
+
+  void _logEnvironmentOutcome(
+    EnvironmentLoadOutcome outcome, {
+    required String prefix,
+  }) {
+    final summary =
+        '$prefix env_outcome source=${outcome.source.name} '
+        'keys=${outcome.loadedKeyCount} '
+        'missingRequired=${outcome.missingRequiredKeys.toList()} '
+        'fallback=${outcome.attemptedFallback} '
+        'initialized=${outcome.dotenvInitialized}';
+    if (!outcome.dotenvInitialized) {
+      _dependencies.runtime.logError(
+        '$summary -- dotenv NAO inicializado; features dependentes vao falhar',
+        outcome.loadError ?? StateError('dotenv not initialized'),
+        StackTrace.current,
+      );
+    } else if (outcome.missingRequiredKeys.isNotEmpty) {
+      const envPath = r'C:\ProgramData\BackupDatabase\config\.env';
+      _dependencies.runtime.logError(
+        '$summary -- chaves obrigatorias ausentes mesmo apos fallback; '
+        'verifique $envPath',
+        outcome.loadError ?? StateError('required keys missing'),
+        StackTrace.current,
+      );
+    } else {
+      _dependencies.runtime.logInfo('$summary -- ok');
+    }
   }
 
   static Future<bool> _defaultCheckSingleInstance(
