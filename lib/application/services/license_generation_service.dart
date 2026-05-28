@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:backup_database/application/services/license_decoder.dart';
+import 'package:backup_database/application/services/revocation_check_helper.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -16,16 +17,28 @@ class LicenseGenerationService {
     required LicenseDecoder licenseDecoder,
     List<int>? privateKeyBytes,
     IRevocationChecker? revocationChecker,
+    String activeKeyId = LicenseConstants.keyIdDefault,
   }) : _privateKey = privateKeyBytes == null
            ? null
            : ed.PrivateKey(privateKeyBytes),
        _licenseDecoder = licenseDecoder,
-       _revocationChecker = revocationChecker;
+       _revocationChecker = revocationChecker,
+       _activeKeyId = activeKeyId;
 
   final ed.PrivateKey? _privateKey;
   final LicenseDecoder _licenseDecoder;
   final IRevocationChecker? _revocationChecker;
+
+  /// `keyId` que vai no payload das licenças geradas. Deve casar com a
+  /// public key correspondente registrada no [LicenseDecoder] do cliente
+  /// (caso contrário a licença é rejeitada com "keyId desconhecido").
+  final String _activeKeyId;
+
   bool get canGenerateLocally => _privateKey != null;
+
+  /// `keyId` atualmente usado para assinar novas licenças. Útil em UI
+  /// administrativa para mostrar qual chave está sendo emitida.
+  String get activeKeyId => _activeKeyId;
 
   Future<rd.Result<String>> generateLicenseKey({
     required String deviceKey,
@@ -67,7 +80,10 @@ class LicenseGenerationService {
         'deviceKey': deviceKey.trim(),
         'allowedFeatures': allowedFeatures,
         'issuedAt': now.toIso8601String(),
-        'keyId': LicenseConstants.keyIdDefault,
+        // Antes hard-codava `keyIdDefault`. Agora usa o `activeKeyId`
+        // do service — permite rotação sem rebuild do app: basta
+        // configurar `BACKUP_DATABASE_LICENSE_ACTIVE_KEY_ID` no env.
+        'keyId': _activeKeyId,
         'issuer': LicenseConstants.issuerDefault,
         if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
         if (notBefore != null) 'notBefore': notBefore.toIso8601String(),
@@ -117,7 +133,11 @@ class LicenseGenerationService {
           );
         }
 
-        final revoked = await _revocationChecker?.isRevoked(deviceKey) ?? false;
+        final revoked = await RevocationCheckHelper.isRevokedSafe(
+          _revocationChecker,
+          deviceKey,
+          caller: 'createLicenseFromKey',
+        );
         if (revoked) {
           LoggerService.warning('Licença rejeitada: deviceKey revogado');
           return const rd.Failure(
@@ -132,6 +152,11 @@ class LicenseGenerationService {
             ? DateTime.parse(expiresAtStr)
             : null;
 
+        final notBeforeStr = data['notBefore'] as String?;
+        final notBefore = notBeforeStr != null
+            ? DateTime.parse(notBeforeStr)
+            : null;
+
         final allowedFeatures = (data['allowedFeatures'] as List)
             .cast<String>()
             .toList();
@@ -140,6 +165,7 @@ class LicenseGenerationService {
           deviceKey: deviceKey,
           licenseKey: licenseKey,
           expiresAt: expiresAt,
+          notBefore: notBefore,
           allowedFeatures: allowedFeatures,
         );
 

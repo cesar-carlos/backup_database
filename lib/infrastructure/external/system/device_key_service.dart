@@ -7,6 +7,7 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_device_key_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:win32/win32.dart';
 
@@ -15,8 +16,39 @@ enum VirtualizationPlatform { none, vmware, virtualbox, hyperv, unknown }
 class DeviceKeyService implements IDeviceKeyService {
   DeviceKeyService();
 
+  /// `getDeviceKey` é determinístico para uma dada máquina e cada chamada
+  /// dispara 2-3 `wmic` (Process.run) + leitura de registro + GetVolumeInformation.
+  /// Esse processo pode levar 1-3s a frio. Como o resultado não muda em
+  /// runtime, memoizamos via um único [Future] (race-free entre chamadas
+  /// concorrentes — o segundo caller aguarda o mesmo future do primeiro).
+  ///
+  /// Para invalidar (apenas testes / cenários de troca de hardware "online"),
+  /// chame [resetCacheForTesting].
+  Future<rd.Result<String>>? _cachedDeviceKeyFuture;
+
   @override
-  Future<rd.Result<String>> getDeviceKey() async {
+  Future<rd.Result<String>> getDeviceKey() {
+    final cached = _cachedDeviceKeyFuture;
+    if (cached != null) return cached;
+    final future = _computeDeviceKey();
+    _cachedDeviceKeyFuture = future;
+    // Se falhou, não cache permanentemente — permite retry em chamadas
+    // futuras (ex.: WMI degradado temporariamente no boot).
+    future.then((result) {
+      if (result.isError()) {
+        _cachedDeviceKeyFuture = null;
+      }
+    }).ignore();
+    return future;
+  }
+
+  /// Para testes apenas. Não usar em código de produção.
+  @visibleForTesting
+  void resetCacheForTesting() {
+    _cachedDeviceKeyFuture = null;
+  }
+
+  Future<rd.Result<String>> _computeDeviceKey() async {
     if (!Platform.isWindows) {
       return const rd.Failure(
         core.ValidationFailure(

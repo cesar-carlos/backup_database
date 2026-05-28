@@ -1,3 +1,4 @@
+import 'package:backup_database/application/services/revocation_check_helper.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
@@ -25,12 +26,16 @@ class LicenseValidationService implements ILicenseValidationService {
       final deviceKeyResult = await _deviceKeyService.getDeviceKey();
       return await deviceKeyResult.fold(
         (deviceKey) async {
-          // L8 fix: paraleliza a busca da licença e a checagem de
-          // revogação. Antes eram sequenciais; cada uma pode envolver
-          // I/O (DB local + leitura/parse da revocation list).
+          // Paraleliza a busca da licença e a checagem de revogação.
+          // Antes eram sequenciais; cada uma pode envolver I/O (DB local
+          // + leitura/parse da revocation list).
           final results = await Future.wait<Object>([
             _licenseRepository.getByDeviceKey(deviceKey),
-            _checkRevokedSafely(deviceKey),
+            RevocationCheckHelper.isRevokedSafe(
+              _revocationChecker,
+              deviceKey,
+              caller: 'getCurrentLicense',
+            ),
           ]);
           final licenseResult = results[0] as rd.Result<License>;
           final revoked = results[1] as bool;
@@ -41,6 +46,17 @@ class LicenseValidationService implements ILicenseValidationService {
                 LoggerService.warning('Licença encontrada mas expirada');
                 return const rd.Failure(
                   core.ValidationFailure(message: 'Licença expirada'),
+                );
+              }
+              if (license.isNotYetValid) {
+                LoggerService.warning(
+                  'Licença encontrada mas ainda nao em vigor (notBefore '
+                  '${license.notBefore?.toIso8601String()})',
+                );
+                return const rd.Failure(
+                  core.ValidationFailure(
+                    message: 'Licença ainda não está em vigor',
+                  ),
                 );
               }
               if (revoked) {
@@ -57,11 +73,7 @@ class LicenseValidationService implements ILicenseValidationService {
         rd.Failure.new,
       );
     } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao obter licença atual',
-        e,
-        stackTrace,
-      );
+      LoggerService.error('Erro ao obter licença atual', e, stackTrace);
       return rd.Failure(
         core.ServerFailure(
           message: 'Erro ao obter licença atual: $e',
@@ -71,31 +83,32 @@ class LicenseValidationService implements ILicenseValidationService {
     }
   }
 
-  /// Encapsula a chamada ao revocation checker tornando o fail-open
-  /// observável. Antes, `_revocationChecker?.isRevoked(...) ?? false`
-  /// silenciosamente assumia "não revogada" quando o checker era null
-  /// ou lançava — atacante podia desligar o checker (ex.: corromper a
-  /// fonte de revogação) sem rastro nos logs.
-  Future<bool> _checkRevokedSafely(String deviceKey) async {
-    final checker = _revocationChecker;
-    if (checker == null) {
-      LoggerService.warning(
-        'IRevocationChecker não configurado — assumindo licença não '
-        'revogada (fail-open). Configure '
-        'BACKUP_DATABASE_LICENSE_REVOCATION_LIST(_PATH) em produção.',
-      );
-      return false;
-    }
+  /// Lê a licença persistida **sem aplicar expiração/revogação**. UI usa
+  /// este método para mostrar o status real ("Licença expirada em X")
+  /// em vez de cair para "Sem licença" quando o `getCurrentLicense` já
+  /// rejeitou. Veja documentação em [ILicenseValidationService].
+  @override
+  Future<rd.Result<License>> getStoredLicense() async {
     try {
-      return await checker.isRevoked(deviceKey);
+      final deviceKeyResult = await _deviceKeyService.getDeviceKey();
+      return await deviceKeyResult.fold(
+        (deviceKey) async {
+          return _licenseRepository.getByDeviceKey(deviceKey);
+        },
+        rd.Failure.new,
+      );
     } on Object catch (e, stackTrace) {
       LoggerService.error(
-        'Falha ao consultar revocation checker — assumindo licença não '
-        'revogada (fail-open). Investigue a causa.',
+        'Erro ao obter licença armazenada',
         e,
         stackTrace,
       );
-      return false;
+      return rd.Failure(
+        core.ServerFailure(
+          message: 'Erro ao obter licença armazenada: $e',
+          originalError: e,
+        ),
+      );
     }
   }
 
@@ -129,52 +142,6 @@ class LicenseValidationService implements ILicenseValidationService {
       return rd.Failure(
         core.ServerFailure(
           message: 'Erro ao verificar permissão: $e',
-          originalError: e,
-        ),
-      );
-    }
-  }
-
-  @override
-  Future<rd.Result<bool>> validateLicense(
-    String licenseKey,
-    String deviceKey,
-  ) async {
-    try {
-      final licenseResult = await _licenseRepository.getByDeviceKey(deviceKey);
-      return await licenseResult.fold(
-        (license) async {
-          if (license.licenseKey != licenseKey) {
-            LoggerService.warning('Chave de licença não corresponde');
-            return const rd.Success(false);
-          }
-
-          if (license.isExpired) {
-            LoggerService.warning('Licença expirada');
-            return const rd.Success(false);
-          }
-
-          final revoked = await _checkRevokedSafely(deviceKey);
-          if (revoked) {
-            LoggerService.warning('Licença revogada');
-            return const rd.Success(false);
-          }
-
-          return const rd.Success(true);
-        },
-        (failure) {
-          return const rd.Success(false);
-        },
-      );
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao validar licença',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        core.ServerFailure(
-          message: 'Erro ao validar licença: $e',
           originalError: e,
         ),
       );

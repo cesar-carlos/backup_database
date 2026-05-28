@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,13 +7,18 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_revocation_checker.dart';
 import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
+import 'package:backup_database/infrastructure/license/revocation_list_issued_at_store.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class SignedRevocationListService implements IRevocationChecker {
   SignedRevocationListService({
     List<int>? publicKeyBytes,
-  }) : this._(publicKeyBytes: publicKeyBytes);
+    RevocationListIssuedAtStore? issuedAtStore,
+  }) : this._(
+         publicKeyBytes: publicKeyBytes,
+         issuedAtStore: issuedAtStore,
+       );
 
   static const _ed25519PublicKeySize = 32;
 
@@ -23,27 +29,40 @@ class SignedRevocationListService implements IRevocationChecker {
   final String? _injectedRevocationList;
   final Duration _cacheTtl;
 
+  /// Persistência (best-effort) do maior `issuedAt` já aceito. Impede
+  /// rollback attack — atacante não consegue ressuscitar um device
+  /// revogado servindo uma CRL antiga (válida + assinada) que ainda
+  /// não tinha a revogação dele. Quando o store é `null` (testes /
+  /// modo legado), o anti-rollback opera apenas em memória dentro
+  /// desta instância.
+  final RevocationListIssuedAtStore? _issuedAtStore;
+  DateTime? _lastAcceptedIssuedAt;
+
   factory SignedRevocationListService.forTesting({
     required List<int> publicKeyBytes,
     required String revocationListJson,
     Duration cacheTtl = LicenseConstants.revocationListTtl,
+    RevocationListIssuedAtStore? issuedAtStore,
   }) => SignedRevocationListService._(
     publicKeyBytes: publicKeyBytes,
     injectedRevocationList: revocationListJson,
     cacheTtl: cacheTtl,
+    issuedAtStore: issuedAtStore,
   );
 
   SignedRevocationListService._({
     List<int>? publicKeyBytes,
     String? injectedRevocationList,
     Duration cacheTtl = LicenseConstants.revocationListTtl,
+    RevocationListIssuedAtStore? issuedAtStore,
   }) : _verifier =
            publicKeyBytes != null &&
                publicKeyBytes.length == _ed25519PublicKeySize
            ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
            : null,
        _injectedRevocationList = injectedRevocationList,
-       _cacheTtl = cacheTtl;
+       _cacheTtl = cacheTtl,
+       _issuedAtStore = issuedAtStore;
 
   static String? _readEnvOrNull(String key) {
     try {
@@ -66,9 +85,14 @@ class SignedRevocationListService implements IRevocationChecker {
     }
   }
 
-  factory SignedRevocationListService.fromEnv() {
+  factory SignedRevocationListService.fromEnv({
+    RevocationListIssuedAtStore? issuedAtStore,
+  }) {
     final keyBytes = _publicKeyFromEnv();
-    return SignedRevocationListService(publicKeyBytes: keyBytes);
+    return SignedRevocationListService(
+      publicKeyBytes: keyBytes,
+      issuedAtStore: issuedAtStore,
+    );
   }
 
   @override
@@ -265,7 +289,82 @@ class SignedRevocationListService implements IRevocationChecker {
       }
     }
 
+    // Anti-rollback: rejeita CRL cujo `issuedAt` é estritamente menor
+    // que o último já aceito. Atacante poderia gravar uma CRL antiga
+    // (válida + assinada, com `expiresAt` no futuro) que não inclui um
+    // device revogado mais recentemente — sem este check, ressuscita
+    // uma licença revogada.
+    final issuedAtStr = data['issuedAt'] as String?;
+    DateTime? issuedAt;
+    if (issuedAtStr != null) {
+      try {
+        issuedAt = DateTime.parse(issuedAtStr);
+      } on Object {
+        return const rd.Failure(
+          ValidationFailure(
+            message: 'issuedAt inválido na lista de revogação',
+          ),
+        );
+      }
+      final last = _lastAcceptedIssuedAt;
+      if (last != null && issuedAt.isBefore(last)) {
+        LoggerService.warning(
+          'Lista de revogação rejeitada (rollback): issuedAt '
+          '${issuedAt.toIso8601String()} < último aceito '
+          '${last.toIso8601String()}',
+        );
+        return const rd.Failure(
+          ValidationFailure(
+            message: 'Tentativa de rollback de revocation list detectada',
+          ),
+        );
+      }
+    }
+
+    // Sucesso: avança o marcador antes de devolver para evitar TOCTOU
+    // entre `verify` e cache update. O store assíncrono é best-effort.
+    if (issuedAt != null) {
+      _lastAcceptedIssuedAt = issuedAt;
+      final store = _issuedAtStore;
+      if (store != null) {
+        unawaited(_safeSaveIssuedAt(store, issuedAt));
+      }
+    }
+
     return rd.Success(keys);
+  }
+
+  Future<void> _safeSaveIssuedAt(
+    RevocationListIssuedAtStore store,
+    DateTime issuedAt,
+  ) async {
+    try {
+      await store.save(issuedAt);
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao persistir lastAcceptedIssuedAt (best-effort): $e',
+        e,
+        s,
+      );
+    }
+  }
+
+  /// Hidrata o marcador anti-rollback a partir do store persistente.
+  /// Chamado uma vez no startup pelo DI; chamadas extras são no-op.
+  Future<void> ensureLastAcceptedIssuedAtLoaded() async {
+    if (_lastAcceptedIssuedAt != null) return;
+    final store = _issuedAtStore;
+    if (store == null) return;
+    try {
+      final loaded = await store.load();
+      if (loaded != null) _lastAcceptedIssuedAt = loaded;
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Falha ao carregar lastAcceptedIssuedAt do store: $e',
+        e,
+        s,
+      );
+    }
   }
 
   Map<String, dynamic>? _parseJson(String input) {

@@ -767,6 +767,12 @@ orquestradores, verifique:
       + rules/enrichers (§9.2) em vez de duplicar validação no
       orchestrator ?
 - [ ] Registro DI de fatia SGBD usa `registerSgbd` / padrão do §9.3 ?
+- [ ] Mudança em fluxo de **licenciamento** passa pela checklist
+      específica do §10.10 (forbidden keys no `.env` bundled,
+      `getCurrentLicense` vs `getStoredLicense`,
+      `RevocationCheckHelper.isRevokedSafe`, anti-rollback de CRL,
+      lockout/hash da senha admin, cache por `runId`, transação no
+      upsert) ?
 
 ## 8. Design system e componentização (PR-C)
 
@@ -921,17 +927,305 @@ genérica** de backup e **DI** centralizado. Decisão registrada em
 
 ---
 
+## 10. Licensing (auditoria 2026-05-28)
+
+Stack final do licenciamento: payload v2 Ed25519, decoder + verifier
+puros, validation service com cache TTL, policy service por feature,
+provider para UI, CRL assinada com anti-rollback, e gerador admin
+(debug-only) com hash + lockout.
+
+### 10.1 Guard de secrets no asset bundled
+
+Localização: `lib/core/config/environment_loader.dart` (constante
+`forbiddenInBundledAssetKeys`).
+
+`.env` é um Flutter asset e vai parar no bundle do cliente — qualquer
+valor lá é trivialmente extraível. Mantenha **vazias** no asset:
+
+- `BACKUP_DATABASE_LICENSE_PRIVATE_KEY` (chave privada Ed25519 — emite
+  licença para qualquer device);
+- `LICENSE_ADMIN_PASSWORD_HASH` / `LICENSE_ADMIN_PASSWORD` (acesso ao
+  gerador embutido);
+- `FTP_IT_PASS` (credencial de teste).
+
+O `EnvironmentLoader.loadIfNeeded`:
+
+1. Quando a fonte primária é o asset bundled, executa
+   `_scrubLeakedSecretsFromCurrentEnv` e **apaga** valores não vazios
+   das chaves forbidden em `dotenv.env`.
+2. Quando o asset bundled é usado como overlay (fallback por chaves
+   obrigatórias faltando no externo), `_overlayBundledAsset` ignora as
+   chaves forbidden mesmo que estejam preenchidas, e registra o
+   incidente em `outcome.leakedBundledSecretKeys`.
+3. Em ambos os casos um log `error` é emitido com a chave culpada.
+
+Valores reais devem ficar em
+`C:\ProgramData\BackupDatabase\config\.env` (ou env vars do SO).
+
+### 10.2 `getCurrentLicense` vs `getStoredLicense`
+
+Localização: `lib/domain/services/i_license_validation_service.dart`.
+
+```dart
+abstract class ILicenseValidationService {
+  /// Política completa — expirada/revogada/ausente devolvem Failure.
+  /// Use para gates de feature e decisões de execução de backup.
+  Future<rd.Result<License>> getCurrentLicense();
+
+  /// Licença persistida bruta — não aplica expiração/revogação.
+  /// Use para renderizar status na UI ("Licença expirada em X — renove").
+  Future<rd.Result<License>> getStoredLicense();
+
+  Future<rd.Result<bool>> isFeatureAllowed(String feature);
+}
+```
+
+Antes só existia `getCurrentLicense`, então a UI nunca conseguia exibir
+"Licença expirada"/"Ainda não em vigor" — caía sempre em "Sem licença".
+O code path `license.isExpired` em `_buildLicenseStatus` era código
+morto.
+
+`LicenseProvider.loadLicense` agora usa `getStoredLicense` (UI vê a
+entidade); `LicensePolicyService` continua usando `getCurrentLicense`
+via `isFeatureAllowed` (política).
+
+### 10.3 `RevocationCheckHelper.isRevokedSafe`
+
+Localização: `lib/application/services/revocation_check_helper.dart`.
+
+Helper único, fail-open observável, usado por
+`LicenseValidationService.getCurrentLicense` **e**
+`LicenseGenerationService.createLicenseFromKey`. Antes os dois fluxos
+divergiam: o de validação tinha log + observabilidade, o de cadastro
+usava `?? false` silencioso (atacante escolhia o caminho mais fraco).
+
+```dart
+// ✅ Correto — em qualquer ponto que precise checar revogação:
+final revoked = await RevocationCheckHelper.isRevokedSafe(
+  _revocationChecker,
+  deviceKey,
+  caller: 'minhaOperacao',
+);
+```
+
+```dart
+// ❌ Anti-pattern (silent fail-open + perda de stack trace em throw):
+final revoked = await _revocationChecker?.isRevoked(deviceKey) ?? false;
+```
+
+### 10.4 Anti-rollback de CRL — `RevocationListIssuedAtStore`
+
+Localização: `lib/infrastructure/license/signed_revocation_list_service.dart`
++ `revocation_list_issued_at_store.dart`.
+
+Atacante poderia replay uma CRL **antiga** (válida + assinada, com
+`expiresAt` no futuro) que ainda não tinha um device revogado mais
+recentemente — sem este check, ressuscita uma licença revogada.
+
+O `SignedRevocationListService`:
+
+1. Persiste em arquivo simples (best-effort) o maior `issuedAt` já
+   aceito (`FileRevocationListIssuedAtStore`).
+2. Em cada novo carregamento, rejeita CRLs com `issuedAt` estritamente
+   menor que o último.
+3. Falhas de I/O no store não impedem operação (best-effort) — só
+   reduzem a janela de defesa.
+
+`ensureLastAcceptedIssuedAtLoaded()` é chamado uma vez no bootstrap
+(`core_module.dart`) para hidratar o marcador antes da primeira
+checagem.
+
+### 10.5 `AdminPasswordVerifier` — hash + lockout
+
+Localização: `lib/application/services/admin_password_verifier.dart`.
+
+Senha admin do gerador agora é armazenada como hash PBKDF2-SHA256
+(`pbkdf2-sha256$<iters>$<salt>$<hash>`). A comparação é constant-time
+e, após `maxAttempts` (default 3) falhas consecutivas, ativa lockout
+por `lockoutDuration` (default 30s).
+
+Para gerar um hash: `dart run scripts/hash_admin_password.dart <senha>`.
+
+Coloque o resultado em `LICENSE_ADMIN_PASSWORD_HASH` **no `.env`
+externo** (`C:\ProgramData\BackupDatabase\config\.env`) — não no
+bundled (`forbiddenInBundledAssetKeys` apaga em runtime se vazado).
+
+### 10.6 `DeviceKeyService.getDeviceKey` é memoizado
+
+Localização: `lib/infrastructure/external/system/device_key_service.dart`.
+
+O cálculo dispara 2-3 `wmic` + leitura de registro + `GetVolumeInformation`
+(1-3s a frio). Antes era invocado N vezes em paralelo no boot (uma vez
+por cada caller: `core_module`, `LicenseProvider.loadDeviceKey`,
+`LicenseProvider.loadLicense → validationService.getCurrentLicense →
+deviceKeyService.getDeviceKey`, …). Agora cacheamos o `Future` — chamadas
+concorrentes compartilham o resultado. Erro **não** é cacheado (permite
+retry).
+
+`CachedLicenseValidationService` também não chama mais `getDeviceKey`
+em cada `getCurrentLicense` — o cache é por instância (1 device por
+processo), não por deviceKey.
+
+### 10.7 Memoização por `runId` em `LicensePolicyService`
+
+Localização: `lib/application/services/license_policy_service.dart`.
+
+`LicensePolicyService` é singleton. Antes:
+
+```dart
+String? _runContext;
+final Map<String, bool> _runFeatureCache = {};  // ❌ Global
+
+void setRunContext(String? runId) {
+  _runContext = runId;
+  _runFeatureCache.clear();  // ❌ Run B zera cache do Run A
+}
+```
+
+Agora:
+
+```dart
+final Map<String, Map<String, bool>> _runFeatureCacheByRunId = {};  // ✅ Por runId
+
+void setRunContext(String? runId) {
+  _runContext = runId;
+  if (runId != null) {
+    _runFeatureCacheByRunId.putIfAbsent(runId, () => <String, bool>{});
+  }
+}
+
+void clearRunContext() {
+  final current = _runContext;
+  _runContext = null;
+  if (current != null) {
+    _runFeatureCacheByRunId.remove(current);  // ✅ Só remove o próprio
+  }
+}
+```
+
+Runs concorrentes (UI local + comando socket remoto, múltiplos
+schedules) ficam isolados; `clearRunContext` de uma corrida não derruba
+o cache de outra.
+
+### 10.8 `upsertByDeviceKey` em transação
+
+Localização: `lib/infrastructure/repositories/license_repository.dart`.
+
+Antes: read + write em chamadas separadas → race em callers concorrentes
+batia em unique constraint. Agora ambos rodam dentro de
+`_database.transaction(...)`:
+
+```dart
+@override
+Future<rd.Result<License>> upsertByDeviceKey(License license) {
+  return RepositoryGuard.run(
+    errorMessage: 'Erro ao upsert licença',
+    action: () async {
+      return _database.transaction(() async {
+        final existing = await _database.licenseDao.getByDeviceKey(
+          license.deviceKey,
+        );
+        if (existing == null) { /* insert */ } else { /* update */ }
+      });
+    },
+  );
+}
+```
+
+Aplique o mesmo padrão para qualquer upsert de "find then create/update"
+que tenha unique constraint vulnerável a race.
+
+### 10.9 `License` igualdade por `licenseKey` (não `id`)
+
+`id` da `License` é gerado por `Uuid().v4()` na construção, então duas
+leituras consecutivas do mesmo registro viravam objetos "diferentes".
+Agora a equality usa `(licenseKey, deviceKey)`:
+
+```dart
+@override
+bool operator ==(Object other) =>
+    identical(this, other) ||
+    other is License &&
+        runtimeType == other.runtimeType &&
+        licenseKey == other.licenseKey &&
+        deviceKey == other.deviceKey;
+
+@override
+int get hashCode => Object.hash(licenseKey, deviceKey);
+```
+
+Mesma lição vale para qualquer entidade onde `id` é gerado client-side
+ao ler: prefira identidade pelo dado **persistido**.
+
+### 10.10 Rotação graceful de chave Ed25519 (multi-key)
+
+Localização: `lib/application/services/license_decoder.dart`
+(construtor `publicKeysByKeyId`) + `LicenseGenerationService.activeKeyId`.
+
+O decoder mantém um mapa `keyId → verifier`. A verificação:
+
+1. Lê `keyId` do payload assinado;
+2. Procura o verifier correspondente no mapa;
+3. Se não encontrar, **rejeita** (não tenta fallback).
+
+Atacante que invente um `keyId` arbitrário (`"ed25519-99"`) é rejeitado
+com `keyId desconhecido`. Atacante que use um `keyId` válido mas
+assine com chave errada cai em `Assinatura Ed25519 de licença inválida`.
+
+`LicenseGenerationService.activeKeyId` controla o `keyId` que **novas**
+licenças carregam. Sem mudar o código do app, basta:
+
+- Adicionar a nova public key em `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS`
+  no `.env` do repo (JSON `{"ed25519-1": "...", "ed25519-2": "..."}`);
+- Configurar `BACKUP_DATABASE_LICENSE_ACTIVE_KEY_ID=ed25519-2` no
+  `.env` externo dev/admin;
+- Configurar a nova `BACKUP_DATABASE_LICENSE_PRIVATE_KEY`.
+
+Procedimento completo em `docs/onboarding/licenciamento.md` →
+"…rotacionar a chave Ed25519".
+
+### 10.11 Checklist final (licensing)
+
+Quando mexer em qualquer parte do fluxo de licenciamento, verifique:
+
+- [ ] Segredo novo no `.env` foi adicionado a
+      `EnvironmentLoader.forbiddenInBundledAssetKeys`?
+- [ ] Política completa (`getCurrentLicense`) e leitura para UI
+      (`getStoredLicense`) estão **separadas**?
+- [ ] Checagem de revogação usa `RevocationCheckHelper.isRevokedSafe`
+      (não `?? false` direto)?
+- [ ] CRL é validada com `issuedAt` monotônico (anti-rollback)?
+- [ ] Cache do `LicensePolicyService` está chaveado por `runId`?
+- [ ] Upsert de licença está dentro de `_database.transaction(...)`?
+- [ ] UI mostra `License.isExpired` e `License.isNotYetValid` como
+      status próprios, não cai em "Sem licença"?
+- [ ] `notBefore` é persistido (coluna na tabela) e checado em
+      `License.isValid`?
+- [ ] Senha admin é hash PBKDF2 (não plain) com lockout?
+- [ ] `DeviceKeyService` é singleton com cache (e novos callers usam
+      o cache em vez de duplicar logic)?
+- [ ] Code path que aceita licença usa `LicenseDecoder` configurado
+      via `publicKeysByKeyId` (não hard-coda `keyIdDefault`)?
+- [ ] Code path que **emite** licença usa
+      `LicenseGenerationService.activeKeyId` (não hard-coda `keyIdDefault`)?
+
+---
+
 ## Referências cruzadas
 
 - `docs/adr/004-generic-hexagonal-ports-sgbds.md` — ports genéricos e
   template SGBD (PR‑E)
 - `docs/adr/009-design-system-themeextension-composition.md` — decisão
   ADR do design system (tokens + ThemeExtension + composition)
+- `docs/adr/016-licensing-audit-secret-handling-and-revocation.md` —
+  audit de licenciamento 2026-05-28 (motivação do §10)
 - `docs/onboarding/design_system.md` — onboarding curto para novos
   widgets
 - `docs/onboarding/adicionar_sgbd.md` — cookbook para novo SGBD (PR-E)
 - `docs/onboarding/architecture_overview.md` — diagrama de camadas e
   regras de import
+- `docs/onboarding/licenciamento.md` — onboarding curto da cadeia de
+  licenciamento (geração, validação, revogação, troubleshooting)
 - `coding_style.mdc` — formatação Dart, naming, logging básico
 - `solid_principles.mdc` — SRP/OCP guidance que motivou várias das
   refatorações (e.g., extração de `BackupStrategy` por SGBD)

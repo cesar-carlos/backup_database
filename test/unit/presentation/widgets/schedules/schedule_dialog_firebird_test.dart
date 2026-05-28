@@ -139,6 +139,13 @@ void main() {
           ? rd.Success(license)
           : rd.Failure(Exception('No license')),
     );
+    // `LicenseProvider.loadLicense` agora consulta `getStoredLicense`
+    // (auditoria 2026-05-28).
+    when(() => mockLicenseValidation.getStoredLicense()).thenAnswer(
+      (_) async => license != null
+          ? rd.Success(license)
+          : rd.Failure(Exception('No license')),
+    );
     when(
       () => mockDeviceKey.getDeviceKey(),
     ).thenAnswer((_) async => const rd.Success('test-device-key'));

@@ -27,8 +27,16 @@ class LicensePolicyService implements ILicensePolicyService {
     );
   }
 
-  String? _runContext;
-  final Map<String, bool> _runFeatureCache = {};
+  /// Cache de feature lookup escopo por `runId` em vez de variável de
+  /// instância única. Antes era `String? _runContext` +
+  /// `Map<String, bool> _runFeatureCache` no singleton — duas execuções
+  /// concorrentes (UI local + comando socket remoto, ou múltiplos
+  /// schedules em paralelo) clobberavam o cache uma da outra e
+  /// `clearRunContext()` de uma corrida zerava o cache da outra.
+  ///
+  /// Agora cada runId carrega seu próprio mapa; runs concorrentes ficam
+  /// isolados e `clearRunContext` só remove o slot do run que terminou.
+  final Map<String, Map<String, bool>> _runFeatureCacheByRunId = {};
 
   @override
   Future<rd.Result<void>> validateScheduleCapabilities(
@@ -174,29 +182,54 @@ class LicensePolicyService implements ILicensePolicyService {
     return const rd.Success(unit);
   }
 
+  /// runId "atual" — usado pelas APIs de validação para chavear o cache.
+  /// Em fluxo de execução normal, `SchedulerService` chama
+  /// `setRunContext('A')` antes e `clearRunContext()` no fim. Para runs
+  /// concorrentes, a memoização agora é por runId (não global) — veja
+  /// `_runFeatureCacheByRunId`.
+  String? _runContext;
+
   @override
   void setRunContext(String? runId) {
     _runContext = runId;
-    _runFeatureCache.clear();
+    if (runId != null) {
+      // `putIfAbsent` em vez de `=` para que reativar o mesmo runId
+      // (ex.: depois de um nested clear/set legítimo) **preserve** o
+      // cache. Antes, `setRunContext` sempre zerava o cache do runId,
+      // o que penalizava cenários reentrantes legítimos.
+      _runFeatureCacheByRunId.putIfAbsent(runId, () => <String, bool>{});
+    }
   }
 
   @override
   void clearRunContext() {
+    final current = _runContext;
     _runContext = null;
-    _runFeatureCache.clear();
+    if (current != null) {
+      _runFeatureCacheByRunId.remove(current);
+    }
   }
 
   Future<bool> _isFeatureAllowed(String feature) async {
-    if (_runContext != null) {
-      final cached = _runFeatureCache[feature];
+    final runId = _runContext;
+    if (runId != null) {
+      final cache = _runFeatureCacheByRunId[runId];
+      final cached = cache?[feature];
       if (cached != null) {
         return cached;
       }
     }
     final result = await _licenseValidationService.isFeatureAllowed(feature);
     final allowed = result.getOrElse((_) => false);
-    if (_runContext != null) {
-      _runFeatureCache[feature] = allowed;
+    if (runId != null) {
+      // Cache pode ter sido removido entre o setRunContext e o lookup
+      // (clearRunContext concorrente) — `putIfAbsent` evita recriar e
+      // perder dados que possam ter chegado por outra fonte.
+      final cache = _runFeatureCacheByRunId.putIfAbsent(
+        runId,
+        () => <String, bool>{},
+      );
+      cache[feature] = allowed;
     }
     return allowed;
   }

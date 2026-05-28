@@ -70,7 +70,7 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 35;
+  int get schemaVersion => 36;
 
   @override
   MigrationStrategy get migration {
@@ -1081,6 +1081,32 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
           } on Object catch (e, stackTrace) {
             LoggerService.warning(
               'Erro na migração v35: mutable_command_audit_table',
+              e,
+              stackTrace,
+            );
+          }
+        }
+
+        if (from < 36) {
+          // Licensing audit: persistir `not_before` da licença para que
+          // reabrir o app antes da janela ainda rejeite. Antes só era
+          // validado no decode; lido do DB caía como "válida".
+          try {
+            final columns = await customSelect(
+              'PRAGMA table_info(licenses_table)',
+            ).get();
+            final hasColumn = columns.any(
+              (row) => row.data['name'] == 'not_before',
+            );
+            if (!hasColumn) {
+              await m.addColumn(licensesTable, licensesTable.notBefore);
+              LoggerService.info(
+                'Migração v36: licenses_table.not_before adicionada.',
+              );
+            }
+          } on Object catch (e, stackTrace) {
+            LoggerService.warning(
+              'Erro na migração v36: licenses_table.not_before',
               e,
               stackTrace,
             );

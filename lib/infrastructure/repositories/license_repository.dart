@@ -39,40 +39,38 @@ class LicenseRepository implements ILicenseRepository {
     );
   }
 
+  /// Upsert atômico: a checagem "existe?" e a escrita acontecem dentro
+  /// de uma única `transaction` do drift. Antes, o read + write eram
+  /// duas chamadas separadas — janela de race entre callers concorrentes
+  /// fazia o segundo bater na unique constraint (`device_key`) e cair
+  /// em `DatabaseFailure`. Agora a transação serializa o par de
+  /// operações.
   @override
-  Future<rd.Result<License>> upsertByDeviceKey(License license) async {
-    final preCheck = await RepositoryGuard.run<License>(
+  Future<rd.Result<License>> upsertByDeviceKey(License license) {
+    return RepositoryGuard.run(
       errorMessage: 'Erro ao upsert licença',
-      // Sentinela: usamos `_UpsertResult` para sinalizar qual operação
-      // o caller deve disparar (insert vs update) sem precisar de
-      // múltiplos retornos.
       action: () async {
-        final existing = await _database.licenseDao.getByDeviceKey(
-          license.deviceKey,
-        );
-        if (existing != null) {
-          throw _UpsertNeedsUpdate(
-            license.copyWith(
-              id: existing.id,
-              createdAt: existing.createdAt,
-            ),
+        return _database.transaction(() async {
+          final existing = await _database.licenseDao.getByDeviceKey(
+            license.deviceKey,
           );
-        }
-        return license;
-      },
-    );
-
-    return preCheck.fold(
-      // Caso "criar": não havia existing.
-      create,
-      (failure) {
-        final original = failure is DatabaseFailure
-            ? failure.originalError
-            : null;
-        if (original is _UpsertNeedsUpdate) {
-          return update(original.licenseToUpdate);
-        }
-        return Future.value(rd.Failure(failure));
+          if (existing == null) {
+            await _database.licenseDao.insertLicense(_toCompanion(license));
+            return license;
+          }
+          final merged = license.copyWith(
+            id: existing.id,
+            createdAt: existing.createdAt,
+            updatedAt: DateTime.now(),
+          );
+          final updated = await _database.licenseDao.updateLicense(
+            _toCompanion(merged),
+          );
+          if (!updated) {
+            throw const NotFoundFailure(message: 'Licença não encontrada');
+          }
+          return merged;
+        });
       },
     );
   }
@@ -129,6 +127,7 @@ class LicenseRepository implements ILicenseRepository {
       deviceKey: data.deviceKey,
       licenseKey: data.licenseKey,
       expiresAt: data.expiresAt,
+      notBefore: data.notBefore,
       allowedFeatures: allowedFeatures,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
@@ -141,20 +140,10 @@ class LicenseRepository implements ILicenseRepository {
       deviceKey: Value(license.deviceKey),
       licenseKey: Value(license.licenseKey),
       expiresAt: Value(license.expiresAt),
+      notBefore: Value(license.notBefore),
       allowedFeatures: Value(jsonEncode(license.allowedFeatures)),
       createdAt: Value(license.createdAt),
       updatedAt: Value(license.updatedAt),
     );
   }
-}
-
-/// Sentinel para o `upsertByDeviceKey`: sinaliza que a licença deve ir
-/// para `update()` em vez de `create()`. Carrega a licença já com `id` e
-/// `createdAt` atualizados a partir do registro existente.
-class _UpsertNeedsUpdate implements Exception {
-  const _UpsertNeedsUpdate(this.licenseToUpdate);
-  final License licenseToUpdate;
-
-  @override
-  String toString() => 'License needs update via existing row';
 }

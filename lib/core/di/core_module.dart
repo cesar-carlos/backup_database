@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,6 +23,7 @@ import 'package:backup_database/infrastructure/datasources/local/database_config
 import 'package:backup_database/infrastructure/datasources/local/database_migration_224.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
+import 'package:backup_database/infrastructure/license/revocation_list_issued_at_store.dart';
 import 'package:backup_database/infrastructure/license/signed_revocation_list_service.dart';
 import 'package:backup_database/infrastructure/security/machine_scope_secure_credential_service.dart';
 import 'package:dio/dio.dart';
@@ -51,6 +53,26 @@ Future<void> setupCoreModule(GetIt getIt) async {
   );
 
   await LoggerService.init(logsDirectory: logsDirectory);
+  final loggerHealth = LoggerService.health;
+  if (!loggerHealth.isHealthy) {
+    // Não use LoggerService.error aqui — se o logger está degradado, a
+    // própria mensagem pode não chegar ao disco. Joga no stderr direto
+    // para garantir trace mínimo (mesmo em service mode, NSSM captura
+    // stderr em service_stderr.log).
+    stderr.writeln(
+      '[bootstrap] LoggerService DEGRADADO: '
+      'fileLoggingEnabled=${loggerHealth.fileLoggingEnabled} '
+      'logsDirectory=${loggerHealth.logsDirectory} '
+      'initError=${loggerHealth.initError} '
+      'sentinelError=${loggerHealth.lastBootSentinelError}',
+    );
+  } else {
+    LoggerService.info(
+      '[bootstrap] LoggerService healthy '
+      'logsDirectory=$logsDirectory '
+      'sentinelWrittenAt=${loggerHealth.lastBootSentinelWrittenAt}',
+    );
+  }
 
   final legacyLogsMigration =
       await migrateLegacyUserLogFilesToMachineScopeIfNeeded();
@@ -147,9 +169,18 @@ Future<void> setupCoreModule(GetIt getIt) async {
       return LicenseDecoder.unavailable(message: message);
     },
   );
-  final revocationChecker = SignedRevocationListService.fromEnv();
+  final issuedAtStore = FileRevocationListIssuedAtStore();
+  final revocationChecker = SignedRevocationListService.fromEnv(
+    issuedAtStore: issuedAtStore,
+  );
+  // Hidrata o marcador anti-rollback no boot — best-effort, falha aqui
+  // não impede inicialização do app.
+  unawaited(revocationChecker.ensureLastAcceptedIssuedAtLoaded());
   getIt.registerLazySingleton<LicenseDecoder>(() => licenseDecoder);
   getIt.registerLazySingleton<IRevocationChecker>(() => revocationChecker);
+  getIt.registerLazySingleton<RevocationListIssuedAtStore>(
+    () => issuedAtStore,
+  );
   getIt.registerLazySingleton<IMetricsCollector>(MetricsCollector.new);
 
   final generationService = _createLicenseGenerationService(
@@ -178,7 +209,6 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerLazySingleton<ILicenseValidationService>(
     () => CachedLicenseValidationService(
       delegate: getIt<LicenseValidationService>(),
-      deviceKeyService: getIt<IDeviceKeyService>(),
     ),
   );
   getIt.registerLazySingleton<ILicenseCacheInvalidator>(
@@ -190,10 +220,23 @@ LicenseGenerationService _createLicenseGenerationService(
   LicenseDecoder licenseDecoder,
   IRevocationChecker revocationChecker,
 ) {
+  // `activeKeyId` é lido sempre (mesmo em release) para permitir que
+  // ferramentas administrativas externas que rodem com este build
+  // identifiquem corretamente a chave ativa. O override só é
+  // significativo em conjunto com a private key (configurada apenas
+  // em dev/admin).
+  final rawActiveKeyId = dotenv
+      .env[LicenseConstants.envLicenseActiveKeyId]
+      ?.trim();
+  final activeKeyId = (rawActiveKeyId != null && rawActiveKeyId.isNotEmpty)
+      ? rawActiveKeyId
+      : LicenseConstants.keyIdDefault;
+
   if (!kDebugMode) {
     return LicenseGenerationService(
       licenseDecoder: licenseDecoder,
       revocationChecker: revocationChecker,
+      activeKeyId: activeKeyId,
     );
   }
 
@@ -202,6 +245,7 @@ LicenseGenerationService _createLicenseGenerationService(
     return LicenseGenerationService(
       licenseDecoder: licenseDecoder,
       revocationChecker: revocationChecker,
+      activeKeyId: activeKeyId,
     );
   }
 
@@ -215,13 +259,20 @@ LicenseGenerationService _createLicenseGenerationService(
       return LicenseGenerationService(
         licenseDecoder: licenseDecoder,
         revocationChecker: revocationChecker,
+        activeKeyId: activeKeyId,
       );
     }
+
+    LoggerService.info(
+      'LicenseGenerationService initialized with activeKeyId="$activeKeyId" '
+      '(decoder accepts: ${licenseDecoder.acceptedKeyIds.join(", ")})',
+    );
 
     return LicenseGenerationService(
       privateKeyBytes: privateKeyBytes,
       licenseDecoder: licenseDecoder,
       revocationChecker: revocationChecker,
+      activeKeyId: activeKeyId,
     );
   } on Object catch (e) {
     LoggerService.warning(
@@ -230,6 +281,7 @@ LicenseGenerationService _createLicenseGenerationService(
     return LicenseGenerationService(
       licenseDecoder: licenseDecoder,
       revocationChecker: revocationChecker,
+      activeKeyId: activeKeyId,
     );
   }
 }

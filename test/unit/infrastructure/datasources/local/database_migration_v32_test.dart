@@ -43,8 +43,10 @@ void main() {
               .customSelect('PRAGMA user_version')
               .getSingle();
           // PR-6 (v34 + v35) introduziu 3 colunas novas + audit table;
-          // schema avancou para 35.
-          expect(versionRow.read<int>('user_version'), 35);
+          // v36 adicionou `licenses_table.not_before` (audit licensing
+          // 2026-05-28). Atualize aqui sempre que `schemaVersion`
+          // mudar em `database.dart`.
+          expect(versionRow.read<int>('user_version'), 36);
 
           final tableRows = await dbMigrated
               .customSelect(

@@ -57,4 +57,5 @@ Detalhe normativo: `.cursor/rules/clean_architecture.mdc` e
 | Helpers obrigatorios (repos, providers, bytes, …) | `.cursor/rules/architectural_patterns.mdc` |
 | Novo motor de banco (passo a passo) | [adicionar_sgbd.md](adicionar_sgbd.md) |
 | Widgets e tokens | [design_system.md](design_system.md) |
+| Licenciamento (cadeia, env, revogação) | [licenciamento.md](licenciamento.md) |
 | Indice de ADRs | [../adr/README.md](../adr/README.md) |

@@ -15,7 +15,11 @@ void main() {
 
     setUp(() {
       keyPair = ed.generateKey();
-      decoder = LicenseDecoder(publicKeyBytes: keyPair.publicKey.bytes);
+      decoder = LicenseDecoder(
+        publicKeysByKeyId: {
+          LicenseConstants.keyIdDefault: keyPair.publicKey.bytes,
+        },
+      );
       generationService = LicenseGenerationService(
         privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,
@@ -261,7 +265,11 @@ void main() {
 
     setUp(() {
       keyPair = ed.generateKey();
-      decoder = LicenseDecoder(publicKeyBytes: keyPair.publicKey.bytes);
+      decoder = LicenseDecoder(
+        publicKeysByKeyId: {
+          LicenseConstants.keyIdDefault: keyPair.publicKey.bytes,
+        },
+      );
       generationService = LicenseGenerationService(
         privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,

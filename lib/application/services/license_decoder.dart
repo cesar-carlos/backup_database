@@ -7,25 +7,69 @@ import 'package:backup_database/infrastructure/license/ed25519_license_verifier.
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+/// Decodifica e verifica licenças Ed25519 v2 — agora com **suporte a
+/// rotação de chave**.
+///
+/// O decoder mantém um mapa `keyId → Ed25519LicenseVerifier`. Durante
+/// a verificação:
+///
+/// 1. Lê `keyId` do payload assinado.
+/// 2. Procura o verifier correspondente no mapa.
+/// 3. Se não encontrar, **rejeita** (não tenta fallback — caso contrário
+///    um atacante poderia atribuir um `keyId` arbitrário esperando que o
+///    sistema verificasse com a chave errada).
+///
+/// Construção típica:
+/// - [LicenseDecoder.fromEnv] — lê `BACKUP_DATABASE_LICENSE_PUBLIC_KEY`
+///   (legacy, mapeada para [LicenseConstants.keyIdDefault]) e/ou
+///   `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS` (mapa JSON
+///   `{"ed25519-1": "base64", "ed25519-2": "base64"}`). Os dois podem
+///   coexistir; a entrada do JSON tem precedência se houver colisão de
+///   `keyId`.
+/// - [LicenseDecoder.unavailable] — quando nenhuma chave foi configurada;
+///   `decode` devolve `ValidationFailure` consistente.
 class LicenseDecoder {
-  LicenseDecoder({required List<int> publicKeyBytes})
-    : _verifier = publicKeyBytes.length == _ed25519PublicKeySize
-          ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
-          : throw ArgumentError(
-              'Public key must be exactly $_ed25519PublicKeySize bytes',
-            ),
-      _availabilityFailure = null;
+  LicenseDecoder({required Map<String, List<int>> publicKeysByKeyId})
+    : _verifiers = _buildVerifiers(publicKeysByKeyId),
+      _availabilityFailure = null {
+    if (_verifiers.isEmpty) {
+      throw ArgumentError(
+        'publicKeysByKeyId must not be empty (provide at least one '
+        'key bytes entry of $_ed25519PublicKeySize bytes).',
+      );
+    }
+  }
 
   LicenseDecoder.unavailable({required String message})
-    : _verifier = null,
+    : _verifiers = const {},
       _availabilityFailure = core.ValidationFailure(message: message);
 
   static const _ed25519PublicKeySize = 32;
 
-  final Ed25519LicenseVerifier? _verifier;
+  /// `keyId → verifier`. Mapa imutável após construção.
+  final Map<String, Ed25519LicenseVerifier> _verifiers;
   final core.ValidationFailure? _availabilityFailure;
 
-  bool get isAvailable => _verifier != null;
+  bool get isAvailable => _verifiers.isNotEmpty;
+
+  /// `keyId`s aceitos por este decoder. Útil para diagnóstico e logs.
+  Iterable<String> get acceptedKeyIds => _verifiers.keys;
+
+  static Map<String, Ed25519LicenseVerifier> _buildVerifiers(
+    Map<String, List<int>> publicKeysByKeyId,
+  ) {
+    final result = <String, Ed25519LicenseVerifier>{};
+    publicKeysByKeyId.forEach((keyId, bytes) {
+      if (bytes.length != _ed25519PublicKeySize) {
+        throw ArgumentError(
+          'Public key for keyId "$keyId" must be exactly '
+          '$_ed25519PublicKeySize bytes, got ${bytes.length}.',
+        );
+      }
+      result[keyId] = Ed25519LicenseVerifier(publicKeyBytes: bytes);
+    });
+    return Map.unmodifiable(result);
+  }
 
   static rd.Result<List<int>> _publicKeyFromEnv() {
     final base64Key = dotenv.env[LicenseConstants.envLicensePublicKey];
@@ -59,14 +103,74 @@ class LicenseDecoder {
     }
   }
 
+  /// Lê `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS` (JSON
+  /// `{"keyId": "base64", ...}`) do env e mescla no mapa final. Falhas
+  /// de parse são reportadas como warning **não-fatal** — chaves
+  /// válidas continuam carregadas, inválidas são descartadas com log.
+  static Map<String, List<int>> _publicKeysMapFromEnv() {
+    final raw = dotenv.env[LicenseConstants.envLicensePublicKeys];
+    if (raw == null || raw.trim().isEmpty) return const {};
+    Map<String, dynamic> decoded;
+    try {
+      decoded = jsonDecode(raw.trim()) as Map<String, dynamic>;
+    } on Object catch (e) {
+      LoggerService.warning(
+        'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS com JSON inválido: $e. '
+        'Ignorando esse env e mantendo apenas chave legacy se houver.',
+      );
+      return const {};
+    }
+    final result = <String, List<int>>{};
+    decoded.forEach((keyId, value) {
+      if (value is! String) {
+        LoggerService.warning(
+          'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" '
+          'não é string base64 — ignorada.',
+        );
+        return;
+      }
+      try {
+        final bytes = base64.decode(value.trim());
+        if (bytes.length != _ed25519PublicKeySize) {
+          LoggerService.warning(
+            'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" tem '
+            '${bytes.length} bytes (esperado $_ed25519PublicKeySize) — '
+            'ignorada.',
+          );
+          return;
+        }
+        result[keyId] = bytes;
+      } on Object catch (e) {
+        LoggerService.warning(
+          'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" base64 '
+          'inválido ($e) — ignorada.',
+        );
+      }
+    });
+    return result;
+  }
+
+  /// Constrói o decoder a partir do env. Mescla a chave legacy
+  /// (`PUBLIC_KEY`, mapeada para `keyIdDefault`) com o mapa
+  /// (`PUBLIC_KEYS`). O mapa tem precedência caso o mesmo `keyId`
+  /// apareça nos dois.
   static rd.Result<LicenseDecoder> fromEnv() {
-    final keyResult = _publicKeyFromEnv();
-    return keyResult.fold(
-      (publicKeyBytes) => rd.Success(
-        LicenseDecoder(publicKeyBytes: publicKeyBytes),
-      ),
-      rd.Failure.new,
+    final keys = <String, List<int>>{};
+
+    final legacy = _publicKeyFromEnv();
+    legacy.fold(
+      (bytes) => keys[LicenseConstants.keyIdDefault] = bytes,
+      (_) {},
     );
+
+    final map = _publicKeysMapFromEnv();
+    keys.addAll(map);
+
+    if (keys.isEmpty) {
+      return rd.Failure(legacy.exceptionOrNull()!);
+    }
+
+    return rd.Success(LicenseDecoder(publicKeysByKeyId: keys));
   }
 
   Future<rd.Result<Map<String, dynamic>>> decode(String licenseKey) async {
@@ -188,11 +292,34 @@ class LicenseDecoder {
     final dataJson = jsonEncode(data);
     final messageBytes = utf8.encode(dataJson);
 
-    if (!_verifier!.verify(
+    // `keyId` já foi validado em `_validateRequiredFields` (trim + non-empty);
+    // aqui usamos para localizar o verifier correto. Se o keyId não está
+    // em `_verifiers`, **rejeita** (não tenta fallback — qualquer chave
+    // que o cliente conheça precisa estar declarada explicitamente).
+    final keyId = (data['keyId'] as String).trim();
+    final verifier = _verifiers[keyId];
+    if (verifier == null) {
+      LoggerService.warning(
+        'Licença usa keyId "$keyId" desconhecido. '
+        'Aceitos: ${_verifiers.keys.join(", ")}.',
+      );
+      return rd.Failure(
+        core.ValidationFailure(
+          message:
+              'keyId desconhecido: "$keyId". '
+              'Atualize a configuração de chaves públicas ou solicite '
+              'uma licença com keyId suportado.',
+        ),
+      );
+    }
+
+    if (!verifier.verify(
       messageBytes: messageBytes,
       signatureBytes: signatureBytes,
     )) {
-      LoggerService.warning('Assinatura Ed25519 de licença inválida');
+      LoggerService.warning(
+        'Assinatura Ed25519 de licença inválida (keyId=$keyId)',
+      );
       return const rd.Failure(
         core.ValidationFailure(message: 'Assinatura de licença inválida'),
       );
@@ -225,15 +352,9 @@ class LicenseDecoder {
 
     final keyId = _requireString(data, 'keyId');
     if (keyId == null) return _missingField('keyId');
-    if (keyId != LicenseConstants.keyIdDefault) {
-      return rd.Failure(
-        core.ValidationFailure(
-          message:
-              'keyId inválido. Esperado "${LicenseConstants.keyIdDefault}", '
-              'recebido "$keyId".',
-        ),
-      );
-    }
+    // Note: validação de "keyId conhecido" agora acontece em `_verify`
+    // contra o mapa `_verifiers` — permite rotação de chave sem mudar
+    // este método. Aqui só garantimos que o campo é uma string não-vazia.
 
     final issuer = _requireString(data, 'issuer');
     if (issuer == null) return _missingField('issuer');
@@ -392,7 +513,9 @@ class LicenseDecoder {
     return {
       'deviceKey': data['deviceKey'] as String,
       'expiresAt': data['expiresAt'] as String?,
+      'notBefore': data['notBefore'] as String?,
       'allowedFeatures': normalizedFeatures,
+      'keyId': data['keyId'] as String,
     };
   }
 }

@@ -4,6 +4,7 @@ import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/services/i_license_cache_invalidator.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/license.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
 import 'package:backup_database/domain/services/i_device_key_service.dart';
@@ -57,7 +58,18 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
     await runAsync<void>(
       genericErrorMessage: 'Erro ao carregar licença',
       action: () async {
-        final licenseResult = await _validationService.getCurrentLicense();
+        // Usa `getStoredLicense` (não `getCurrentLicense`) para que a UI
+        // consiga renderizar status "Licença expirada"/"Ainda não em
+        // vigor". Antes a UI só conseguia mostrar "Sem licença" para
+        // qualquer falha, porque `getCurrentLicense` filtra
+        // expirada/revogada por contrato.
+        //
+        // Validações de feature continuam passando por
+        // `LicensePolicyService` → `getCurrentLicense` no caminho de
+        // execução de backup; o getter `hasValidLicense` aqui aplica
+        // `License.isValid` (expira/notBefore), sem revogação — para
+        // gating remoto a UI deve consultar policy quando crítico.
+        final licenseResult = await _validationService.getStoredLicense();
         licenseResult.fold(
           (license) => _currentLicense = license,
           (failure) {
@@ -109,8 +121,26 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
   Future<bool> isFeatureAllowed(String feature) async {
     try {
       final result = await _validationService.isFeatureAllowed(feature);
-      return result.fold((allowed) => allowed, (_) => false);
-    } on Object {
+      return result.fold(
+        (allowed) => allowed,
+        (failure) {
+          // Fail-closed mas observável: antes engolíamos a falha sem
+          // log, impedindo diagnóstico de "por que feature X aparece
+          // negada?".
+          LoggerService.debug(
+            'LicenseProvider.isFeatureAllowed("$feature") = false: '
+            '${failure is core.Failure ? failure.message : failure}',
+          );
+          return false;
+        },
+      );
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'LicenseProvider.isFeatureAllowed("$feature") falhou — '
+        'fail-closed (assumindo negada).',
+        e,
+        stackTrace,
+      );
       return false;
     }
   }

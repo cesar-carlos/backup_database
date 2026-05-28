@@ -9075,6 +9075,17 @@ class $LicensesTableTable extends LicensesTable
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _notBeforeMeta = const VerificationMeta(
+    'notBefore',
+  );
+  @override
+  late final GeneratedColumn<DateTime> notBefore = GeneratedColumn<DateTime>(
+    'not_before',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _allowedFeaturesMeta = const VerificationMeta(
     'allowedFeatures',
   );
@@ -9115,6 +9126,7 @@ class $LicensesTableTable extends LicensesTable
     deviceKey,
     licenseKey,
     expiresAt,
+    notBefore,
     allowedFeatures,
     createdAt,
     updatedAt,
@@ -9156,6 +9168,12 @@ class $LicensesTableTable extends LicensesTable
       context.handle(
         _expiresAtMeta,
         expiresAt.isAcceptableOrUnknown(data['expires_at']!, _expiresAtMeta),
+      );
+    }
+    if (data.containsKey('not_before')) {
+      context.handle(
+        _notBeforeMeta,
+        notBefore.isAcceptableOrUnknown(data['not_before']!, _notBeforeMeta),
       );
     }
     if (data.containsKey('allowed_features')) {
@@ -9212,6 +9230,10 @@ class $LicensesTableTable extends LicensesTable
         DriftSqlType.dateTime,
         data['${effectivePrefix}expires_at'],
       ),
+      notBefore: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}not_before'],
+      ),
       allowedFeatures: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}allowed_features'],
@@ -9239,6 +9261,11 @@ class LicensesTableData extends DataClass
   final String deviceKey;
   final String licenseKey;
   final DateTime? expiresAt;
+
+  /// Janela "not before" — licença ainda não passou a valer. Persistir
+  /// (em vez de só validar no decode) evita o bypass de "renove agora,
+  /// reabra o app antes do horário e use".
+  final DateTime? notBefore;
   final String allowedFeatures;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -9247,6 +9274,7 @@ class LicensesTableData extends DataClass
     required this.deviceKey,
     required this.licenseKey,
     this.expiresAt,
+    this.notBefore,
     required this.allowedFeatures,
     required this.createdAt,
     required this.updatedAt,
@@ -9259,6 +9287,9 @@ class LicensesTableData extends DataClass
     map['license_key'] = Variable<String>(licenseKey);
     if (!nullToAbsent || expiresAt != null) {
       map['expires_at'] = Variable<DateTime>(expiresAt);
+    }
+    if (!nullToAbsent || notBefore != null) {
+      map['not_before'] = Variable<DateTime>(notBefore);
     }
     map['allowed_features'] = Variable<String>(allowedFeatures);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -9274,6 +9305,9 @@ class LicensesTableData extends DataClass
       expiresAt: expiresAt == null && nullToAbsent
           ? const Value.absent()
           : Value(expiresAt),
+      notBefore: notBefore == null && nullToAbsent
+          ? const Value.absent()
+          : Value(notBefore),
       allowedFeatures: Value(allowedFeatures),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -9290,6 +9324,7 @@ class LicensesTableData extends DataClass
       deviceKey: serializer.fromJson<String>(json['deviceKey']),
       licenseKey: serializer.fromJson<String>(json['licenseKey']),
       expiresAt: serializer.fromJson<DateTime?>(json['expiresAt']),
+      notBefore: serializer.fromJson<DateTime?>(json['notBefore']),
       allowedFeatures: serializer.fromJson<String>(json['allowedFeatures']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -9303,6 +9338,7 @@ class LicensesTableData extends DataClass
       'deviceKey': serializer.toJson<String>(deviceKey),
       'licenseKey': serializer.toJson<String>(licenseKey),
       'expiresAt': serializer.toJson<DateTime?>(expiresAt),
+      'notBefore': serializer.toJson<DateTime?>(notBefore),
       'allowedFeatures': serializer.toJson<String>(allowedFeatures),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -9314,6 +9350,7 @@ class LicensesTableData extends DataClass
     String? deviceKey,
     String? licenseKey,
     Value<DateTime?> expiresAt = const Value.absent(),
+    Value<DateTime?> notBefore = const Value.absent(),
     String? allowedFeatures,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -9322,6 +9359,7 @@ class LicensesTableData extends DataClass
     deviceKey: deviceKey ?? this.deviceKey,
     licenseKey: licenseKey ?? this.licenseKey,
     expiresAt: expiresAt.present ? expiresAt.value : this.expiresAt,
+    notBefore: notBefore.present ? notBefore.value : this.notBefore,
     allowedFeatures: allowedFeatures ?? this.allowedFeatures,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -9334,6 +9372,7 @@ class LicensesTableData extends DataClass
           ? data.licenseKey.value
           : this.licenseKey,
       expiresAt: data.expiresAt.present ? data.expiresAt.value : this.expiresAt,
+      notBefore: data.notBefore.present ? data.notBefore.value : this.notBefore,
       allowedFeatures: data.allowedFeatures.present
           ? data.allowedFeatures.value
           : this.allowedFeatures,
@@ -9349,6 +9388,7 @@ class LicensesTableData extends DataClass
           ..write('deviceKey: $deviceKey, ')
           ..write('licenseKey: $licenseKey, ')
           ..write('expiresAt: $expiresAt, ')
+          ..write('notBefore: $notBefore, ')
           ..write('allowedFeatures: $allowedFeatures, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -9362,6 +9402,7 @@ class LicensesTableData extends DataClass
     deviceKey,
     licenseKey,
     expiresAt,
+    notBefore,
     allowedFeatures,
     createdAt,
     updatedAt,
@@ -9374,6 +9415,7 @@ class LicensesTableData extends DataClass
           other.deviceKey == this.deviceKey &&
           other.licenseKey == this.licenseKey &&
           other.expiresAt == this.expiresAt &&
+          other.notBefore == this.notBefore &&
           other.allowedFeatures == this.allowedFeatures &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -9384,6 +9426,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
   final Value<String> deviceKey;
   final Value<String> licenseKey;
   final Value<DateTime?> expiresAt;
+  final Value<DateTime?> notBefore;
   final Value<String> allowedFeatures;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -9393,6 +9436,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
     this.deviceKey = const Value.absent(),
     this.licenseKey = const Value.absent(),
     this.expiresAt = const Value.absent(),
+    this.notBefore = const Value.absent(),
     this.allowedFeatures = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -9403,6 +9447,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
     required String deviceKey,
     required String licenseKey,
     this.expiresAt = const Value.absent(),
+    this.notBefore = const Value.absent(),
     this.allowedFeatures = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -9417,6 +9462,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
     Expression<String>? deviceKey,
     Expression<String>? licenseKey,
     Expression<DateTime>? expiresAt,
+    Expression<DateTime>? notBefore,
     Expression<String>? allowedFeatures,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
@@ -9427,6 +9473,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
       if (deviceKey != null) 'device_key': deviceKey,
       if (licenseKey != null) 'license_key': licenseKey,
       if (expiresAt != null) 'expires_at': expiresAt,
+      if (notBefore != null) 'not_before': notBefore,
       if (allowedFeatures != null) 'allowed_features': allowedFeatures,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -9439,6 +9486,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
     Value<String>? deviceKey,
     Value<String>? licenseKey,
     Value<DateTime?>? expiresAt,
+    Value<DateTime?>? notBefore,
     Value<String>? allowedFeatures,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -9449,6 +9497,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
       deviceKey: deviceKey ?? this.deviceKey,
       licenseKey: licenseKey ?? this.licenseKey,
       expiresAt: expiresAt ?? this.expiresAt,
+      notBefore: notBefore ?? this.notBefore,
       allowedFeatures: allowedFeatures ?? this.allowedFeatures,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -9470,6 +9519,9 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
     }
     if (expiresAt.present) {
       map['expires_at'] = Variable<DateTime>(expiresAt.value);
+    }
+    if (notBefore.present) {
+      map['not_before'] = Variable<DateTime>(notBefore.value);
     }
     if (allowedFeatures.present) {
       map['allowed_features'] = Variable<String>(allowedFeatures.value);
@@ -9493,6 +9545,7 @@ class LicensesTableCompanion extends UpdateCompanion<LicensesTableData> {
           ..write('deviceKey: $deviceKey, ')
           ..write('licenseKey: $licenseKey, ')
           ..write('expiresAt: $expiresAt, ')
+          ..write('notBefore: $notBefore, ')
           ..write('allowedFeatures: $allowedFeatures, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -19205,6 +19258,7 @@ typedef $$LicensesTableTableCreateCompanionBuilder =
       required String deviceKey,
       required String licenseKey,
       Value<DateTime?> expiresAt,
+      Value<DateTime?> notBefore,
       Value<String> allowedFeatures,
       required DateTime createdAt,
       required DateTime updatedAt,
@@ -19216,6 +19270,7 @@ typedef $$LicensesTableTableUpdateCompanionBuilder =
       Value<String> deviceKey,
       Value<String> licenseKey,
       Value<DateTime?> expiresAt,
+      Value<DateTime?> notBefore,
       Value<String> allowedFeatures,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -19248,6 +19303,11 @@ class $$LicensesTableTableFilterComposer
 
   ColumnFilters<DateTime> get expiresAt => $composableBuilder(
     column: $table.expiresAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get notBefore => $composableBuilder(
+    column: $table.notBefore,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -19296,6 +19356,11 @@ class $$LicensesTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get notBefore => $composableBuilder(
+    column: $table.notBefore,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get allowedFeatures => $composableBuilder(
     column: $table.allowedFeatures,
     builder: (column) => ColumnOrderings(column),
@@ -19334,6 +19399,9 @@ class $$LicensesTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get expiresAt =>
       $composableBuilder(column: $table.expiresAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get notBefore =>
+      $composableBuilder(column: $table.notBefore, builder: (column) => column);
 
   GeneratedColumn<String> get allowedFeatures => $composableBuilder(
     column: $table.allowedFeatures,
@@ -19386,6 +19454,7 @@ class $$LicensesTableTableTableManager
                 Value<String> deviceKey = const Value.absent(),
                 Value<String> licenseKey = const Value.absent(),
                 Value<DateTime?> expiresAt = const Value.absent(),
+                Value<DateTime?> notBefore = const Value.absent(),
                 Value<String> allowedFeatures = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -19395,6 +19464,7 @@ class $$LicensesTableTableTableManager
                 deviceKey: deviceKey,
                 licenseKey: licenseKey,
                 expiresAt: expiresAt,
+                notBefore: notBefore,
                 allowedFeatures: allowedFeatures,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -19406,6 +19476,7 @@ class $$LicensesTableTableTableManager
                 required String deviceKey,
                 required String licenseKey,
                 Value<DateTime?> expiresAt = const Value.absent(),
+                Value<DateTime?> notBefore = const Value.absent(),
                 Value<String> allowedFeatures = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -19415,6 +19486,7 @@ class $$LicensesTableTableTableManager
                 deviceKey: deviceKey,
                 licenseKey: licenseKey,
                 expiresAt: expiresAt,
+                notBefore: notBefore,
                 allowedFeatures: allowedFeatures,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

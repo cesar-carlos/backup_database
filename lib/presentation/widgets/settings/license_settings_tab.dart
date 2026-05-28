@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/application/providers/license_provider.dart';
+import 'package:backup_database/application/services/admin_password_verifier.dart';
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
@@ -27,6 +28,11 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
   final ValueNotifier<bool> _isAuthenticatedNotifier = ValueNotifier<bool>(
     false,
   );
+
+  /// Verificador de senha admin com hash + lockout. Mantido no `State`
+  /// para que o contador de falhas e o lockout persistam entre
+  /// reaberturas do diálogo (sem reset trivial).
+  final AdminPasswordVerifier _adminVerifier = AdminPasswordVerifier();
 
   @override
   void initState() {
@@ -61,6 +67,29 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       LicenseFeatures.emailNotification: 'Notificação por e-mail',
     };
     return labels[feature] ?? feature;
+  }
+
+  /// Devolve `null` quando `result` é sucesso, ou a mensagem localizada
+  /// para exibir como erro caso contrário.
+  String? _localizeAdminVerification(VerificationResult result) {
+    if (result.isSuccess) return null;
+    if (result.isNotConfigured) {
+      return appLocaleString(
+        context,
+        'Gerador desabilitado: LICENSE_ADMIN_PASSWORD_HASH não configurada '
+            'no .env externo.',
+        'Generator disabled: LICENSE_ADMIN_PASSWORD_HASH not configured '
+            'in external .env.',
+      );
+    }
+    if (result.isLockedOut) {
+      return appLocaleString(
+        context,
+        'Bloqueado por excesso de tentativas. Aguarde alguns segundos.',
+        'Locked out due to repeated failures. Wait a few seconds.',
+      );
+    }
+    return appLocaleString(context, 'Senha incorreta', 'Incorrect password');
   }
 
   DateTime? _tryParseDate(String value) {
@@ -283,16 +312,44 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     }
 
     if (license.isExpired) {
+      final expiresAt = license.expiresAt;
       return ListTile(
         leading: Icon(FluentIcons.warning, color: context.colors.warning),
         title: Text(
           appLocaleString(context, 'Licença expirada', 'Expired license'),
         ),
         subtitle: Text(
+          expiresAt != null
+              ? appLocaleString(
+                  context,
+                  'Expirou em: ${DateFormat('dd/MM/yyyy HH:mm').format(expiresAt)}',
+                  'Expired on: ${DateFormat('dd/MM/yyyy HH:mm').format(expiresAt)}',
+                )
+              : appLocaleString(
+                  context,
+                  'Sem data de expiração registrada',
+                  'No expiration date recorded',
+                ),
+        ),
+      );
+    }
+
+    if (license.isNotYetValid) {
+      final notBefore = license.notBefore!;
+      return ListTile(
+        leading: Icon(FluentIcons.warning, color: context.colors.warning),
+        title: Text(
           appLocaleString(
             context,
-            'Expirou em: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
-            'Expired on: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
+            'Licença ainda não em vigor',
+            'License not yet active',
+          ),
+        ),
+        subtitle: Text(
+          appLocaleString(
+            context,
+            'Válida a partir de: ${DateFormat('dd/MM/yyyy HH:mm').format(notBefore)}',
+            'Valid from: ${DateFormat('dd/MM/yyyy HH:mm').format(notBefore)}',
           ),
         ),
       );
@@ -331,10 +388,10 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
             padding: const EdgeInsets.only(bottom: 4),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   FluentIcons.accept,
                   size: 16,
-                  color: AppPalette.success,
+                  color: context.colors.success,
                 ),
                 const SizedBox(width: 8),
                 Text(feature),
@@ -488,10 +545,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
             ),
             Button(
               onPressed: () {
-                final adminPassword =
-                    dotenv.env['LICENSE_ADMIN_PASSWORD'] ?? '';
                 final enteredPassword = passwordController.text.trim();
-
                 if (enteredPassword.isEmpty) {
                   setState(() {
                     errorMessage = appLocaleString(
@@ -503,19 +557,20 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   return;
                 }
 
-                if (enteredPassword == adminPassword) {
+                final storedHash =
+                    dotenv.env['LICENSE_ADMIN_PASSWORD_HASH'] ?? '';
+                final result = _adminVerifier.verify(
+                  enteredPassword: enteredPassword,
+                  storedHash: storedHash,
+                );
+                final localizedError = _localizeAdminVerification(result);
+                if (localizedError == null) {
                   passwordController.dispose();
                   Navigator.pop(dialogContext);
                   _isAuthenticatedNotifier.value = true;
-                } else {
-                  setState(() {
-                    errorMessage = appLocaleString(
-                      context,
-                      'Senha incorreta',
-                      'Incorrect password',
-                    );
-                  });
+                  return;
                 }
+                setState(() => errorMessage = localizedError);
               },
               child: Text(appLocaleString(context, 'Entrar', 'Sign in')),
             ),
