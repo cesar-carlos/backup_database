@@ -92,8 +92,19 @@ void main() {
     test(
       'setup.iss creates desktop icon task checked by default',
       () async {
+        // §audit-2026-05-28: Inno Setup [Tasks] vem checadas por
+        // default. NAO existe `Flags: checked` (ISCC 6.6.1 rejeita
+        // como "unknown flag"). Para garantir o comportamento
+        // "checked by default" basta NAO ter `Flags: unchecked`.
         final iss = await _loadSetupIssParser();
-        expect(iss.hasTask('desktopicon', hasFlag: 'checked'), isTrue);
+        expect(iss.hasTask('desktopicon'), isTrue);
+        expect(
+          iss.hasTask('desktopicon', hasFlag: 'unchecked'),
+          isFalse,
+          reason:
+              'desktopicon nao pode ter Flags: unchecked '
+              '(quebra o "checked by default")',
+        );
       },
     );
 

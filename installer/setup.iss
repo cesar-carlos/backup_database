@@ -1,5 +1,5 @@
 #define MyAppName "Backup Database"
-#define MyAppVersion "3.3.1"
+#define MyAppVersion "3.4.0"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -34,7 +34,10 @@ CloseApplicationsFilter=*.exe
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"; Flags: checked
+; Inno Setup: tasks vem checadas por default. Para desmarcar inicialmente
+; use `Flags: unchecked`. Nao existe `Flags: checked` (foi um erro do
+; commit ee94182 que so foi detectado no build 3.4.0).
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
 Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
 
 [Dirs]

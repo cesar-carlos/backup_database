@@ -1,16 +1,21 @@
-; Icon and desktop shortcut helpers for setup.iss.
-;
-; Pertencem ao mesmo escopo Pascal de setup.iss (sao incluidos via
-; `#include` na secao [Code]). Centralizam o fluxo de refresh de icone
-; descrito em docs/adr/015-windows-icon-pipeline-and-shortcut-refresh.md:
-;
-;   - RefreshWindowsIconCache: `ie4uinit.exe -show` (limpa cache global)
-;   - RemoveExistingDesktopShortcut: apaga .lnk legado antes do Inno gerar o novo
-;   - TryTouchShortcutWith: helper privado para tentar PS com fallback
-;   - TouchDesktopShortcut: atualiza LastWriteTime do .lnk (forca refresh local)
-;
-; Forwards correspondentes ficam em setup.iss para preservar a ordem
-; de declaracao Pascal junto das demais procedures do instalador.
+// Icon and desktop shortcut helpers for setup.iss.
+//
+// Pertencem ao mesmo escopo Pascal de setup.iss (sao incluidos via
+// `#include` na secao [Code]). Centralizam o fluxo de refresh de icone
+// descrito em docs/adr/015-windows-icon-pipeline-and-shortcut-refresh.md:
+//
+//   - RefreshWindowsIconCache: `ie4uinit.exe -show` (limpa cache global)
+//   - RemoveExistingDesktopShortcut: apaga .lnk legado antes do Inno gerar o novo
+//   - TryTouchShortcutWith: helper privado para tentar PS com fallback
+//   - TouchDesktopShortcut: atualiza LastWriteTime do .lnk (forca refresh local)
+//
+// Forwards correspondentes ficam em setup.iss para preservar a ordem
+// de declaracao Pascal junto das demais procedures do instalador.
+//
+// IMPORTANTE: este arquivo e incluido dentro da secao [Code] do
+// setup.iss. Comentarios DEVEM usar `//` (Pascal), nao `;` (Inno
+// section comment) — ISCC 6.6.1 reporta "BEGIN expected" se
+// encontrar `;` no inicio de linha aqui.
 
 procedure RemoveExistingDesktopShortcut();
 var
