@@ -34,7 +34,7 @@ CloseApplicationsFilter=*.exe
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
+Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"; Flags: checked
 Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
 
 [Dirs]
@@ -91,6 +91,9 @@ procedure RemoveLegacyStartupEntries(); forward;
 procedure DeleteClientStartupTask(); forward;
 procedure ConfigureClientStartupTask(const AppExePath: String); forward;
 procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String); forward;
+procedure RefreshWindowsIconCache(); forward;
+procedure RemoveExistingDesktopShortcut(); forward;
+procedure TouchDesktopShortcut(); forward;
 
 function GetUpdateContextPath(): String;
 begin
@@ -408,9 +411,21 @@ var
   VCRedistErrorCode: Integer;
   ExecResult: Boolean;
   AppExe: String;
+  UserChoice: Integer;
 begin
   Result := '';
-  
+
+  // Reforco defensivo: NSSM pode ter reiniciado o servico entre
+  // InitializeSetup e PrepareToInstall (ex.: usuario passou tempo no
+  // wizard). Parar de novo antes de copiar arquivos garante que o .exe
+  // sera substituido — atalho da area de trabalho passa a refletir o
+  // icone novo no primeiro launch.
+  if IsServiceInstalled('BackupDatabaseService') then
+  begin
+    StopService('BackupDatabaseService');
+    Sleep(2000);
+  end;
+
   // Verificar novamente se o aplicativo está rodando antes de instalar
   AppExe := ExpandConstant('{#MyAppExeName}');
   if IsAppRunning(AppExe) then
@@ -427,9 +442,11 @@ begin
     end;
     
     // Se ainda estiver rodando após todas as tentativas, registrar evidência
-    // explícita no log do Inno Setup. Em modo silencioso (auto update) também
-    // sinalizamos via Result para o updater capturar no histórico — o instalador
-    // continua, mas alguns arquivos podem não ser substituídos.
+    // explícita no log do Inno Setup. Em modo silencioso (auto update)
+    // abortamos. Em modo interativo pedimos confirmação ao usuário porque
+    // continuar com o app aberto costuma deixar o .exe antigo no disco —
+    // sintoma classico: atalho desktop continua com icone velho apos
+    // instalar versao nova.
     if IsAppRunning(AppExe) then
     begin
       Log('WARNING: ' + AppExe + ' continua em execucao apos taskkill; '
@@ -440,6 +457,27 @@ begin
           + ' continua em execucao. A instalacao silenciosa nao pode garantir '
           + 'a substituicao completa dos binarios.';
         Exit;
+      end
+      else
+      begin
+        UserChoice := MsgBox(
+          'O aplicativo ' + ExpandConstant('{#MyAppName}')
+          + ' continua em execucao mesmo apos varias tentativas de fechamento.'#13#10#13#10
+          + 'Continuar agora pode deixar o executavel atual no disco — o atalho '
+          + 'da area de trabalho pode continuar mostrando o icone antigo ate que '
+          + 'a maquina seja reiniciada.'#13#10#13#10
+          + 'Deseja continuar mesmo assim? (Nao recomendado)',
+          mbConfirmation,
+          MB_YESNO or MB_DEFBUTTON2
+        );
+        if UserChoice = IDNO then
+        begin
+          Result := 'Instalacao cancelada pelo usuario: o aplicativo continua em '
+            + 'execucao. Feche o ' + ExpandConstant('{#MyAppName}') + ' e tente novamente.';
+          Exit;
+        end;
+        Log('WARNING: usuario optou por continuar com ' + AppExe + ' aberto; '
+          + 'icone do atalho pode permanecer desatualizado ate o proximo logon.');
       end;
     end;
   end;
@@ -501,6 +539,15 @@ var
   AppExePath: String;
   NssmPath: String;
 begin
+  // Remover o .lnk antigo da area de trabalho ANTES da secao [Icons] do Inno
+  // gerar o novo. Sem isso, o Explorer pode preservar o icone cacheado mesmo
+  // quando o .lnk e sobrescrito — sintoma reportado: icone velho do Flutter
+  // sobrevive ao upgrade.
+  if (CurStep = ssInstall) and WizardIsTaskSelected('desktopicon') then
+  begin
+    RemoveExistingDesktopShortcut();
+  end;
+
   // Write .install_mode only after files are installed, when {app} is defined
   if CurStep = ssPostInstall then
   begin
@@ -560,7 +607,68 @@ begin
       else
         Log('Warning: Failed to restore update operational state from update_context.json');
     end;
+
+    RefreshWindowsIconCache();
+    TouchDesktopShortcut();
   end;
+end;
+
+procedure RemoveExistingDesktopShortcut();
+var
+  ShortcutPath: String;
+begin
+  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
+  if FileExists(ShortcutPath) then
+  begin
+    if DeleteFile(ShortcutPath) then
+      Log('Removed legacy desktop shortcut before recreate: ' + ShortcutPath)
+    else
+      Log('Warning: failed to remove legacy desktop shortcut: ' + ShortcutPath);
+  end;
+end;
+
+procedure TouchDesktopShortcut();
+var
+  ShortcutPath: String;
+  ResultCode: Integer;
+  PsCommand: String;
+begin
+  // Tocar o LastWriteTime do .lnk forca o Explorer a reavaliar o icone na
+  // proxima atualizacao do desktop, complementando ie4uinit -show em
+  // cenarios de cache mais agressivo.
+  if not WizardIsTaskSelected('desktopicon') then Exit;
+  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
+  if not FileExists(ShortcutPath) then Exit;
+
+  PsCommand := '(Get-Item -LiteralPath ''' + ShortcutPath + ''').LastWriteTime = Get-Date';
+  if Exec(
+    'powershell.exe',
+    '-NoProfile -ExecutionPolicy Bypass -Command "' + PsCommand + '"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) and (ResultCode = 0) then
+    Log('Touched desktop shortcut to refresh icon cache: ' + ShortcutPath)
+  else
+    Log('Warning: failed to touch desktop shortcut (' + ShortcutPath + '), exit=' + IntToStr(ResultCode));
+end;
+
+procedure RefreshWindowsIconCache();
+var
+  ResultCode: Integer;
+begin
+  if Exec(
+    ExpandConstant('{sys}\ie4uinit.exe'),
+    '-show',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    Log('Refreshed Windows icon cache (ie4uinit.exe -show)')
+  else
+    Log('Warning: failed to refresh Windows icon cache (ie4uinit.exe)');
 end;
 
 // Check if server mode was selected (used to conditionally create service icons)

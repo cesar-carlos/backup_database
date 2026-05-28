@@ -51,6 +51,116 @@ void main() {
       },
     );
 
+    test(
+      'setup.iss refreshes Windows icon cache after install',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('RefreshWindowsIconCache'));
+        expect(setup, contains('ie4uinit.exe'));
+        expect(setup, contains('-show'));
+      },
+    );
+
+    test(
+      'setup.iss desktop shortcut uses executable icon',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(
+          setup,
+          contains(
+            'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppExeName}"; Tasks: desktopicon',
+          ),
+        );
+      },
+    );
+
+    test(
+      'setup.iss creates desktop icon task checked by default',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(
+          setup,
+          contains(
+            'Name: "desktopicon"; Description: "Create a desktop icon"; '
+            'GroupDescription: "Additional Icons"; Flags: checked',
+          ),
+        );
+      },
+    );
+
+    test(
+      'setup.iss removes legacy desktop shortcut before recreating it',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('RemoveExistingDesktopShortcut'));
+        expect(setup, contains(r'{autodesktop}\{#MyAppName}.lnk'));
+        expect(
+          setup,
+          contains(
+            "if (CurStep = ssInstall) and WizardIsTaskSelected('desktopicon')",
+          ),
+        );
+      },
+    );
+
+    test(
+      'setup.iss touches desktop shortcut to flush icon cache',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('TouchDesktopShortcut'));
+        expect(setup, contains('LastWriteTime'));
+        expect(setup, contains('powershell.exe'));
+      },
+    );
+
+    test(
+      'setup.iss prompts user when app stays running on interactive install',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('MB_DEFBUTTON2'));
+        expect(setup, contains('Instalacao cancelada pelo usuario'));
+        expect(setup, contains('icone do atalho pode permanecer desatualizado'));
+      },
+    );
+
+    test(
+      'setup.iss re-stops Windows service in PrepareToInstall before copying files',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        // O servico ja e parado em InitializeSetup. Reforco em
+        // PrepareToInstall cobre o caso de o NSSM reiniciar entre as fases
+        // (usuario passou tempo no wizard) — sem isso, o .exe antigo pode
+        // ficar travado em uso e o icone novo nao chega ao disco.
+        final prepareSection = setup
+            .substring(setup.indexOf('function PrepareToInstall'));
+        expect(
+          prepareSection,
+          contains("StopService('BackupDatabaseService')"),
+        );
+      },
+    );
+
     test('self-hosted workflow exposes manual windows smoke suite', () async {
       final workflow = await _repoFile(
         p.join('.github', 'workflows', 'integration-self-hosted.yml'),

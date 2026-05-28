@@ -10,9 +10,17 @@ import subprocess
 import sys
 import urllib.request
 import zipfile
-import hashlib
 import stat
 from pathlib import Path
+
+# Shared icon helpers live in scripts/windows_icon_utils.py so both the CI
+# validator and this build pipeline stay in lockstep.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_SCRIPTS_DIR = _REPO_ROOT / "scripts"
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+import windows_icon_utils as wiu  # noqa: E402
 
 
 VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
@@ -24,6 +32,27 @@ TRAY_ICON_CUSTOM_MARKER = ".tray_icon_custom"
 
 def step(message: str) -> None:
     print(message)
+
+
+def _run_icon_verification(project_root: Path, *, require_exe: bool) -> bool:
+    """Re-use scripts/verify_windows_icons.py as a single source of truth.
+
+    Returns True on success. Prints a friendly error and returns False when
+    the validator exits non-zero (missing artifacts, hash drift, or .exe
+    without the embedded icon payload).
+    """
+    verify_script = project_root / "scripts" / "verify_windows_icons.py"
+    if not verify_script.is_file():
+        print(f"ERRO: script de verificacao nao encontrado: {verify_script}")
+        return False
+    args = [sys.executable, str(verify_script)]
+    if require_exe:
+        args.append("--require-exe")
+    code = run_command(args, cwd=project_root)
+    if code != 0:
+        print("ERRO: artefatos de icone Windows invalidos ou dessincronizados")
+        return False
+    return True
 
 
 def find_dart_executable() -> str | None:
@@ -56,6 +85,7 @@ def ensure_windows_launcher_icons(project_root: Path) -> tuple[bool, bool]:
         not app_icon.is_file()
         or icon_source.stat().st_mtime > app_icon.stat().st_mtime
         or pubspec_path.stat().st_mtime > app_icon.stat().st_mtime
+        or wiu.png_source_hash_mismatch(project_root)
     )
     if not needs_regen:
         print("OK: app_icon.ico sincronizado com assets/image/new")
@@ -86,9 +116,7 @@ def ensure_windows_launcher_icons(project_root: Path) -> tuple[bool, bool]:
 
 
 def _write_app_icon_source_hash(project_root: Path, icon_source: Path) -> None:
-    hash_path = project_root / "windows" / "runner" / "resources" / ".app_icon_source_sha256"
-    digest = hashlib.sha256(icon_source.read_bytes()).hexdigest()
-    hash_path.write_text(f"{digest}\n", encoding="utf-8")
+    wiu.write_recorded_png_hash(project_root, icon_source)
 
 
 def _sync_widgetbook_app_icon(project_root: Path, app_icon: Path) -> None:
@@ -240,7 +268,11 @@ def newest_source_mtime(project_root: Path) -> float:
     return latest
 
 
-def clean_flutter_windows_outputs(project_root: Path) -> None:
+def clean_flutter_windows_outputs(
+    project_root: Path,
+    *,
+    relink_runner: bool = False,
+) -> None:
     def handle_remove_readonly(func, path, excinfo) -> None:  # type: ignore[no-untyped-def]
         os.chmod(path, stat.S_IWRITE)
         func(path)
@@ -254,19 +286,28 @@ def clean_flutter_windows_outputs(project_root: Path) -> None:
             shutil.rmtree(path, onexc=handle_remove_readonly)
             print(f"  Limpando output gerado: {path}")
 
+    if not relink_runner:
+        return
+
+    runner_root = project_root / "build" / "windows" / "x64" / "runner"
+    relink_paths = (
+        runner_root / "Release" / "backup_database.exe",
+        runner_root / "backup_database.dir" / "Release",
+        runner_root / "backup_database.dir" / "Debug",
+    )
+    for path in relink_paths:
+        if path.is_file():
+            path.unlink()
+            print(f"  Limpando output gerado: {path}")
+        elif path.is_dir():
+            shutil.rmtree(path, onexc=handle_remove_readonly)
+            print(f"  Limpando output gerado: {path}")
+
 
 def write_sha256_sidecar(file_path: Path) -> Path:
-    digest = hashlib.sha256()
-    with file_path.open("rb") as handle:
-        while True:
-            chunk = handle.read(1024 * 1024)
-            if not chunk:
-                break
-            digest.update(chunk)
-
     sidecar_path = file_path.with_name(f"{file_path.name}.sha256")
     sidecar_path.write_text(
-        f"{digest.hexdigest()}  {file_path.name}\n",
+        f"{wiu.sha256_file(file_path)}  {file_path.name}\n",
         encoding="utf-8",
     )
     return sidecar_path
@@ -393,7 +434,10 @@ def main() -> int:
             )
             print("Executando rebuild para alinhar versao...")
 
-        clean_flutter_windows_outputs(project_root)
+        clean_flutter_windows_outputs(
+            project_root,
+            relink_runner=icons_regenerated or tray_updated,
+        )
 
         flutter_exe = find_flutter_executable()
         if flutter_exe is None:
@@ -422,6 +466,12 @@ def main() -> int:
         return 1
 
     print(f"OK: executavel valido ({current_version})")
+
+    # Confirma cedo que o `.exe` recem-empacotado realmente carrega o icone
+    # gerado por flutter_launcher_icons. Em caso de falha aqui, o problema
+    # esta no recurso compilado e nao no atalho do Inno Setup.
+    if not _run_icon_verification(project_root, require_exe=True):
+        return 1
     print()
 
     step("Passo 4: Verificando Visual C++ Redistributables...")
@@ -455,7 +505,12 @@ def main() -> int:
     print(f"OK: Inno Setup encontrado: {iscc_path}")
     print()
 
-    step("Passo 7: Compilando instalador...")
+    step("Passo 7: Validando artefatos de icone Windows (pre-ISCC)...")
+    if not _run_icon_verification(project_root, require_exe=True):
+        return 1
+    print()
+
+    step("Passo 8: Compilando instalador...")
     print("Aguarde, isso pode levar alguns minutos...")
 
     code = run_command([str(iscc_path), str(setup_iss_path.resolve())], cwd=script_root)

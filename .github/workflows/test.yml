@@ -49,6 +49,9 @@ jobs:
       - name: Verify Windows icon artifacts
         run: python scripts/verify_windows_icons.py
 
+      - name: Unit tests for Windows icon utils (synthetic ICO/PNG)
+        run: python test/scripts/test_windows_icon_utils.py
+
       - name: Verify dart format
         run: dart format --set-exit-if-changed --output=none lib test tools
 

@@ -15,6 +15,7 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `sync_appcast_from_releases.py` | Python | Versao Python do sincronizador de appcast |
 | `update_appcast_manual.py` | Python | **DEPRECATED** — manutencao emergencial; o fluxo oficial usa `update-appcast`. Exige `--sha256` para nao gerar feed silenciosamente invalido. |
 | `verify_windows_icons.py` | Python | Valida `app_icon.ico`, `app_tray.ico` e hash da fonte PNG (CI / pre-release) |
+| `windows_icon_utils.py` | Python | Modulo compartilhado: hashing, sidecar e checagem do PNG embutido no `.exe` |
 
 ## Icones Windows
 
@@ -27,6 +28,22 @@ python scripts/verify_windows_icons.py
 ```
 
 Falha se `app_tray.ico` divergir de `app_icon.ico` (sem `.tray_icon_custom`) ou se o hash em `windows/runner/resources/.app_icon_source_sha256` nao bater com `database_512px.png`.
+
+Flags opcionais:
+
+- `--require-exe`: alem das checagens padrao, falha se `build/windows/x64/runner/Release/backup_database.exe` nao existir ou nao embutir o PNG do `app_icon.ico` atual. Usado por `installer/build_installer.py` apos `flutter build windows --release` para detectar o caso em que o `.exe` foi compilado com o icone antigo.
+- `--skip-exe`: pula explicitamente a checagem do `.exe` mesmo quando o binario esta presente (uso raro; default ja pula em CI Linux).
+
+### `windows_icon_utils.py`
+
+Modulo Python compartilhado entre `verify_windows_icons.py` e `installer/build_installer.py`. Concentra:
+
+- `sha256_file(path)` — hash de arquivo
+- `png_source_hash_mismatch(root)` — sidecar `.app_icon_source_sha256` vs PNG
+- `extract_largest_png_from_ico(ico_bytes)` — extrai payload PNG do ICO gerado por `flutter_launcher_icons`
+- `exe_embeds_icon_png(exe_path, png_bytes)` — confere se o PNG aparece dentro do `.exe`
+
+Testes unitarios sem artefatos reais: `python test/scripts/test_windows_icon_utils.py`.
 
 ## Banco de Dados
 

@@ -79,7 +79,15 @@ jobs:
               flutter test test/integration/ftp_integration_test.dart --reporter compact
             }
             "windows-smoke" {
+              # Sincroniza app_icon.ico a partir do PNG fonte ANTES do build,
+              # senao o .exe pode sair com o icone default do Flutter (caso
+              # raiz do bug reportado: atalho desktop com icone antigo).
+              dart run flutter_launcher_icons
+              python scripts/verify_windows_icons.py
               flutter build windows --release
+              # Confirma que o .exe recem-compilado realmente embute o PNG
+              # gerado por flutter_launcher_icons.
+              python scripts/verify_windows_icons.py --require-exe
               pwsh -NoProfile -ExecutionPolicy Bypass -File test/scripts/windows_single_instance_smoke.ps1 `
                 -AppExePath "build/windows/x64/runner/Release/backup_database.exe" `
                 -NssmPath "installer/dependencies/nssm-2.24/win64/nssm.exe"
