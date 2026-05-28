@@ -27,6 +27,10 @@
   ],
   "blocked_versions": [],
   "min_supported_app_version": null,
-  "rollout_percentages": {},
-  "min_publication_age_minutes": {}
+  "rollout_percentages": {
+    "3.5.0": 25
+  },
+  "min_publication_age_minutes": {
+    "3.5.0": 60
+  }
 }
