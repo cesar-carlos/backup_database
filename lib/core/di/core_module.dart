@@ -225,8 +225,7 @@ LicenseGenerationService _createLicenseGenerationService(
   // identifiquem corretamente a chave ativa. O override só é
   // significativo em conjunto com a private key (configurada apenas
   // em dev/admin).
-  final rawActiveKeyId = dotenv
-      .env[LicenseConstants.envLicenseActiveKeyId]
+  final rawActiveKeyId = dotenv.env[LicenseConstants.envLicenseActiveKeyId]
       ?.trim();
   final activeKeyId = (rawActiveKeyId != null && rawActiveKeyId.isNotEmpty)
       ? rawActiveKeyId

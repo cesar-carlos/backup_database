@@ -22,7 +22,7 @@ class FakeRemoteSchedulesConnectionManager extends ConnectionManager {
     this.simulateRunIdSupported = true,
     this.simulateQueueSupported = false,
     this.simulateArtifactRetentionSupported = false,
-  }) : super(serverConnectionDao: null);
+  }) : super(serverConnectionRepository: null);
 
   bool simulateConnected;
   bool simulateRunIdSupported;

@@ -8,11 +8,12 @@ import 'package:backup_database/core/logging/logging.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/remote_file_entry.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
-import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/domain/entities/server_connection.dart';
+import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/error_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
@@ -75,15 +76,33 @@ typedef BackupProgressCallback =
     );
 
 class ConnectionManager {
+  /// §audit-2026-05-28 wave 2 (P0): aceita um
+  /// [IServerConnectionRepository] para que `connectToSavedConnection`
+  /// e `getSavedConnections` enxerguem a senha vinda do vault DPAPI.
+  /// Antes consumíamos o DAO direto e lhe líamos `password`, que após
+  /// a correção P0 da wave 1 é **sempre** vazia (senha real fica no
+  /// vault). Isso quebrava silenciosamente o auto-connect e o connect
+  /// manual por ID.
+  ///
+  /// O parâmetro continua opcional para preservar o uso em testes que
+  /// não querem montar o stack de repositório.
   ConnectionManager({
-    ServerConnectionDao? serverConnectionDao,
+    IServerConnectionRepository? serverConnectionRepository,
     FileTransferResumeMetadataStore? resumeMetadataStore,
-  }) : _serverConnectionDao = serverConnectionDao,
+    Duration? fileTransferIdleTimeout,
+  }) : _serverConnectionRepository = serverConnectionRepository,
        _resumeMetadataStore =
            resumeMetadataStore ?? const FileTransferResumeMetadataStore(),
+       _fileTransferIdleTimeout =
+           fileTransferIdleTimeout ?? SocketConfig.fileTransferIdleTimeout,
        _socketLogger = di.getIt<SocketLoggerService>();
 
-  final ServerConnectionDao? _serverConnectionDao;
+  final IServerConnectionRepository? _serverConnectionRepository;
+
+  /// §audit-2026-05-28 wave 3 (P1): override do watchdog de inatividade
+  /// — `@visibleForTesting` permite testes manterem timeout curto
+  /// (100ms) em vez do default produção de 2 min.
+  final Duration _fileTransferIdleTimeout;
   final FileTransferResumeMetadataStore _resumeMetadataStore;
   final SocketLoggerService _socketLogger;
   TcpSocketClient? _client;
@@ -137,6 +156,12 @@ class ConnectionManager {
   ConnectionStatus get status =>
       _client?.status ?? ConnectionStatus.disconnected;
   String? get lastErrorMessage => _client?.lastErrorMessage;
+
+  /// §audit-2026-05-28 wave 2 (P1): código semântico do último erro
+  /// (passthrough do `TcpSocketClient`). Permite à UI distinguir
+  /// licença negada vs senha inválida sem fazer matching frágil em
+  /// strings traduzidas.
+  ErrorCode? get lastErrorCode => _client?.lastErrorCode;
   Stream<Message>? get messageStream => _client?.messageStream;
   Stream<ConnectionStatus>? get statusStream => _client?.statusStream;
 
@@ -500,6 +525,16 @@ class ConnectionManager {
     Message message,
     _FileTransferState state,
   ) async {
+    // §audit-2026-05-28 wave 3 (P1): qualquer mensagem dessa
+    // transferência (metadata, chunk, progress, complete) conta como
+    // sinal de vida e reseta o watchdog de inatividade. Mensagens de
+    // erro também resetam — _cleanupTransfer chamado em seguida vai
+    // cancelar o watchdog definitivamente.
+    state.resetIdleWatchdog(
+      _fileTransferIdleTimeout,
+      () => _onTransferIdleTimeout(requestId, state),
+    );
+
     if (isFileTransferStartMetadata(message)) {
       state.fileName = getFileNameFromMetadata(message);
       state.totalChunks = getTotalChunksFromMetadata(message);
@@ -570,20 +605,39 @@ class ConnectionManager {
 
       // Streaming: Escrever diretamente no sink
       state.fileSink.add(dataToWrite);
-      if (chunk.chunkIndex % 10 == 0) {
-        // Flush periódico opcional
-      }
 
-      LoggerService.debug(
-        '[ConnectionManager] Chunk ${chunk.chunkIndex}/${chunk.totalChunks} recebido e escrito: ${chunk.data.length} bytes',
-      );
+      // §audit-2026-05-28 wave 2 (P2): antes logávamos `debug` por
+      // chunk recebido — em transfers grandes (centenas de milhares
+      // de chunks de 128 KB) isso gerava ruído enorme e contendia
+      // pelo disco do log. Agora throttle por **milestone de 10%**
+      // (state.lastLoggedTransferPercent), seguindo o padrão §5.5
+      // dos `architectural_patterns.mdc`.
+      final percent = (chunk.chunkIndex / chunk.totalChunks * 100).floor();
+      final isNewMilestone = percent >= state.lastLoggedTransferPercent + 10;
+      if (isNewMilestone) {
+        LoggerService.debug(
+          '[ConnectionManager] Transfer ${state.fileName} progresso: '
+          '$percent% (${chunk.chunkIndex}/${chunk.totalChunks})',
+        );
+        state.lastLoggedTransferPercent = percent;
+      }
       return;
     }
     if (isFileTransferProgressMessage(message)) {
       final current = getCurrentChunkFromProgress(message);
       final total = getTotalChunksFromProgress(message);
       state.onProgress?.call(current, total);
-      LoggerService.debug('[ConnectionManager] Progresso: $current/$total');
+      // Mesmo throttling pattern aplicado à mensagem dedicada de
+      // progresso — servidores que mandam essa mensagem além dos
+      // chunks acabavam reabrindo o canal de log a cada delta.
+      final percent = total > 0 ? (current / total * 100).floor() : 0;
+      final isNewMilestone = percent >= state.lastLoggedProgressPercent + 10;
+      if (isNewMilestone) {
+        LoggerService.debug(
+          '[ConnectionManager] Progresso: $current/$total ($percent%)',
+        );
+        state.lastLoggedProgressPercent = percent;
+      }
       return;
     }
     if (isFileTransferCompleteMessage(message)) {
@@ -609,6 +663,12 @@ class ConnectionManager {
   Future<void> _completeFileTransfer(_FileTransferState state) async {
     LoggerService.info('[ConnectionManager] _completeFileTransfer iniciado');
     LoggerService.info('[ConnectionManager] OutputPath: ${state.outputPath}');
+
+    // §audit-2026-05-28 wave 3 (P1): cancelar watchdog antes da
+    // finalização. Sem isso, um Timer pendente poderia disparar em
+    // paralelo à validação de hash/tamanho e tentar completar o
+    // completer duas vezes.
+    state.cancelIdleWatchdog();
 
     try {
       // Finalizar escrita no .part
@@ -1151,7 +1211,7 @@ class ConnectionManager {
 
       fileSink ??= partFile.openWrite(mode: FileMode.append);
 
-      _activeTransfers[requestId] = _FileTransferState(
+      final state = _FileTransferState(
         completer: completer,
         outputPath: outputPath,
         partFilePath: partFilePath,
@@ -1162,9 +1222,25 @@ class ConnectionManager {
         fileSink: fileSink,
         onProgress: onProgress,
       );
+      _activeTransfers[requestId] = state;
+
+      // §audit-2026-05-28 wave 3 (P1): watchdog de inatividade. Antes
+      // tínhamos um único `timeout(5min)` como deadline total que
+      // abortava transferências grandes em progresso. Agora o
+      // watchdog reseta a cada chunk/progress recebido em
+      // `_onTransferMessage`; o `Future.any` com o hard ceiling
+      // (6h por padrão) é defesa contra transferências presas em
+      // throughput sub-baseline (1 byte/s).
+      state.resetIdleWatchdog(
+        _fileTransferIdleTimeout,
+        () => _onTransferIdleTimeout(requestId, state),
+      );
 
       LoggerService.info(
-        '[ConnectionManager] Enviando requisição de transferência (startChunk: $startChunk)...',
+        '[ConnectionManager] Enviando requisição de transferência '
+        '(startChunk: $startChunk, idleTimeout: '
+        '${_fileTransferIdleTimeout.inSeconds}s, '
+        'hardCeiling: ${SocketConfig.fileTransferHardTimeout.inMinutes}min)...',
       );
       await send(
         createFileTransferStartRequestMessage(
@@ -1180,14 +1256,19 @@ class ConnectionManager {
       );
 
       final result = await completer.future.timeout(
-        SocketConfig.fileTransferTimeout,
+        SocketConfig.fileTransferHardTimeout,
       );
       LoggerService.info('[ConnectionManager] Transferência completada!');
       return result;
     } on TimeoutException {
       await _cleanupTransfer(requestId);
-      LoggerService.error('[ConnectionManager] Timeout na transferência!');
-      return rd.Failure(TimeoutException('requestFile timeout'));
+      LoggerService.error(
+        '[ConnectionManager] Hard ceiling de transferência atingido '
+        '(${SocketConfig.fileTransferHardTimeout.inMinutes}min).',
+      );
+      return rd.Failure(
+        TimeoutException('requestFile hard ceiling timeout'),
+      );
     } on Object catch (e) {
       await _cleanupTransfer(requestId);
       LoggerService.error('[ConnectionManager] Erro na transferência: $e');
@@ -1195,9 +1276,42 @@ class ConnectionManager {
     }
   }
 
+  /// Chamado pelo `Timer` do watchdog quando passou
+  /// [_fileTransferIdleTimeout] sem chunk/progress recebido. Encerra
+  /// a transferência com `Failure` semântico e limpa o `.part` para
+  /// que um retry posterior possa decidir resumir do offset atual
+  /// via `FileTransferResumeMetadataStore`.
+  void _onTransferIdleTimeout(int requestId, _FileTransferState state) {
+    if (!_activeTransfers.containsKey(requestId)) return;
+    LoggerService.error(
+      '[ConnectionManager] Transferência ociosa por mais que '
+      '${_fileTransferIdleTimeout.inSeconds}s; abortando '
+      '(runId=${state.runId ?? "—"}, fileName=${state.fileName}).',
+    );
+    if (!state.completer.isCompleted) {
+      state.completer.complete(
+        rd.Failure(
+          TimeoutException(
+            'Transferência sem progresso por '
+            '${_fileTransferIdleTimeout.inSeconds}s',
+          ),
+        ),
+      );
+    }
+    // _cleanupTransfer roda na microtask seguinte (acionado pelo
+    // completer acima dentro de `requestFile`); aqui só cancelamos
+    // o watchdog para evitar callback redundante.
+    state.cancelIdleWatchdog();
+  }
+
   Future<void> _cleanupTransfer(int requestId) async {
     final state = _activeTransfers.remove(requestId);
     if (state != null) {
+      // §audit-2026-05-28 wave 3 (P1): cancelar o watchdog primeiro
+      // para evitar que um Timer pendente dispare DEPOIS do cleanup
+      // (caso a transferência seja encerrada normalmente por
+      // `complete`/erro de descompressão antes de o Timer expirar).
+      state.cancelIdleWatchdog();
       try {
         // Fechar o sink de forma assíncrona para garantir liberação do lock
         await state.fileSink.close();
@@ -2474,27 +2588,47 @@ class ConnectionManager {
     await client.send(message);
   }
 
-  Future<List<ServerConnectionsTableData>> getSavedConnections() async {
-    if (_serverConnectionDao == null) {
-      return <ServerConnectionsTableData>[];
+  /// Returns all saved connections, com senha lida do vault. Lista
+  /// vazia quando o repositório não foi injetado (cenários de teste).
+  Future<List<ServerConnection>> getSavedConnections() async {
+    final repo = _serverConnectionRepository;
+    if (repo == null) {
+      return const <ServerConnection>[];
     }
-    return _serverConnectionDao.getAll();
+    final result = await repo.getAll();
+    return result.fold(
+      (list) => list,
+      (failure) {
+        LoggerService.warning(
+          'Falha ao listar conexões salvas: $failure',
+        );
+        return const <ServerConnection>[];
+      },
+    );
   }
 
+  /// §audit-2026-05-28 wave 2 (P0): conecta por ID lendo a entidade
+  /// pelo repositório, que retorna a senha do vault DPAPI. Antes
+  /// líamos o DAO direto e ficávamos com `password: ''` em qualquer
+  /// servidor autenticado, derrubando o auto-connect.
   Future<void> connectToSavedConnection(
     String connectionId, {
     bool enableAutoReconnect = false,
   }) async {
-    final dao = _serverConnectionDao;
-    if (dao == null) {
+    final repo = _serverConnectionRepository;
+    if (repo == null) {
       throw StateError(
-        'ConnectionManager has no ServerConnectionDao; cannot connect to saved connection',
+        'ConnectionManager has no IServerConnectionRepository; '
+        'cannot connect to saved connection',
       );
     }
-    final connection = await dao.getById(connectionId);
-    if (connection == null) {
-      throw StateError('Saved connection not found: $connectionId');
-    }
+    final result = await repo.getById(connectionId);
+    final connection = result.fold(
+      (found) => found,
+      (failure) => throw StateError(
+        'Saved connection not found: $connectionId ($failure)',
+      ),
+    );
     await connect(
       host: connection.host,
       port: connection.port,
@@ -2537,6 +2671,34 @@ class _FileTransferState {
   String? expectedHash;
   bool isCompressed = false;
   int transferChunkSize;
+
+  /// §audit-2026-05-28 wave 2 (P2): throttling de logs por chunk —
+  /// rastreia o último percentual logado para emitir 1 linha a cada
+  /// 10% em vez de uma linha por chunk recebido. Inicia em `-1`
+  /// (não `0`) para garantir que o primeiro milestone (0%) seja
+  /// logado. Padrão §5.5 de `architectural_patterns.mdc`.
+  int lastLoggedTransferPercent = -1;
+
+  /// Equivalente para a mensagem dedicada `fileTransferProgress`,
+  /// que vem em cadência diferente dos chunks.
+  int lastLoggedProgressPercent = -1;
+
+  /// §audit-2026-05-28 wave 3 (P1): watchdog de inatividade. Cada
+  /// chunk/progress chama `resetIdleWatchdog`, que cancela o Timer
+  /// anterior e cria um novo do timeout do `ConnectionManager`. Se
+  /// nenhum tráfego chegar nesse intervalo, o callback do Timer é
+  /// disparado e marca a transferência como falha.
+  Timer? _idleWatchdog;
+
+  void resetIdleWatchdog(Duration timeout, void Function() onTimeout) {
+    _idleWatchdog?.cancel();
+    _idleWatchdog = Timer(timeout, onTimeout);
+  }
+
+  void cancelIdleWatchdog() {
+    _idleWatchdog?.cancel();
+    _idleWatchdog = null;
+  }
 }
 
 class _BackupProgressState {

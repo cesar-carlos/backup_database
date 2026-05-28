@@ -10,6 +10,7 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
 import 'package:backup_database/infrastructure/protocol/compression.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/socket/client/socket_client_service.dart';
 import 'package:backup_database/infrastructure/socket/heartbeat.dart';
@@ -55,6 +56,7 @@ class TcpSocketClient implements SocketClientService {
   bool _reconnectEnabled = false;
   bool _disconnectRequested = false;
   String? _lastErrorMessage;
+  ErrorCode? _lastErrorCode;
 
   @override
   bool get isConnected => _status == ConnectionStatus.connected;
@@ -69,6 +71,12 @@ class TcpSocketClient implements SocketClientService {
   Stream<ConnectionStatus> get statusStream => _statusController.stream;
 
   String? get lastErrorMessage => _lastErrorMessage;
+
+  /// §audit-2026-05-28 wave 2 (P1): código semântico do último erro
+  /// (especialmente `authFailed` vs `licenseDenied`) — antes só
+  /// expúnhamos a mensagem em string, o que forçava UI a fazer
+  /// matching frágil em texto traduzido.
+  ErrorCode? get lastErrorCode => _lastErrorCode;
 
   void _setStatus(ConnectionStatus newStatus) {
     if (_status != newStatus) {
@@ -113,6 +121,7 @@ class TcpSocketClient implements SocketClientService {
   ]) async {
     _setStatus(ConnectionStatus.connecting);
     _lastErrorMessage = null;
+    _lastErrorCode = null;
     _waitingAuth = false;
     try {
       _socket = await Socket.connect(
@@ -250,8 +259,13 @@ class TcpSocketClient implements SocketClientService {
           final success = message.payload['success'] == true;
           if (!success) {
             final error = getAuthErrorMessage(message) ?? 'Erro desconhecido';
+            final errorCode = getAuthErrorCode(message);
             _lastErrorMessage = error;
-            LoggerService.error('Autenticação FALHOU: $error');
+            _lastErrorCode = errorCode;
+            LoggerService.error(
+              'Autenticação FALHOU '
+              '(${errorCode?.code ?? 'sem código'}): $error',
+            );
             _setStatus(ConnectionStatus.authenticationFailed);
             _messageController.add(message);
             unawaited(
@@ -437,6 +451,15 @@ class TcpSocketClient implements SocketClientService {
     _setStatus(ConnectionStatus.disconnected);
     if (!_messageController.isClosed) {
       await _messageController.close();
+    }
+    // §audit-2026-05-28 wave 2 (P2): antes do close, o
+    // `_statusController` ficava aberto após `disconnect()` manual
+    // (só o auto-disconnect via `_handleDisconnect` fechava). Isso
+    // deixava listeners da `statusStream` órfãos achando que a
+    // sessão ainda estava ativa em modo `disconnected`. Agora
+    // fechamos sempre — alinhado com `_messageController`.
+    if (!_statusController.isClosed) {
+      await _statusController.close();
     }
     LoggerService.info('TcpSocketClient disconnected');
   }

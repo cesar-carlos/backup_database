@@ -8,6 +8,7 @@ import 'package:backup_database/domain/entities/server_connection.dart';
 import 'package:backup_database/domain/repositories/i_connection_log_repository.dart';
 import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
+import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
 import 'package:backup_database/infrastructure/protocol/session_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -119,6 +120,52 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
   /// em `false` quando saude e desconhecida (defesa: melhor bloquear
   /// e pedir refresh do que disparar backup contra servidor instavel).
   bool get isServerHealthy => _serverHealth?.isOk ?? false;
+
+  /// Código semântico do último erro de conexão (passthrough do
+  /// `ConnectionManager`). `null` quando nunca houve erro ou após
+  /// reset.
+  ErrorCode? get connectionErrorCode => _connectionManager.lastErrorCode;
+
+  /// §audit-2026-05-28 wave 2 (P1): mensagem amigável para o usuário,
+  /// derivada do [ErrorCode] do último erro de conexão. Antes
+  /// exibíamos o texto cru de `lastErrorMessage` (que pode vir do
+  /// servidor em modo verbose, mencionando licença, identidade de
+  /// peer, etc.). Agora distinguimos os principais cenários
+  /// operacionais e damos ao usuário uma instrução acionável.
+  ///
+  /// Quando o código é `null` ou desconhecido, cai no
+  /// `lastErrorMessage` cru — preserva diagnóstico em caminhos
+  /// novos que ainda não foram mapeados.
+  String? get friendlyConnectionErrorMessage {
+    final code = connectionErrorCode;
+    if (code == null) return _connectionManager.lastErrorMessage;
+    switch (code) {
+      case ErrorCode.licenseDenied:
+        return 'A licença do servidor não autoriza conexões remotas. '
+            'Entre em contato com o administrador para renovar a licença.';
+      case ErrorCode.authenticationFailed:
+        return 'Falha de autenticação: verifique a senha ou o '
+            'identificador do servidor.';
+      case ErrorCode.notAuthenticated:
+        return 'O servidor exige autenticação. Cadastre a senha do '
+            'servidor e tente novamente.';
+      case ErrorCode.unsupportedProtocolVersion:
+        return 'A versão do protocolo deste cliente é incompatível com '
+            'o servidor. Atualize o cliente para uma versão compatível.';
+      case ErrorCode.timeout:
+      case ErrorCode.connectionLost:
+        return 'Conexão perdida ou tempo esgotado. Verifique se o '
+            'servidor está ativo e se a rede está acessível.';
+      case ErrorCode.permissionDenied:
+        return 'Permissão negada pelo servidor.';
+      case ErrorCode.rateLimitExceeded:
+        return 'Muitas tentativas de conexão em pouco tempo. Aguarde '
+            'alguns instantes e tente novamente.';
+      // Erros que NÃO ocorrem no handshake — usamos o texto cru.
+      default:
+        return _connectionManager.lastErrorMessage ?? code.defaultMessage;
+    }
+  }
 
   // Atalhos para os getters de feature do ConnectionManager — UI nao
   // precisa importar capabilities_messages.dart.
@@ -258,6 +305,19 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
         );
       },
     );
+    if (ok ?? false) {
+      // §audit-2026-05-28 wave 2 (P2): se o cliente está desconectado
+      // e acabou de cadastrar o primeiro servidor (ou um servidor novo)
+      // **depois** do boot, dispara o auto-connect imediatamente. Antes,
+      // o `_hasTriedAutoConnectAtStartup` ficava `true` após o boot e
+      // a primeira tentativa de auto-connect só vinha no próximo
+      // restart do app — operador precisava clicar "Conectar"
+      // manualmente.
+      if (AppModePolicy.shouldAutoConnectSavedServers &&
+          !_connectionManager.isConnected) {
+        unawaited(tryConnectToSavedServersInBackground());
+      }
+    }
     return ok ?? false;
   }
 

@@ -49,7 +49,15 @@ void main() {
         ).readAsString();
 
         expect(setup, contains('ShouldLaunchPostInstall'));
-        expect(setup, contains('--minimized --launch-origin=windows-startup'));
+        // §audit-2026-05-28: a task de logon do cliente AGORA passa
+        // `--mode=client` explicitamente. Sem isso, ao abrir o app a
+        // resolucao de modo dependia 100% de {app}\.install_mode — se
+        // o arquivo sumisse, o resolver caia no default `server` e a
+        // maquina de cliente abria como servidor (socket server etc.).
+        expect(
+          setup,
+          contains('--mode=client --minimized --launch-origin=windows-startup'),
+        );
         expect(setup, contains('InstallAndStartServiceFromInstaller'));
         expect(setup, contains('-NonInteractive'));
         expect(setup, contains('sc.exe'));
@@ -75,17 +83,39 @@ void main() {
     );
 
     test(
-      'setup.iss desktop shortcut uses executable icon',
+      'setup.iss desktop shortcuts use executable icon and explicit --mode',
       () async {
+        // §audit-2026-05-28: o atalho de desktop foi separado em um para
+        // cada modo (Server / Client) e passa `--mode=` explicitamente.
+        // Antes existia um unico atalho sem `--mode`, que dependia 100%
+        // de `{app}\.install_mode` — se o arquivo sumisse, o resolver
+        // caia em "server" por default, abrindo socket server numa
+        // maquina instalada como cliente.
         final iss = await _loadSetupIssParser();
 
-        final entry = iss.iconEntry(r'{autodesktop}\{#MyAppName}');
-        expect(entry, isNotNull);
+        final serverEntry = iss.iconEntry(
+          r'{autodesktop}\{#MyAppName} (Server)',
+        );
+        expect(serverEntry, isNotNull, reason: 'server desktop icon missing');
         expect(
-          entry,
+          serverEntry,
           contains(r'IconFilename: "{app}\{#MyAppExeName}"'),
         );
-        expect(entry, contains('Tasks: desktopicon'));
+        expect(serverEntry, contains('Tasks: desktopicon'));
+        expect(serverEntry, contains('Parameters: "--mode=server"'));
+        expect(serverEntry, contains('Check: IsServerMode'));
+
+        final clientEntry = iss.iconEntry(
+          r'{autodesktop}\{#MyAppName} (Client)',
+        );
+        expect(clientEntry, isNotNull, reason: 'client desktop icon missing');
+        expect(
+          clientEntry,
+          contains(r'IconFilename: "{app}\{#MyAppExeName}"'),
+        );
+        expect(clientEntry, contains('Tasks: desktopicon'));
+        expect(clientEntry, contains('Parameters: "--mode=client"'));
+        expect(clientEntry, contains('Check: IsClientMode'));
       },
     );
 
@@ -109,7 +139,7 @@ void main() {
     );
 
     test(
-      'setup.iss removes legacy desktop shortcut before recreating it',
+      'setup.iss removes legacy and per-mode desktop shortcuts before recreate',
       () async {
         final iss = await _loadSetupIssParser();
 
@@ -117,10 +147,27 @@ void main() {
           iss.hasForwardDeclaration('RemoveExistingDesktopShortcut'),
           isTrue,
         );
+        // §audit-2026-05-28: o helper agora limpa tres caminhos:
+        // - legado `.lnk` (atalho unico antigo, sem --mode=)
+        // - novo `(Server).lnk` e `(Client).lnk`
         expect(
           iss.routineContains(
             'RemoveExistingDesktopShortcut',
             r'{autodesktop}\{#MyAppName}.lnk',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'RemoveExistingDesktopShortcut',
+            r'{autodesktop}\{#MyAppName} (Server).lnk',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'RemoveExistingDesktopShortcut',
+            r'{autodesktop}\{#MyAppName} (Client).lnk',
           ),
           isTrue,
         );
@@ -143,18 +190,33 @@ void main() {
         final iss = await _loadSetupIssParser();
 
         expect(iss.hasForwardDeclaration('TouchDesktopShortcut'), isTrue);
+        // Touch agora delega para TouchOneDesktopShortcut por nome de
+        // shortcut e cobre os tres caminhos (legado + Server + Client).
         expect(
-          iss.routineContains('TouchDesktopShortcut', 'LastWriteTime'),
+          iss.routineContains(
+            'TouchDesktopShortcut',
+            r'{autodesktop}\{#MyAppName} (Server).lnk',
+          ),
           isTrue,
         );
-        // Tenta powershell.exe primeiro e pwsh.exe (PowerShell 7) como
-        // fallback para cobrir SKUs reduzidos / policy restritiva.
         expect(
-          iss.routineContains('TouchDesktopShortcut', "'powershell.exe'"),
+          iss.routineContains(
+            'TouchDesktopShortcut',
+            r'{autodesktop}\{#MyAppName} (Client).lnk',
+          ),
+          isTrue,
+        );
+        // O helper unitario contem a logica de PowerShell — checa la.
+        expect(
+          iss.routineContains('TouchOneDesktopShortcut', 'LastWriteTime'),
           isTrue,
         );
         expect(
-          iss.routineContains('TouchDesktopShortcut', "'pwsh.exe'"),
+          iss.routineContains('TouchOneDesktopShortcut', "'powershell.exe'"),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('TouchOneDesktopShortcut', "'pwsh.exe'"),
           isTrue,
         );
         expect(iss.contains('function TryTouchShortcutWith'), isTrue);

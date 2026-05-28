@@ -193,13 +193,22 @@ class SystemSettingsProvider extends ChangeNotifier {
       const minimizedArg = SingleInstanceConfig.minimizedArgument;
       final startupOriginArg =
           SingleInstanceConfig.windowsStartupLaunchOriginArgument;
+      final appMode = _appModeProvider();
+      // §audit-2026-05-28: passar --mode=client explicitamente na task
+      // de logon. Sem isso, abrir o app dependia 100% de
+      // {app}\.install_mode — se o arquivo sumisse, o resolver caia
+      // em `server` (default) abrindo socket server numa maquina
+      // de cliente. O argumento DEVE vir antes dos demais para
+      // bater com o que o installer escreve.
+      final modeArg = appMode == AppMode.client ? '--mode=client' : '';
       final taskArguments = enable
-          ? (startMinimized
-                    ? '$minimizedArg $startupOriginArg'
-                    : startupOriginArg)
-                .trim()
+          ? <String>[
+              if (modeArg.isNotEmpty) modeArg,
+              if (startMinimized) minimizedArg,
+              startupOriginArg,
+            ].join(' ').trim()
           : '';
-      final installScheduledTask = _appModeProvider() != AppMode.server;
+      final installScheduledTask = appMode != AppMode.server;
 
       final outcome = await _windowsMachineStartup.apply(
         enabled: enable,

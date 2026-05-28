@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
+import 'package:backup_database/infrastructure/protocol/message_types.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
 class SocketLoggerService {
@@ -55,10 +57,55 @@ class SocketLoggerService {
 
     await _writeLine(logLine);
 
-    if (message.payload.isNotEmpty && message.payload.toString().length < 500) {
-      await _writeLine('  Payload: ${message.payload}');
+    if (message.payload.isNotEmpty) {
+      final redacted = redactPayloadForLog(
+        message.header.type,
+        message.payload,
+      );
+      if (redacted.toString().length < 500) {
+        await _writeLine('  Payload: $redacted');
+      }
     }
   }
+
+  /// §audit-2026-05-28 wave 2 (P1): payload de mensagens sensíveis
+  /// (auth, gerenciamento de senha de DB remoto) **NUNCA** deve ser
+  /// gravado em disco, mesmo na forma de hash. O hash PBKDF2 ainda
+  /// vaza informação suficiente para um ataque de dicionário offline
+  /// contra um servidor cuja `serverId` o atacante já conhece. Trocamos
+  /// o valor por `'***'` antes de escrever.
+  ///
+  /// Visível para testes garantirem cobertura por tipo de mensagem.
+  @visibleForTesting
+  static Map<String, dynamic> redactPayloadForLog(
+    MessageType type,
+    Map<String, dynamic> payload,
+  ) {
+    final sensitiveKeysByType = _sensitiveKeysByMessageType[type];
+    if (sensitiveKeysByType == null || sensitiveKeysByType.isEmpty) {
+      return payload;
+    }
+    final redacted = <String, dynamic>{};
+    for (final entry in payload.entries) {
+      redacted[entry.key] = sensitiveKeysByType.contains(entry.key)
+          ? '***'
+          : entry.value;
+    }
+    return redacted;
+  }
+
+  /// Map de tipos de mensagem → set de chaves do payload cuja
+  /// gravação em disco é proibida. Adicione novas mensagens
+  /// sensíveis aqui (tabela estática, §5.8 dos
+  /// `architectural_patterns.mdc`).
+  static const Map<MessageType, Set<String>> _sensitiveKeysByMessageType = {
+    MessageType.authRequest: {'passwordHash', 'password'},
+    MessageType.authResponse: {'token', 'sessionToken'},
+    MessageType.authChallenge: {'nonce'},
+    MessageType.createDatabaseConfigRequest: {'password', 'cryptKey'},
+    MessageType.updateDatabaseConfigRequest: {'password', 'cryptKey'},
+    MessageType.testDatabaseConnectionRequest: {'password'},
+  };
 
   Future<void> _writeLine(String line) async {
     try {

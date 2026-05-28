@@ -7,15 +7,19 @@ import 'package:backup_database/application/providers/remote_file_transfer_provi
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/constants/route_names.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
+import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/remote/remote_backup_preflight_dialog.dart';
+import 'package:backup_database/presentation/widgets/remote/remote_run_diagnostics_dialog.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
@@ -61,12 +65,15 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     _wasConnected = isConnected;
 
     if (isConnected && !wasConnected) {
+      // §audit-2026-05-28 wave 2 (P1): `tryResumeExecutionAfterReconnect`
+      // é responsabilidade do `ServerConnectionProvider`, que escuta
+      // `ConnectionStatus` de forma global. Antes, esta página também
+      // disparava o resume — quando o usuário estava aqui no momento
+      // da reconexão, os dois caminhos rodavam em paralelo e dobravam
+      // o download. A página continua reidratando listas (schedules,
+      // queue, status do servidor) via `_loadConnectedRemoteData`,
+      // que é idempotente.
       _loadConnectedRemoteData(context);
-      unawaited(
-        context
-            .read<RemoteSchedulesProvider>()
-            .tryResumeExecutionAfterReconnect(),
-      );
     }
   }
 
@@ -1168,22 +1175,61 @@ class _BackupProgressCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            FilledButton(
-              onPressed: onCancel,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(FluentIcons.cancel, size: 16),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    appLocaleString(
-                      context,
-                      'Cancelar backup',
-                      'Cancel backup',
-                    ),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                FilledButton(
+                  onPressed: onCancel,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.cancel, size: 16),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        appLocaleString(
+                          context,
+                          'Cancelar backup',
+                          'Cancel backup',
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                // §audit-2026-05-28 wave 3 (P2): botão de diagnóstico
+                // remoto. O ConnectionManager já tinha os RPCs
+                // (`getRunLogs`, `getRunErrorDetails`) desde a wave 1,
+                // mas faltava entrada na UI — operador que precisava
+                // investigar um run em execução / `failed` no servidor
+                // remoto não tinha como fazê-lo sem SSH.
+                Button(
+                  onPressed: provider.activeRunId == null
+                      ? null
+                      : () => unawaited(
+                          RemoteRunDiagnosticsDialog.show(
+                            context,
+                            connectionManager: service_locator
+                                .getIt<ConnectionManager>(),
+                            runId: provider.activeRunId!,
+                            scheduleName: schedule.name,
+                          ),
+                        ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(FluentIcons.diagnostic, size: 16),
+                      const SizedBox(width: AppSpacing.sm),
+                      Text(
+                        appLocaleString(
+                          context,
+                          'Diagnóstico',
+                          'Diagnostics',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),

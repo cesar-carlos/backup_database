@@ -2,7 +2,7 @@ import 'package:backup_database/infrastructure/socket/client/connection_manager.
 
 class FakeConnectedLegacyRemoteConnectionManager extends ConnectionManager {
   FakeConnectedLegacyRemoteConnectionManager()
-    : super(serverConnectionDao: null);
+    : super(serverConnectionRepository: null);
 
   @override
   bool get isConnected => true;
@@ -14,7 +14,7 @@ class FakeConnectedLegacyRemoteConnectionManager extends ConnectionManager {
 class FakeConnectedFirebirdCapableRemoteConnectionManager
     extends ConnectionManager {
   FakeConnectedFirebirdCapableRemoteConnectionManager()
-    : super(serverConnectionDao: null);
+    : super(serverConnectionRepository: null);
 
   @override
   bool get isConnected => true;

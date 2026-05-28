@@ -10,6 +10,7 @@ import 'package:backup_database/application/providers/server_connection_provider
 import 'package:backup_database/application/providers/server_credential_provider.dart';
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/config/app_mode_policy.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
@@ -154,16 +155,12 @@ class _MainLayoutState extends State<MainLayout> {
     // Filtrar itens baseado no modo
     switch (mode) {
       case AppMode.client:
-        // Cliente NÃO vê: Bancos de Dados, Agendamentos, Servidor, Logs, Notificações
-        // Cliente apenas se conecta ao servidor e executa ações remotas
+        // A blocklist de rotas server-only vive em `AppModePolicy` e é a
+        // fonte única — assim o redirect do router e o filtro do sidebar
+        // nunca divergem.
         return allItems
             .where(
-              (item) =>
-                  item.route != RouteNames.sqlServerConfig &&
-                  item.route != RouteNames.schedules &&
-                  item.route != RouteNames.serverSettings &&
-                  item.route != RouteNames.logs &&
-                  item.route != RouteNames.notifications,
+              (item) => AppModePolicy.isRouteAllowedInCurrentMode(item.route),
             )
             .toList();
 

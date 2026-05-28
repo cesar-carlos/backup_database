@@ -45,6 +45,7 @@ void main() {
     test('should block server-only routes', () {
       const blocked = [
         RouteNames.sqlServerConfig,
+        RouteNames.sybaseConfig,
         RouteNames.schedules,
         RouteNames.serverSettings,
         RouteNames.logs,

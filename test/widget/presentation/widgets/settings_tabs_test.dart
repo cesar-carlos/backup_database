@@ -124,6 +124,12 @@ class _FakeMachineSettingsRepository implements IMachineSettingsRepository {
 
   @override
   Future<void> setStartWithWindows(bool value) async {}
+
+  @override
+  Future<String?> getPendingRemoteRunSnapshotJson() async => null;
+
+  @override
+  Future<void> setPendingRemoteRunSnapshotJson(String? json) async {}
 }
 
 class _FakeWindowsMachineStartupService

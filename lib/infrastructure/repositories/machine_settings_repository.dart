@@ -138,4 +138,29 @@ class MachineSettingsRepository implements IMachineSettingsRepository {
       ),
     );
   }
+
+  /// §audit-2026-05-28 wave 3 (P2): persistido em `SharedPreferences`
+  /// (e **não** no Drift) por dois motivos:
+  ///   1. evita migração de schema só para um campo opcional cuja
+  ///      vida útil é "entre execução e próxima reconexão";
+  ///   2. SharedPreferences sobrevive ao auto-update sem que a gente
+  ///      precise reabrir o banco antes da UI carregar.
+  static const String _pendingRemoteRunPrefKey =
+      'pending_remote_run_snapshot_v1';
+
+  @override
+  Future<String?> getPendingRemoteRunSnapshotJson() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_pendingRemoteRunPrefKey);
+  }
+
+  @override
+  Future<void> setPendingRemoteRunSnapshotJson(String? json) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (json == null) {
+      await prefs.remove(_pendingRemoteRunPrefKey);
+    } else {
+      await prefs.setString(_pendingRemoteRunPrefKey, json);
+    }
+  }
 }

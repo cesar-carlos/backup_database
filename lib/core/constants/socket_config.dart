@@ -7,7 +7,38 @@ class SocketConfig {
   static const Duration heartbeatTimeout = Duration(seconds: 60);
   static const Duration connectionTimeout = Duration(seconds: 10);
   static const Duration scheduleRequestTimeout = Duration(seconds: 15);
+
+  /// §audit-2026-05-28 wave 3 (P1): timeout **legado** de file transfer
+  /// — era usado como um único "deadline total" de 5 min, o que abortava
+  /// transferências grandes (>2 GB em links de 100 Mbps típicos) mesmo
+  /// quando estavam progredindo normalmente. Hoje a transferência usa:
+  ///
+  ///   - [fileTransferIdleTimeout] como **watchdog de inatividade**
+  ///     (zerado a cada chunk / progress recebido);
+  ///   - [fileTransferHardTimeout] como teto absoluto (defesa contra
+  ///     transferência presa progredindo bytes minúsculos por horas).
+  ///
+  /// A constante continua exportada por compatibilidade — callers
+  /// novos devem usar os helpers acima.
   static const Duration fileTransferTimeout = Duration(minutes: 5);
+
+  /// Inatividade máxima permitida durante um file transfer (sem
+  /// chunk/progress recebido). Cada `fileChunk` ou
+  /// `fileTransferProgress` reseta o watchdog. Backups que ficam mudos
+  /// por mais que isso indicam servidor travado / rede caída / disco
+  /// cheio do peer.
+  ///
+  /// 2 min cobre folgadamente um GC pausado / IO lento, sem deixar o
+  /// cliente preso por horas sem evidência.
+  static const Duration fileTransferIdleTimeout = Duration(minutes: 2);
+
+  /// Teto absoluto: mesmo que o servidor mande 1 byte/segundo, a
+  /// transferência termina aqui. Dimensionado para suportar **40 GB
+  /// em link de 30 Mbps** (~3 h) com folga. Backups maiores são
+  /// excepcionais; quando ocorrerem, é melhor abortar e logar para
+  /// investigação do que vazar handle aberto indefinidamente.
+  static const Duration fileTransferHardTimeout = Duration(hours: 6);
+
   static const Duration backupExecutionTimeout = Duration(minutes: 10);
   static const int maxRetries = 3;
   static const int maxReconnectAttempts = 5;

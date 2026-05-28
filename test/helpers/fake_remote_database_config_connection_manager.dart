@@ -6,7 +6,7 @@ class FakeRemoteDatabaseConfigConnectionManager extends ConnectionManager {
   FakeRemoteDatabaseConfigConnectionManager({
     this.simulateConnected = true,
     this.simulateFirebirdSupported = false,
-  }) : super(serverConnectionDao: null);
+  }) : super(serverConnectionRepository: null);
 
   bool simulateConnected;
   bool simulateFirebirdSupported;

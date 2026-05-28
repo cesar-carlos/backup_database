@@ -439,7 +439,7 @@ void main() {
           },
           exitProcess: (code) {},
         );
-        service.installReadinessCheck = (release) async {
+        service.installReadinessCheck = (release, source) async {
           return 'Atualizacao bloqueada: existe um backup em andamento na UI.';
         };
 

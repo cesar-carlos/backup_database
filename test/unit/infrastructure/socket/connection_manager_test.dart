@@ -1,9 +1,10 @@
 import 'dart:io';
 
 import 'package:backup_database/core/di/service_locator.dart' as di;
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/logging/socket_logger_service.dart';
-import 'package:backup_database/infrastructure/datasources/daos/server_connection_dao.dart';
-import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/domain/entities/server_connection.dart';
+import 'package:backup_database/domain/repositories/i_server_connection_repository.dart';
 import 'package:backup_database/infrastructure/protocol/capabilities_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/health_messages.dart';
@@ -16,9 +17,9 @@ import 'package:backup_database/infrastructure/socket/client/socket_client_servi
 import 'package:backup_database/infrastructure/socket/server/execution_status_message_handler.dart';
 import 'package:backup_database/infrastructure/socket/server/remote_execution_registry.dart';
 import 'package:backup_database/infrastructure/socket/server/tcp_socket_server.dart';
-import 'package:drift/drift.dart' hide isNotNull, isNull;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:result_dart/result_dart.dart' as rd;
 
 int _nextPort = 29700;
 
@@ -28,7 +29,30 @@ int getPort() {
   return p;
 }
 
-class MockServerConnectionDao extends Mock implements ServerConnectionDao {}
+class _MockServerConnectionRepository extends Mock
+    implements IServerConnectionRepository {}
+
+ServerConnection _buildConnection({
+  String id = 'conn-1',
+  String name = 'Server A',
+  String serverId = 's1',
+  String host = '127.0.0.1',
+  int port = 9527,
+  String password = '',
+}) {
+  final now = DateTime.now();
+  return ServerConnection(
+    id: id,
+    name: name,
+    serverId: serverId,
+    host: host,
+    port: port,
+    password: password,
+    isOnline: false,
+    createdAt: now,
+    updatedAt: now,
+  );
+}
 
 void main() {
   late ConnectionManager manager;
@@ -119,7 +143,7 @@ void main() {
       );
     });
 
-    test('getSavedConnections when no dao returns empty list', () async {
+    test('getSavedConnections when no repository returns empty list', () async {
       final mgr = ConnectionManager();
       addTearDown(mgr.disconnect);
       final list = await mgr.getSavedConnections();
@@ -127,36 +151,23 @@ void main() {
     });
 
     test(
-      'getSavedConnections when dao provided returns dao.getAll()',
+      'getSavedConnections when repository provided returns repo.getAll()',
       () async {
-        final mockDao = MockServerConnectionDao();
-        final now = DateTime.now();
-        final saved = [
-          ServerConnectionsTableData(
-            id: 'conn-1',
-            name: 'Server A',
-            serverId: 's1',
-            host: '127.0.0.1',
-            port: 9527,
-            password: 'p1',
-            isOnline: false,
-            createdAt: now,
-            updatedAt: now,
-          ),
-        ];
-        when(mockDao.getAll).thenAnswer((_) async => saved);
-        final mgr = ConnectionManager(serverConnectionDao: mockDao);
+        final mockRepo = _MockServerConnectionRepository();
+        final saved = [_buildConnection(password: 'p1')];
+        when(mockRepo.getAll).thenAnswer((_) async => rd.Success(saved));
+        final mgr = ConnectionManager(serverConnectionRepository: mockRepo);
         addTearDown(mgr.disconnect);
         final list = await mgr.getSavedConnections();
         expect(list.length, 1);
         expect(list.first.id, 'conn-1');
         expect(list.first.name, 'Server A');
         expect(list.first.host, '127.0.0.1');
-        verify(mockDao.getAll).called(1);
+        verify(mockRepo.getAll).called(1);
       },
     );
 
-    test('connectToSavedConnection when no dao throws', () async {
+    test('connectToSavedConnection when no repository throws', () async {
       final mgr = ConnectionManager();
       addTearDown(mgr.disconnect);
       expect(
@@ -166,49 +177,57 @@ void main() {
     });
 
     test('connectToSavedConnection when connection not found throws', () async {
-      final mockDao = MockServerConnectionDao();
-      when(() => mockDao.getById(any())).thenAnswer((_) async => null);
-      final mgr = ConnectionManager(serverConnectionDao: mockDao);
+      final mockRepo = _MockServerConnectionRepository();
+      when(() => mockRepo.getById(any())).thenAnswer(
+        (_) async => const rd.Failure(NotFoundFailure(message: 'missing')),
+      );
+      final mgr = ConnectionManager(serverConnectionRepository: mockRepo);
       addTearDown(mgr.disconnect);
       expect(
         () => mgr.connectToSavedConnection('missing-id'),
         throwsA(isA<StateError>()),
       );
-      verify(() => mockDao.getById('missing-id')).called(1);
+      verify(() => mockRepo.getById('missing-id')).called(1);
     });
 
-    test('connectToSavedConnection with valid id connects', () async {
-      final db = AppDatabase.inMemory();
-      addTearDown(db.close);
-      final port = getPort();
-      await server.start(port: port);
-      addTearDown(() async {
-        await server.stop();
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      });
-      final now = DateTime.now();
-      await db.serverConnectionDao.insertConnection(
-        ServerConnectionsTableCompanion.insert(
-          id: 'saved-1',
-          name: 'Local',
-          serverId: '',
-          host: '127.0.0.1',
-          port: Value(port),
-          password: '',
-          isOnline: const Value(false),
-          createdAt: now,
-          updatedAt: now,
-        ),
-      );
-      final mgr = ConnectionManager(
-        serverConnectionDao: db.serverConnectionDao,
-      );
-      addTearDown(mgr.disconnect);
-      await mgr.connectToSavedConnection('saved-1');
-      expect(mgr.isConnected, isTrue);
-      expect(mgr.activeHost, '127.0.0.1');
-      expect(mgr.activePort, port);
-    });
+    test(
+      '§audit-2026-05-28 wave 2 P0: '
+      'connectToSavedConnection uses password from the repository (vault) '
+      'and not the DAO column',
+      () async {
+        // Regressão: na wave 1 movemos a senha para o vault DPAPI e a
+        // coluna `password` do SQLite passou a ficar SEMPRE vazia.
+        // Antes desta correção, `connectToSavedConnection` lia o DAO
+        // direto → recebia `password: ''` e tentava conectar como
+        // anônimo. Servidor com auth respondia `authFailed`.
+        final mockRepo = _MockServerConnectionRepository();
+        final port = getPort();
+        await server.start(port: port);
+        addTearDown(() async {
+          await server.stop();
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        });
+        when(() => mockRepo.getById('saved-1')).thenAnswer(
+          (_) async => rd.Success(
+            _buildConnection(
+              id: 'saved-1',
+              name: 'Local',
+              serverId: '',
+              port: port,
+              // password '' (default) — sem auth para o teste; o ponto
+              // é o caminho repo → connect, não o handshake.
+            ),
+          ),
+        );
+        final mgr = ConnectionManager(serverConnectionRepository: mockRepo);
+        addTearDown(mgr.disconnect);
+        await mgr.connectToSavedConnection('saved-1');
+        expect(mgr.isConnected, isTrue);
+        expect(mgr.activeHost, '127.0.0.1');
+        expect(mgr.activePort, port);
+        verify(() => mockRepo.getById('saved-1')).called(1);
+      },
+    );
   });
 
   group('ConnectionManager capabilities cache (M4.1)', () {

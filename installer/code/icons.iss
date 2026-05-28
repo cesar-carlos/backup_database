@@ -17,18 +17,25 @@
 // section comment) — ISCC 6.6.1 reporta "BEGIN expected" se
 // encontrar `;` no inicio de linha aqui.
 
-procedure RemoveExistingDesktopShortcut();
-var
-  ShortcutPath: String;
+procedure RemoveOneDesktopShortcut(const ShortcutPath: String);
 begin
-  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
   if FileExists(ShortcutPath) then
   begin
     if DeleteFile(ShortcutPath) then
-      Log('Removed legacy desktop shortcut before recreate: ' + ShortcutPath)
+      Log('Removed desktop shortcut before recreate: ' + ShortcutPath)
     else
-      Log('Warning: failed to remove legacy desktop shortcut: ' + ShortcutPath);
+      Log('Warning: failed to remove desktop shortcut: ' + ShortcutPath);
   end;
+end;
+
+procedure RemoveExistingDesktopShortcut();
+begin
+  // §audit-2026-05-28: agora geramos dois atalhos (Server e Client) com
+  // --mode= explicito. Limpamos todos os tres nomes possiveis para
+  // garantir refresh limpo (legado sem modo + os dois novos).
+  RemoveOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName}.lnk'));
+  RemoveOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName} (Server).lnk'));
+  RemoveOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName} (Client).lnk'));
 end;
 
 function TryTouchShortcutWith(const PsExe, ShortcutPath, PsCommand: String): Boolean;
@@ -45,18 +52,11 @@ begin
   ) and (ResultCode = 0);
 end;
 
-procedure TouchDesktopShortcut();
+procedure TouchOneDesktopShortcut(const ShortcutPath: String);
 var
-  ShortcutPath: String;
   PsCommand: String;
 begin
-  // Tocar o LastWriteTime do .lnk forca o Explorer a reavaliar o icone na
-  // proxima atualizacao do desktop, complementando ie4uinit -show em
-  // cenarios de cache mais agressivo.
-  if not WizardIsTaskSelected('desktopicon') then Exit;
-  ShortcutPath := ExpandConstant('{autodesktop}\{#MyAppName}.lnk');
   if not FileExists(ShortcutPath) then Exit;
-
   PsCommand := '(Get-Item -LiteralPath ''' + ShortcutPath + ''').LastWriteTime = Get-Date';
 
   // Tenta primeiro powershell.exe (Windows PowerShell 5.1, parte do baseline
@@ -76,6 +76,22 @@ begin
   end;
 
   Log('Warning: failed to touch desktop shortcut, both powershell.exe and pwsh.exe unavailable: ' + ShortcutPath);
+end;
+
+procedure TouchDesktopShortcut();
+begin
+  // Tocar o LastWriteTime do .lnk forca o Explorer a reavaliar o icone na
+  // proxima atualizacao do desktop, complementando ie4uinit -show em
+  // cenarios de cache mais agressivo.
+  if not WizardIsTaskSelected('desktopicon') then Exit;
+  // §audit-2026-05-28: Inno gera apenas um dos dois novos atalhos
+  // (Check: IsServerMode | IsClientMode). TouchOneDesktopShortcut tem
+  // early-exit se o arquivo nao existir — best-effort em ambos cobre
+  // tambem o cenario de upgrade onde so o legado ".lnk" sem sufixo
+  // ainda existe e foi recriado pelo Inno.
+  TouchOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName}.lnk'));
+  TouchOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName} (Server).lnk'));
+  TouchOneDesktopShortcut(ExpandConstant('{autodesktop}\{#MyAppName} (Client).lnk'));
 end;
 
 procedure RefreshWindowsIconCache();

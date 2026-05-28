@@ -1,4 +1,5 @@
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/core/config/app_mode_policy.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -45,6 +46,30 @@ class DashboardProvider extends ChangeNotifier with AsyncStateMixin {
   Future<void> loadDashboardData() async {
     _serverMetrics = null;
     _metricsReport = null;
+
+    // Em modo cliente o dashboard mostra **apenas métricas remotas**:
+    // todas as queries locais (backup_history, schedules, métricas de
+    // 30 dias) varriam tabelas vazias gerando I/O desnecessário e —
+    // em hardware lento — atrasando o boot do painel. Zerar os
+    // contadores garante UI consistente caso essa rotina rode antes
+    // do gate na UI.
+    if (AppModePolicy.isClient) {
+      _totalBackups = 0;
+      _backupsToday = 0;
+      _failedToday = 0;
+      _activeSchedules = 0;
+      _recentBackups = const [];
+      _activeSchedulesList = const [];
+      await runAsync<void>(
+        action: () async {
+          if (_connectionManager?.isConnected ?? false) {
+            await _loadServerMetrics();
+          }
+        },
+      );
+      return;
+    }
+
     await runAsync<void>(
       action: () async {
         await Future.wait([

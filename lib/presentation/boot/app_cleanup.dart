@@ -7,6 +7,7 @@ import 'package:backup_database/domain/services/i_remote_staging_cleanup_schedul
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
+import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 
 class AppCleanup {
@@ -20,16 +21,31 @@ class AppCleanup {
   /// Ordem proposital:
   /// 1. Cancelar processos de backup em execução (mata `pg_basebackup`,
   ///    `sqlcmd`, `dbisql` etc. para evitar zumbis após o fechamento).
-  /// 2. Parar o scheduler (não aceita mais agendamentos).
-  /// 3. Fechar o banco SQLite (faz checkpoint do WAL).
-  /// 4. Liberar o mutex de instância única.
-  /// 5. Dispose de tray e window managers.
+  /// 2. **Desconectar do servidor remoto** (cliente): fecha o socket
+  ///    limpo, completa completers RPC pendentes com erro e impede
+  ///    auto-reconnect durante o shutdown. Sem este passo, o auto-update
+  ///    matava o socket abruptamente quando o readiness check
+  ///    eventualmente passava entre uma transferência e a próxima.
+  /// 3. Parar o scheduler (não aceita mais agendamentos).
+  /// 4. Fechar o banco SQLite (faz checkpoint do WAL).
+  /// 5. Liberar o mutex de instância única.
+  /// 6. Dispose de tray e window managers.
   static Future<void> cleanup() async {
     LoggerService.info('Encerrando aplicativo...');
 
     await _runStep('cancelar backups em execução', () async {
       if (service_locator.getIt.isRegistered<IBackupCancellationService>()) {
         service_locator.getIt<IBackupCancellationService>().cancelAllRunning();
+      }
+    });
+
+    // §audit-2026-05-28 wave 2 (P1): desconectar do servidor antes de
+    // matar o restante para garantir um fechamento limpo (heartbeat
+    // parado, RPCs pendentes completados com erro, auto-reconnect
+    // desativado).
+    await _runStep('desconectar do servidor remoto', () async {
+      if (service_locator.getIt.isRegistered<ConnectionManager>()) {
+        await service_locator.getIt<ConnectionManager>().disconnect();
       }
     });
 

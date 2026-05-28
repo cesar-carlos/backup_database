@@ -6,7 +6,9 @@ import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/remote/remote_database_config_edit_dialog.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -35,10 +37,49 @@ class _RemoteDatabaseConfigsPageState extends State<RemoteDatabaseConfigsPage> {
     }
   }
 
+  Future<void> _onAdd(BuildContext context) async {
+    final provider = context.read<RemoteDatabaseConfigProvider>();
+    final firebirdSupported = context
+        .read<ServerConnectionProvider>()
+        .isFirebirdSupported;
+
+    final availableTypes = [
+      for (final type in RemoteDatabaseType.values)
+        if (type != RemoteDatabaseType.firebird || firebirdSupported) type,
+    ];
+
+    final selectedType = await showDialog<RemoteDatabaseType>(
+      context: context,
+      builder: (dialogContext) => _DatabaseTypePickerDialog(
+        availableTypes: availableTypes,
+      ),
+    );
+    if (selectedType == null || !context.mounted) return;
+
+    await RemoteDatabaseConfigEditDialog.show(
+      context,
+      provider: provider,
+      databaseType: selectedType,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final connected = context.watch<ServerConnectionProvider>().isConnected;
     return AppPageScaffold(
       title: _l(context, 'Bancos no servidor', 'Server databases'),
+      actions: [
+        AppPageAction(
+          label: _l(context, 'Adicionar', 'Add'),
+          icon: FluentIcons.add,
+          isPrimary: true,
+          // §audit-2026-05-28 wave 3 (P2): dispara o picker de SGBD e
+          // depois abre `RemoteDatabaseConfigEditDialog.create`. Antes,
+          // criação/edição só existiam no protocolo — operador tinha
+          // que configurar bancos novos direto no servidor.
+          onPressed: connected ? () => unawaited(_onAdd(context)) : null,
+        ),
+      ],
       body: Consumer<ServerConnectionProvider>(
         builder: (context, connectionProvider, _) {
           if (!connectionProvider.isConnected) {
@@ -141,6 +182,13 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
             ),
           ),
           Tooltip(
+            message: _l(context, 'Editar', 'Edit'),
+            child: IconButton(
+              icon: const Icon(FluentIcons.edit),
+              onPressed: busy ? null : () => unawaited(_onEdit(context)),
+            ),
+          ),
+          Tooltip(
             message: _l(context, 'Testar conexão', 'Test connection'),
             child: IconButton(
               icon: const Icon(FluentIcons.plug_connected),
@@ -156,6 +204,16 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _onEdit(BuildContext context) async {
+    await RemoteDatabaseConfigEditDialog.show(
+      context,
+      provider: context.read<RemoteDatabaseConfigProvider>(),
+      databaseType: entry.databaseType,
+      editingConfigId: entry.id,
+      initial: entry.rawConfig,
     );
   }
 
@@ -206,6 +264,46 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
     await FluentInfoBarFeedback.showSuccess(
       context,
       message: _l(context, 'Banco excluído', 'Database deleted'),
+    );
+  }
+}
+
+class _DatabaseTypePickerDialog extends StatelessWidget {
+  const _DatabaseTypePickerDialog({required this.availableTypes});
+
+  final List<RemoteDatabaseType> availableTypes;
+
+  @override
+  Widget build(BuildContext context) {
+    return ContentDialog(
+      title: Text(_l(context, 'Escolha o SGBD', 'Choose the database engine')),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final type in availableTypes) ...[
+              Button(
+                onPressed: () => Navigator.of(context).pop(type),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.xs,
+                  ),
+                  child: Text(remoteDatabaseTypeLabel(type)),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        Button(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(_l(context, 'Cancelar', 'Cancel')),
+        ),
+      ],
     );
   }
 }

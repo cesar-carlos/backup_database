@@ -71,8 +71,12 @@ Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; P
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-; Desktop icon (default launch, mode resolved by app config/.install_mode)
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+; Desktop icon (one per mode — explicit --mode= flag avoids relying on
+; {app}\.install_mode being present/valid at launch time).
+; §audit-2026-05-28: o icone unico sem --mode= podia abrir como server
+; em maquina instalada como cliente se o .install_mode sumisse.
+Name: "{autodesktop}\{#MyAppName} (Server)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Check: IsServerMode
+Name: "{autodesktop}\{#MyAppName} (Client)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Check: IsClientMode
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchPostInstall
@@ -641,6 +645,11 @@ begin
   Result := (SelectedMode = 'server');
 end;
 
+function IsClientMode(): Boolean;
+begin
+  Result := (SelectedMode = 'client');
+end;
+
 function ShouldLaunchPostInstall(): Boolean;
 begin
   Result := not ((SelectedMode = 'server') and WizardIsTaskSelected('startup'));
@@ -668,7 +677,11 @@ var
   TaskRun: String;
 begin
   DeleteClientStartupTask();
-  TaskRun := '"\"' + AppExePath + '\" --minimized --launch-origin=windows-startup"';
+  // §audit-2026-05-28: passar --mode=client explicitamente. Antes a task
+  // dependia 100% de {app}\.install_mode para resolver o modo; se o
+  // arquivo sumisse/corrompesse o resolver caia em "server" (default),
+  // abrindo o socket server em uma maquina instalada como cliente.
+  TaskRun := '"\"' + AppExePath + '\" --mode=client --minimized --launch-origin=windows-startup"';
   Exec('schtasks.exe', '/Create /TN "\BackupDatabase\MachineStartup" /SC ONLOGON /TR ' + TaskRun + ' /F /RL LIMITED', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   if ResultCode <> 0 then
     Log('Warning: failed to create client startup scheduled task, exit=' + IntToStr(ResultCode));

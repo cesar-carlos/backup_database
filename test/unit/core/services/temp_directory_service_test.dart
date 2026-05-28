@@ -218,4 +218,15 @@ class _FakeMachineSettingsRepository implements IMachineSettingsRepository {
   Future<void> setScheduleTransferDestinationsJson(String? json) async {
     scheduleTransferDestinationsJson = json;
   }
+
+  String? pendingRemoteRunSnapshotJson;
+
+  @override
+  Future<String?> getPendingRemoteRunSnapshotJson() async =>
+      pendingRemoteRunSnapshotJson;
+
+  @override
+  Future<void> setPendingRemoteRunSnapshotJson(String? json) async {
+    pendingRemoteRunSnapshotJson = json;
+  }
 }

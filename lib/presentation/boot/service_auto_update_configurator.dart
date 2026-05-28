@@ -64,7 +64,13 @@ class ServiceAutoUpdateConfigurator {
     );
   }
 
-  Future<String?> _checkInstallReadiness(AppcastRelease release) async {
+  Future<String?> _checkInstallReadiness(
+    AppcastRelease release,
+    AppUpdateSource source,
+  ) async {
+    // No modo serviço o processo já roda como LocalSystem (validado
+    // pelo `ServiceAccountProbe`). UAC só importa para o caminho UI;
+    // por isso o checador de elevação **não** é chamado aqui.
     final serviceAccount = await accountProbe.probeInstalledAccount();
     return ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
       serviceAccount,

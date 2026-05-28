@@ -71,7 +71,10 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     () => ConnectionLogRepository(getIt<AppDatabase>()),
   );
   getIt.registerLazySingleton<IServerConnectionRepository>(
-    () => ServerConnectionRepository(getIt<AppDatabase>()),
+    () => ServerConnectionRepository(
+      getIt<AppDatabase>(),
+      getIt<ISecureCredentialService>(),
+    ),
   );
   getIt.registerLazySingleton<IMachineSettingsRepository>(
     () => MachineSettingsRepository(getIt<AppDatabase>()),
@@ -88,6 +91,12 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   // ========================================================================
 
   getIt.registerLazySingleton<ProcessService>(ProcessService.new);
+  // §audit-2026-05-28 wave 4: probe de elevação/UAC para gatear o
+  // auto-update silencioso (UI). Consulta `EnableLUA` no registry e
+  // o token do processo via PowerShell. Não-Windows = no-op.
+  getIt.registerLazySingleton<IElevationProbe>(
+    () => WindowsElevationProbe(processService: getIt<ProcessService>()),
+  );
   getIt.registerLazySingleton<IBackupCancellationService>(
     () => BackupCancellationService(getIt<ProcessService>()),
   );
@@ -251,7 +260,11 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
 
   getIt.registerLazySingleton<ConnectionManager>(
     () => ConnectionManager(
-      serverConnectionDao: getIt<AppDatabase>().serverConnectionDao,
+      // §audit-2026-05-28 wave 2 (P0): passar o repositório (em vez do
+      // DAO direto) garante que `connectToSavedConnection` leia a
+      // senha do vault DPAPI. O DAO sozinho devolve `password: ''`
+      // após a migração para secure storage da wave 1.
+      serverConnectionRepository: getIt<IServerConnectionRepository>(),
     ),
   );
   getIt.registerLazySingleton<BackupProgressProvider>(

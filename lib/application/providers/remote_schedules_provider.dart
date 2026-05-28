@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
@@ -11,6 +12,7 @@ import 'package:backup_database/core/utils/error_mapper.dart'
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
@@ -48,9 +50,15 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     RemoteFileTransferProvider? transferProvider,
     TempDirectoryService? tempDirectoryService,
     EnsureServerHealthyForBackup? ensureServerHealthy,
+    IMachineSettingsRepository? machineSettings,
   }) : _transferProvider = transferProvider,
        _tempDirectoryService =
            tempDirectoryService ?? getIt<TempDirectoryService>(),
+       _machineSettings =
+           machineSettings ??
+           (getIt.isRegistered<IMachineSettingsRepository>()
+               ? getIt<IMachineSettingsRepository>()
+               : null),
        _ensureServerHealthy =
            ensureServerHealthy ??
            (() =>
@@ -59,10 +67,15 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _queueEventsSubscription = _connectionManager.queueEvents.listen(
       _onQueueEvent,
     );
+    // §audit-2026-05-28 wave 3 (P2): tenta restaurar estado de run
+    // pendente do disco. Não bloqueia o construtor; quando carregar,
+    // a primeira `ConnectionStatus.connected` dispara o resume.
+    unawaited(_restorePendingRemoteRunFromDisk());
   }
 
   final ConnectionManager _connectionManager;
   final EnsureServerHealthyForBackup _ensureServerHealthy;
+  final IMachineSettingsRepository? _machineSettings;
 
   static Future<bool> _refreshServerHealthViaConnectionManager(
     ConnectionManager manager,
@@ -89,6 +102,20 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? _executingScheduleId;
   String? _activeRunId;
   bool _disconnectedDuringRun = false;
+
+  /// §audit-2026-05-28 wave 2 (P1): guarda contra dupla execução do
+  /// resume após reconnect. Antes, tanto o
+  /// `ServerConnectionProvider._listenToConnectionStatus` quanto o
+  /// `RemoteSchedulesPage._onConnectionChanged` chamavam este método
+  /// — se a página estivesse aberta no momento da reconexão, os dois
+  /// fluxos rodavam em paralelo (`getExecutionStatus`,
+  /// `waitForRemoteBackupCompletion`, `_finishBackupAndDownload`),
+  /// disparando downloads duplicados do mesmo `runId`.
+  ///
+  /// O `ServerConnectionProvider` é agora o **único owner** desta
+  /// chamada, mas mantemos a flag como defesa em profundidade
+  /// (re-entrância acidental por callbacks de UI futuros).
+  bool _isResumingAfterReconnect = false;
 
   String? _backupStep;
   String? _backupMessage;
@@ -463,6 +490,17 @@ class RemoteSchedulesProvider extends ChangeNotifier {
             onProgress: _onBackupProgress,
             onRunIdKnown: (runId) {
               _activeRunId = runId;
+              // §audit-2026-05-28 wave 3 (P2): persiste IMEDIATAMENTE
+              // ao saber o runId. Crash / auto-update entre aqui e o
+              // término do backup continua recuperável: no próximo
+              // boot lemos esse JSON e o `tryResumeExecutionAfterReconnect`
+              // já existente cuida do resto.
+              unawaited(
+                _persistPendingRemoteRunSnapshot(
+                  runId: runId,
+                  scheduleId: scheduleId,
+                ),
+              );
               notifyListeners();
             },
           )
@@ -692,6 +730,27 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       return;
     }
 
+    // §audit-2026-05-28 wave 2 (P1): guard de re-entrância. Owner único
+    // é o `ServerConnectionProvider`, mas se algum callback de UI
+    // ainda disparar (page resume, retry manual), o segundo caller
+    // simplesmente sai cedo — sem disparar downloads paralelos.
+    if (_isResumingAfterReconnect) {
+      LoggerService.debug(
+        '[remote_schedules] tryResumeExecutionAfterReconnect já em '
+        'execução para runId=$_activeRunId; ignorando re-entry',
+      );
+      return;
+    }
+    _isResumingAfterReconnect = true;
+
+    try {
+      await _tryResumeExecutionAfterReconnectInner();
+    } finally {
+      _isResumingAfterReconnect = false;
+    }
+  }
+
+  Future<void> _tryResumeExecutionAfterReconnectInner() async {
     final runId = _activeRunId!;
     final scheduleId = _executingScheduleId;
     if (scheduleId == null) {
@@ -935,7 +994,94 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     _isTransferringFile = false;
     _error = error;
     _lastErrorCode = errorCode;
+    // §audit-2026-05-28 wave 3 (P2): limpar o snapshot persistido.
+    // Reset é sempre terminal — sucesso, falha ou cancelamento — não
+    // queremos que o próximo boot tente "resumir" algo já encerrado.
+    unawaited(_clearPendingRemoteRunSnapshot());
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------
+  // Snapshot persistido de execução remota (P2 wave 3)
+  // ---------------------------------------------------------------
+
+  /// Grava `{runId, scheduleId, startedAt}` em
+  /// `IMachineSettingsRepository`. Best-effort: falha de I/O só vira
+  /// warning para não atrapalhar o fluxo de execução em si.
+  Future<void> _persistPendingRemoteRunSnapshot({
+    required String runId,
+    required String scheduleId,
+  }) async {
+    final settings = _machineSettings;
+    if (settings == null) return;
+    try {
+      final json = jsonEncode({
+        'v': 1,
+        'runId': runId,
+        'scheduleId': scheduleId,
+        'startedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+      await settings.setPendingRemoteRunSnapshotJson(json);
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        '[remote_schedules] Falha ao persistir snapshot de run pendente: $e',
+        e,
+        s,
+      );
+    }
+  }
+
+  Future<void> _clearPendingRemoteRunSnapshot() async {
+    final settings = _machineSettings;
+    if (settings == null) return;
+    try {
+      await settings.setPendingRemoteRunSnapshotJson(null);
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        '[remote_schedules] Falha ao limpar snapshot de run pendente: $e',
+        e,
+        s,
+      );
+    }
+  }
+
+  /// Lê o snapshot persistido (se existir) e popula `_activeRunId` /
+  /// `_executingScheduleId` em modo "desconectado durante run". A
+  /// próxima `ConnectionStatus.connected` dispara o
+  /// `tryResumeExecutionAfterReconnect` que já existia, agora cobrindo
+  /// o caminho de **restart do processo** além de simples drop de
+  /// conexão.
+  Future<void> _restorePendingRemoteRunFromDisk() async {
+    final settings = _machineSettings;
+    if (settings == null) return;
+    try {
+      final raw = await settings.getPendingRemoteRunSnapshotJson();
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+      final runId = decoded['runId'] as String?;
+      final scheduleId = decoded['scheduleId'] as String?;
+      if (runId == null || runId.isEmpty) return;
+      if (scheduleId == null || scheduleId.isEmpty) return;
+      _activeRunId = runId;
+      _executingScheduleId = scheduleId;
+      _disconnectedDuringRun = true;
+      _backupStep = 'Aguardando reconexão';
+      _backupMessage =
+          'Execução remota pendente detectada do boot anterior; '
+          'retomaremos assim que a conexão for restabelecida.';
+      LoggerService.info(
+        '[remote_schedules] Snapshot pré-restart restaurado: '
+        'runId=$runId, scheduleId=$scheduleId',
+      );
+      notifyListeners();
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        '[remote_schedules] Falha ao restaurar snapshot pré-restart: $e',
+        e,
+        s,
+      );
+    }
   }
 
   Future<bool> cancelQueuedRemoteBackup(String runId) async {

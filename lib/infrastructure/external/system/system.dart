@@ -6,6 +6,7 @@ export 'os_version_checker.dart';
 export 'single_instance_ipc_client.dart';
 export 'single_instance_service.dart';
 export 'storage_checker.dart';
+export 'windows_elevation_probe.dart';
 export 'windows_event_log_service.dart';
 export 'windows_machine_startup_service.dart';
 export 'windows_message_box.dart';

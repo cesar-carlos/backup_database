@@ -123,6 +123,11 @@ Future<void> setupPresentationModule(GetIt getIt) async {
     () => RemoteSchedulesProvider(
       getIt<ConnectionManager>(),
       transferProvider: getIt<RemoteFileTransferProvider>(),
+      // §audit-2026-05-28 wave 3 (P2): permite o provider persistir
+      // `runId/scheduleId` da execução remota em andamento — assim
+      // crash / auto-update entre o início do backup e o final ainda
+      // é recuperável pela rotina de resume após reconnect.
+      machineSettings: getIt<IMachineSettingsRepository>(),
       ensureServerHealthy: () async {
         final connectionProvider = getIt<ServerConnectionProvider>();
         await connectionProvider.refreshServerStatus();

@@ -14,6 +14,7 @@ export 'i_database_backup_port.dart';
 export 'i_destination_orchestrator.dart';
 export 'i_device_key_service.dart';
 export 'i_dropbox_destination_service.dart';
+export 'i_elevation_probe.dart';
 export 'i_email_service.dart';
 export 'i_execution_queue_bootstrap.dart';
 export 'i_execution_queue_housekeeping_scheduler.dart';

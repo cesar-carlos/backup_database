@@ -264,8 +264,15 @@ typedef DetachedProcessStarter =
       List<String> arguments,
     );
 typedef BeforeInstallHook = Future<void> Function();
+
+/// §audit-2026-05-28 wave 4: o callback agora recebe também o
+/// [AppUpdateSource] da checagem. Permite decidir, p.ex., bloquear o
+/// install silencioso quando a origem for `periodic`/`startup` (e o
+/// SO vai disparar prompt UAC sem usuário olhar) e deixar passar
+/// quando for `manual` (usuário sabe que vai aparecer o prompt e está
+/// disposto a confirmar).
 typedef InstallReadinessCheck =
-    Future<String?> Function(AppcastRelease release);
+    Future<String?> Function(AppcastRelease release, AppUpdateSource source);
 typedef UpdateInstallContextProvider =
     Future<AppUpdateInstallContext> Function(AppcastRelease release);
 typedef FreeDiskSpaceProbe = Future<int?> Function(Directory directory);
@@ -1063,7 +1070,7 @@ class AutoUpdateService {
         ),
       );
 
-      final blockReason = await installReadinessCheck?.call(release);
+      final blockReason = await installReadinessCheck?.call(release, source);
       if (blockReason != null) {
         throw AppUpdateBlockedException(
           message: blockReason,

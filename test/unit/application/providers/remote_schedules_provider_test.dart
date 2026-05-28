@@ -293,6 +293,48 @@ void main() {
     });
 
     test(
+      '§audit-2026-05-28 wave 2 P1: '
+      'concurrent tryResumeExecutionAfterReconnect runs only once',
+      () async {
+        // Regressão: na wave 2 descobrimos que ServerConnectionProvider e
+        // RemoteSchedulesPage chamavam o resume em paralelo quando o
+        // usuário estava na página no momento da reconexão. O segundo
+        // caller disparava `getExecutionStatus` de novo e duplicava
+        // downloads do mesmo runId. Agora a página delegou ao
+        // ServerConnectionProvider e o provider tem guard de
+        // re-entrância — defesa em profundidade caso algum caller
+        // futuro volte a chamar duas vezes.
+        connectionManager.remoteBackupCompleter =
+            Completer<rd.Result<String>>();
+        unawaited(provider.executeSchedule(scheduleId));
+        await Future<void>.delayed(Duration.zero);
+        provider.clearExecutionStateOnDisconnect();
+
+        connectionManager.executionStatusToReturn = ExecutionStatusResult(
+          runId: '${scheduleId}_run-test',
+          state: ExecutionState.running,
+          serverTimeUtc: DateTime.utc(2026),
+          scheduleId: scheduleId,
+        );
+        connectionManager.waitForCompletionResult = const rd.Success(
+          'remote/sch_run-test/file.bak',
+        );
+
+        // Dispara dois resumes em paralelo
+        final f1 = provider.tryResumeExecutionAfterReconnect();
+        final f2 = provider.tryResumeExecutionAfterReconnect();
+        await Future.wait([f1, f2]);
+
+        // Só um deles efetivamente bateu no servidor
+        expect(connectionManager.getExecutionStatusCallCount, 1);
+        expect(connectionManager.attachListenerCallCount, 1);
+        expect(connectionManager.waitForCompletionCallCount, 1);
+
+        connectionManager.remoteBackupCompleter!.complete(const rd.Success(''));
+      },
+    );
+
+    test(
       'should clear state when artifact expired on completed resume',
       () async {
         connectionManager.remoteBackupCompleter =

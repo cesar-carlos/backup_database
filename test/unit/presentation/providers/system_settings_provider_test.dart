@@ -172,7 +172,12 @@ void main() {
         final call = startup.calls.first;
         expect(call.enabled, isTrue);
         expect(call.installScheduledTask, isTrue);
-        expect(call.taskArguments, '--launch-origin=windows-startup');
+        // §audit-2026-05-28: a task agora carrega --mode=client
+        // explicito para nao depender de {app}\.install_mode.
+        expect(
+          call.taskArguments,
+          '--mode=client --launch-origin=windows-startup',
+        );
         expect(startup.inspectCalls, equals(1));
       },
     );
@@ -246,7 +251,11 @@ void main() {
         final call = startup.calls.first;
         expect(call.enabled, isTrue);
         expect(call.installScheduledTask, isTrue);
-        expect(call.taskArguments, '--launch-origin=windows-startup');
+        // §audit-2026-05-28: --mode=client agora vai junto da task.
+        expect(
+          call.taskArguments,
+          '--mode=client --launch-origin=windows-startup',
+        );
         expect(startup.inspectCalls, equals(1));
       },
     );
@@ -277,6 +286,32 @@ void main() {
         expect(machineSettings.startWithWindows, isFalse);
         expect(startup.calls, isEmpty);
         expect(startup.inspectCalls, equals(1));
+      },
+    );
+
+    test(
+      'should NOT inject --mode=client in unified mode',
+      () async {
+        // §audit-2026-05-28: o modo unified e legado mas continua valido
+        // como fallback interno. Nao devemos injetar --mode=client nele.
+        SharedPreferences.setMockInitialValues({});
+        final startup = _FakeWindowsMachineStartupService();
+        final provider = SystemSettingsProvider(
+          machineSettingsRepository: _FakeMachineSettingsRepository(),
+          userPreferencesRepository: UserPreferencesRepository(),
+          windowsMachineStartupService: startup,
+          executablePathProvider: () => r'C:\Apps\BackupDatabase.exe',
+          appModeProvider: () => AppMode.unified,
+        );
+        await provider.initialize();
+        startup.calls.clear();
+
+        await provider.setStartWithWindows(true);
+
+        expect(startup.calls.length, equals(1));
+        final call = startup.calls.first;
+        expect(call.taskArguments, '--launch-origin=windows-startup');
+        expect(call.taskArguments, isNot(contains('--mode=')));
       },
     );
 
@@ -439,6 +474,17 @@ class _FakeMachineSettingsRepository implements IMachineSettingsRepository {
   @override
   Future<void> setScheduleTransferDestinationsJson(String? json) async {
     scheduleTransferDestinationsJson = json;
+  }
+
+  String? pendingRemoteRunSnapshotJson;
+
+  @override
+  Future<String?> getPendingRemoteRunSnapshotJson() async =>
+      pendingRemoteRunSnapshotJson;
+
+  @override
+  Future<void> setPendingRemoteRunSnapshotJson(String? json) async {
+    pendingRemoteRunSnapshotJson = json;
   }
 }
 

@@ -19,8 +19,14 @@ abstract final class AppModePolicy {
   }
 
   /// Server-only routes blocked when running in client mode.
+  ///
+  /// Local SGBD configuration pages (SQL Server, Sybase, …) live under one
+  /// page (`DatabaseConfigPage`) reused for every native driver. Every new
+  /// local-SGBD route MUST be added here when introduced, otherwise the
+  /// client would bypass the mode gate by typing the URL directly.
   static const Set<String> _clientBlockedRoutes = {
     RouteNames.sqlServerConfig,
+    RouteNames.sybaseConfig,
     RouteNames.schedules,
     RouteNames.serverSettings,
     RouteNames.logs,
