@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/connection_log_provider.dart';
 import 'package:backup_database/application/providers/dashboard_provider.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
@@ -233,8 +234,7 @@ class _MainLayoutState extends State<MainLayout> {
           );
         }
       case RouteNames.connectionLogs:
-        // loadLogs() é chamado no initState do widget
-        break;
+        unawaited(context.read<ConnectionLogProvider>().loadLogs());
     }
   }
 

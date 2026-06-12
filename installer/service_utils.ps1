@@ -24,6 +24,25 @@ function Test-ServiceScQueryRunning {
     return $false
 }
 
+function Test-ServiceScQueryStopped {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ScQueryOutput
+    )
+
+    $upper = $ScQueryOutput.ToUpperInvariant()
+    if ($upper.Contains('STOPPED')) {
+        return $true
+    }
+    if ($upper.Contains('PARADO')) {
+        return $true
+    }
+    if ($ScQueryOutput -match '(?:STATE|ESTADO)\s*:\s*1\b') {
+        return $true
+    }
+    return $false
+}
+
 function Get-ServiceScQueryStatus {
     param(
         [Parameter(Mandatory = $true)]
@@ -38,9 +57,13 @@ function Get-ServiceScQueryStatus {
         $stateName = $Matches[1]
     }
 
+    $isRunning = ($exitCode -eq 0) -and (Test-ServiceScQueryRunning -ScQueryOutput $output)
+    $isStopped = ($exitCode -eq 0) -and (Test-ServiceScQueryStopped -ScQueryOutput $output)
+
     return [PSCustomObject]@{
         ExitCode = $exitCode
-        IsRunning = ($exitCode -eq 0) -and (Test-ServiceScQueryRunning -ScQueryOutput $output)
+        IsRunning = $isRunning
+        IsStopped = $isStopped
         StateName = $stateName
         RawOutput = $output
     }
@@ -123,4 +146,53 @@ function Start-WindowsServiceWithPolling {
         -TimeoutSeconds $TimeoutSeconds `
         -IntervalSeconds $IntervalSeconds `
         -InitialDelaySeconds $InitialDelaySeconds
+}
+
+function Wait-ServiceStopped {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName,
+        [int]$TimeoutSeconds = $script:ServiceStartPollingTimeoutSeconds,
+        [int]$IntervalSeconds = $script:ServiceStartPollingIntervalSeconds,
+        [int]$InitialDelaySeconds = $script:ServiceStartPollingInitialDelaySeconds
+    )
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $pollCount = 0
+    $lastStatus = $null
+
+    if ($InitialDelaySeconds -gt 0) {
+        Start-Sleep -Seconds $InitialDelaySeconds
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds $IntervalSeconds
+        $pollCount++
+        $lastStatus = Get-ServiceScQueryStatus -ServiceName $ServiceName
+
+        Write-Host (
+            "Wait-ServiceStopped: poll=$pollCount " +
+            "stopped=$($lastStatus.IsStopped) state=$($lastStatus.StateName)"
+        )
+
+        if ($lastStatus.IsStopped) {
+            Write-Host (
+                "Wait-ServiceStopped: converged in $($stopwatch.ElapsedMilliseconds)ms"
+            )
+            return $true
+        }
+    }
+
+    $lastState = if ($null -ne $lastStatus) { $lastStatus.StateName } else { 'unknown' }
+    $message = (
+        "Timeout ao aguardar STOPPED para '$ServiceName' apos " +
+        "$($stopwatch.ElapsedMilliseconds)ms. Ultimo estado: $lastState"
+    )
+    Write-Warning $message
+    if ($null -ne $lastStatus -and -not [string]::IsNullOrWhiteSpace($lastStatus.RawOutput)) {
+        Write-Warning $lastStatus.RawOutput
+    }
+    return $false
 }

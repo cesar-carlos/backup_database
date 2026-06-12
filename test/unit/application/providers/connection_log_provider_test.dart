@@ -12,7 +12,7 @@ final _sampleLogs = <ConnectionLog>[
     id: '1',
     clientHost: '192.168.1.1',
     success: true,
-    timestamp: DateTime(2026, 1, 1),
+    timestamp: DateTime(2026),
   ),
 ];
 
@@ -24,6 +24,19 @@ void main() {
     setUp(() {
       repository = _MockRepository();
       provider = ConnectionLogProvider(repository);
+    });
+
+    test('sets generic error message when repository fails', () async {
+      when(() => repository.getRecentLogs(any())).thenAnswer(
+        (_) async => rd.Failure(Exception('database unavailable')),
+      );
+
+      await provider.loadLogs();
+
+      expect(
+        provider.error,
+        'Erro ao carregar log de conexões: Exception: database unavailable',
+      );
     });
 
     test('returns early when already loading', () async {

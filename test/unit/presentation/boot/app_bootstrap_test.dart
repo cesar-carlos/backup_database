@@ -296,9 +296,11 @@ AppBootstrapDependencies _buildDependencies({
     ),
     temporaryBackupCleanupStartupTask: TemporaryBackupCleanupStartupTask(
       isSchedulerRegistered: () => true,
+      shouldSkipCleanup: (_) async => false,
       startScheduler: () {
         events.add('temp_cleanup_start');
       },
+      logInfo: _ignoreLog,
       logWarning: _ignoreLogWithError,
     ),
   );

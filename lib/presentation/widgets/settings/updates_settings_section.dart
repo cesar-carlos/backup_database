@@ -169,6 +169,13 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
               'Servico Windows precisa estar em LocalSystem.',
               'Windows Service must run as LocalSystem.',
             );
+          case AppUpdateBlockReason.readinessCheckUnavailable:
+            return appLocaleString(
+              context,
+              'Nao foi possivel verificar se o app esta pronto para atualizar. '
+                  'Tente novamente em instantes.',
+              'Could not verify install readiness. Try again shortly.',
+            );
           case AppUpdateBlockReason.localBackupRunning:
           case null:
             return appLocaleString(
@@ -293,6 +300,8 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
         return 'uac_policy';
       case AppUpdateBlockReason.serviceAccountUnsupported:
         return 'service_account_unsupported';
+      case AppUpdateBlockReason.readinessCheckUnavailable:
+        return 'readiness_check_unavailable';
     }
   }
 

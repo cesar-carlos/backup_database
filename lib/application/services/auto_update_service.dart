@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:backup_database/application/services/auto_update/app_update_decision_engine.dart';
 import 'package:backup_database/application/services/auto_update/appcast_parser.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/exit_codes.dart';
+import 'package:backup_database/core/service/service_shutdown_handler.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -97,6 +99,10 @@ enum AppUpdateBlockReason {
   /// `LocalSystem` (ver `ServiceAccountProbe`). Bloqueio permanente
   /// até reinstalar o serviço; ação manual exige reinstall.
   serviceAccountUnsupported,
+
+  /// Falha ao consultar providers de prontidão (ex.: exceção inesperada).
+  /// Fail-closed: não arriscar handoff sem saber se há backup ativo.
+  readinessCheckUnavailable,
 }
 
 /// Resultado tipado da checagem de readiness. Antes a função devolvia
@@ -409,6 +415,18 @@ class AppUpdateInstallContext {
   }
 }
 
+class BeforeInstallHookTimeoutException implements Exception {
+  BeforeInstallHookTimeoutException(this.timeout);
+
+  final Duration timeout;
+
+  @override
+  String toString() =>
+      'A preparação para a atualização excedeu o tempo limite de '
+      '${timeout.inSeconds} segundos. Verifique se há backups ou '
+      'transferências em andamento e tente novamente.';
+}
+
 class AppUpdateBlockedException implements Exception {
   const AppUpdateBlockedException({
     required this.message,
@@ -481,6 +499,8 @@ class AutoUpdateService {
     FreeDiskSpaceProbe? freeDiskSpaceProbe,
     ProcessAliveCheck? processAliveCheck,
     MachineIdResolver? machineIdResolver,
+    @visibleForTesting Duration? beforeInstallHookTimeout,
+    @visibleForTesting Duration? installerSpawnGracePeriod,
   }) : _dio = dio ?? Dio(),
        _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
        _feedUrlReader =
@@ -496,7 +516,9 @@ class AutoUpdateService {
        _exitProcess = exitProcess ?? exit,
        _freeDiskSpaceProbe = freeDiskSpaceProbe ?? _defaultFreeDiskSpaceProbe,
        _processAliveCheck = processAliveCheck ?? _defaultProcessAliveCheck,
-       _machineIdResolver = machineIdResolver ?? _defaultMachineIdResolver {
+       _machineIdResolver = machineIdResolver ?? _defaultMachineIdResolver,
+       _beforeInstallHookTimeoutOverride = beforeInstallHookTimeout,
+       _installerSpawnGracePeriodOverride = installerSpawnGracePeriod {
     _applyDefaultNetworkTimeouts(_dio);
   }
 
@@ -514,11 +536,15 @@ class AutoUpdateService {
   /// `_cleanupStagedInstallers`. Em `staged/updates` raramente cresce.
   static const int _minFreeSpaceFactor = 2;
 
+  /// Timeout do `beforeInstallHook` em modo UI (cleanup de backups locais).
+  @visibleForTesting
+  static const Duration beforeInstallHookTimeoutUi = Duration(seconds: 90);
+
   /// Janela curta para confirmar que o instalador silencioso realmente
-  /// iniciou (processo vivo + setup.iss removeu o `update_context.json`).
-  /// Acima disso, ainda assumimos sucesso para nao bloquear o handoff em
-  /// VMs muito lentas, mas registramos a duracao em telemetria.
-  static const Duration _installerSpawnGracePeriod = Duration(seconds: 5);
+  /// iniciou (pid vivo pelo menos uma vez dentro da janela).
+  static const Duration _defaultInstallerSpawnGracePeriod = Duration(
+    seconds: 5,
+  );
 
   /// Espera curta antes do `exit()` para o S.O. registrar o spawn detached.
   static const Duration _exitGracePeriod = Duration(milliseconds: 250);
@@ -562,6 +588,17 @@ class AutoUpdateService {
   final FreeDiskSpaceProbe _freeDiskSpaceProbe;
   final ProcessAliveCheck _processAliveCheck;
   final MachineIdResolver _machineIdResolver;
+  final Duration? _beforeInstallHookTimeoutOverride;
+  final Duration? _installerSpawnGracePeriodOverride;
+
+  Duration get _beforeInstallHookTimeout =>
+      _beforeInstallHookTimeoutOverride ??
+      (ServiceModeDetector.isServiceMode()
+          ? ServiceShutdownHandler.defaultGracefulShutdownTimeout
+          : beforeInstallHookTimeoutUi);
+
+  Duration get _installerSpawnGracePeriod =>
+      _installerSpawnGracePeriodOverride ?? _defaultInstallerSpawnGracePeriod;
 
   final StreamController<AppUpdateSnapshot> _snapshotController =
       StreamController<AppUpdateSnapshot>.broadcast();
@@ -952,7 +989,7 @@ class AutoUpdateService {
     final now = DateTime.now();
     final currentVersion = await _resolveCurrentVersion();
     String? targetVersion;
-    var lockReleased = false;
+    var handoffExitInvoked = false;
     int? installerBytes;
     AppUpdateInstallContext? installContext;
 
@@ -1132,7 +1169,7 @@ class AutoUpdateService {
       await transitionStage(AppUpdateStage.preparingInstall);
       _emitSnapshot(
         _snapshot.copyWith(
-          status: AppUpdateStatus.installing,
+          status: AppUpdateStatus.downloading,
           release: release,
           stage: currentStage,
           lastDownloadDuration: downloadDuration,
@@ -1153,8 +1190,32 @@ class AutoUpdateService {
       }
 
       if (beforeInstallHook != null) {
-        await beforeInstallHook!.call();
+        final hookTimeout = _beforeInstallHookTimeout;
+        try {
+          await beforeInstallHook!.call().timeout(
+            hookTimeout,
+            onTimeout: () {
+              throw BeforeInstallHookTimeoutException(hookTimeout);
+            },
+          );
+        } on BeforeInstallHookTimeoutException {
+          rethrow;
+        } on TimeoutException {
+          throw BeforeInstallHookTimeoutException(hookTimeout);
+        }
       }
+
+      _emitSnapshot(
+        _snapshot.copyWith(
+          status: AppUpdateStatus.installing,
+          release: release,
+          stage: currentStage,
+          lastDownloadDuration: downloadDuration,
+          message:
+              'Preparacao concluida. Iniciando troca silenciosa para '
+              '${release.targetVersion}.',
+        ),
+      );
 
       installContext = await _persistInstallContext(
         release: release,
@@ -1215,8 +1276,9 @@ class AutoUpdateService {
         installerBytes: installerBytes,
         downloadDuration: downloadDuration,
       );
-      await lockHandle.release();
-      lockReleased = true;
+      // Mantem o lock global ate o processo encerrar — evita que outra
+      // instancia inicie um segundo handoff durante a janela do setup.
+      handoffExitInvoked = true;
       await Future<void>.delayed(_exitGracePeriod);
 
       // Exit code dinamico: em modo servico usamos `handoffForInstaller (78)`
@@ -1276,13 +1338,14 @@ class AutoUpdateService {
         e,
         s,
       );
+      final userErrorMessage = _pipelineErrorMessage(e);
       _emitSnapshot(
         _snapshot.copyWith(
           status: AppUpdateStatus.error,
           currentVersion: currentVersion.toString(),
           stage: currentStage,
           message: 'Falha ao processar a atualizacao automatica.',
-          errorMessage: e.toString(),
+          errorMessage: userErrorMessage,
           lastCheckAt: now,
           lastErrorAt: now,
           lastSource: source,
@@ -1302,12 +1365,12 @@ class AutoUpdateService {
         status: AppUpdateStatus.error,
         startedAt: now,
         duration: checkStopwatch.elapsed,
-        errorMessage: e.toString(),
+        errorMessage: userErrorMessage,
         installerBytes: installerBytes,
         downloadDuration: downloadDuration,
       );
     } finally {
-      if (!lockReleased) {
+      if (!handoffExitInvoked) {
         await lockHandle.release();
       }
     }
@@ -1402,12 +1465,9 @@ class AutoUpdateService {
 
   /// Confirma que o instalador detached realmente iniciou. Estrategia:
   /// 1. Pula a checagem se o starter custom nao expoe pid (testes).
-  /// 2. Espera ate `_installerSpawnGracePeriod` (5s) verificando o pid em
-  ///    janelas curtas. Se o processo morrer cedo, devolve false.
-  /// 3. Como heuristica adicional, considera vivo se o `update_context.json`
-  ///    ainda existir (o `setup.iss` so apaga apos `restore_update_state.ps1`).
-  ///
-  /// Retorna `true` quando assumimos sucesso (suficiente para chamar `exit`).
+  /// 2. Espera ate [_installerSpawnGracePeriod] verificando o pid em
+  ///    janelas curtas. Exige evidencia positiva (pid vivo ao menos uma vez).
+  /// 3. Se a janela expira sem evidencia, falha o handoff (fail-closed).
   Future<bool> _waitForInstallerSpawn(DetachedProcessHandle? handle) async {
     if (handle == null) {
       // Fallback retro: starter custom (ex.: testes) que nao expoe pid;
@@ -1417,24 +1477,23 @@ class AutoUpdateService {
 
     final deadline = DateTime.now().add(_installerSpawnGracePeriod);
     const pollInterval = Duration(milliseconds: 250);
-    var attempts = 0;
+    var consecutiveDeadChecks = 0;
+    var sawAliveOnce = false;
+
     while (DateTime.now().isBefore(deadline)) {
-      attempts++;
       if (_processAliveCheck(handle.pid)) {
-        // Encontramos o pid pelo menos uma vez — o Inno extrai recursos no
-        // %TEMP% por ~1s antes de spawnar children; basta o pai estar vivo.
-        if (attempts >= 2) {
-          return true;
+        sawAliveOnce = true;
+        consecutiveDeadChecks = 0;
+      } else {
+        consecutiveDeadChecks++;
+        if (consecutiveDeadChecks >= 2 && !sawAliveOnce) {
+          return false;
         }
-      } else if (attempts >= 2) {
-        // Duas tentativas seguidas sem o pid: confirmamos que morreu cedo.
-        return false;
       }
       await Future<void>.delayed(pollInterval);
     }
-    // Esgotou janela com checks inconclusivos: assume sucesso para nao
-    // bloquear o handoff em VMs muito lentas.
-    return true;
+
+    return sawAliveOnce || _processAliveCheck(handle.pid);
   }
 
   Future<Version> _resolveCurrentVersion() async {
@@ -2043,6 +2102,19 @@ class AutoUpdateService {
       case DioExceptionType.unknown:
         return false;
     }
+  }
+
+  static String _pipelineErrorMessage(Object error) {
+    if (error is AppUpdateBlockedException) {
+      return error.message;
+    }
+    if (error is StateError) {
+      return error.message;
+    }
+    return failureUserMessage(
+      error,
+      fallback: 'Falha ao processar a atualizacao automatica.',
+    );
   }
 
   static void _applyDefaultNetworkTimeouts(Dio dio) {

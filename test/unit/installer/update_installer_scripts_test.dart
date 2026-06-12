@@ -63,6 +63,43 @@ void main() {
         expect(setup, contains('-StartAfterInstall'));
         expect(setup, contains('RUNNING confirmed'));
         expect(setup, contains('did not reach RUNNING within polling timeout'));
+        expect(setup, contains('WaitForServiceStopped'));
+        expect(setup, contains('Wait-ServiceStopped'));
+        expect(setup, contains('STOPPED confirmed'));
+        expect(
+          setup,
+          contains('did not reach STOPPED within polling timeout'),
+        );
+      },
+    );
+
+    test(
+      'setup.iss distinguishes merge_env and restore exit code 2',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+
+        expect(setup, contains('RunTempPowerShellScriptEx'));
+        expect(setup, contains('MergeExitCode'));
+        expect(setup, contains('RestoreExitCode'));
+        expect(
+          setup,
+          contains('merge_env.ps1 exit 2 — chave critica ausente'),
+        );
+        expect(setup, contains('AUTO_UPDATE_FEED_URL'));
+        expect(
+          setup,
+          contains('instalacao silenciosa abortada por merge_env.ps1 exit 2'),
+        );
+        expect(
+          setup,
+          contains('restore_update_state.ps1 exit 2'),
+        );
+        expect(
+          setup,
+          contains('update_context.json preservado para retry'),
+        );
       },
     );
 
@@ -283,6 +320,78 @@ void main() {
   });
 
   group('installer PowerShell scripts', () {
+    test(
+      'service_utils timing constants mirror WindowsServiceTimingConfig',
+      () async {
+        final serviceUtils = await _repoFile(
+          p.join('installer', 'service_utils.ps1'),
+        ).readAsString();
+        final timingConfig = await _repoFile(
+          p.join(
+            'lib',
+            'infrastructure',
+            'external',
+            'system',
+            'windows_service',
+            'windows_service_timing_config.dart',
+          ),
+        ).readAsString();
+
+        expect(
+          serviceUtils,
+          contains(
+            r'$script:ServiceStartPollingInitialDelaySeconds = 3',
+          ),
+        );
+        expect(
+          serviceUtils,
+          contains(r'$script:ServiceStartPollingIntervalSeconds = 1'),
+        );
+        expect(
+          serviceUtils,
+          contains(r'$script:ServiceStartPollingTimeoutSeconds = 30'),
+        );
+        expect(
+          timingConfig,
+          contains('startPollingInitialDelay = const Duration(seconds: 3)'),
+        );
+        expect(
+          timingConfig,
+          contains('startPollingInterval = const Duration(seconds: 1)'),
+        );
+        expect(
+          timingConfig,
+          contains('startPollingTimeout = const Duration(seconds: 30)'),
+        );
+        expect(serviceUtils, contains('function Wait-ServiceStopped'));
+        expect(serviceUtils, contains('function Test-ServiceScQueryStopped'));
+      },
+    );
+
+    test(
+      'restore_update_state documents exit 2 and preserves context on timeout',
+      () async {
+        final restoreScript = await _repoFile(
+          p.join('installer', 'restore_update_state.ps1'),
+        ).readAsString();
+
+        expect(restoreScript, contains('Exit codes'));
+        expect(restoreScript, contains('exit 2'));
+        expect(
+          restoreScript,
+          contains('update_context.json e PRESERVADO'),
+        );
+        expect(
+          restoreScript,
+          contains('Exit 2: update_context.json preservado para retry'),
+        );
+        expect(
+          restoreScript,
+          contains(r'install $ServiceName "`"$AppPath`""'),
+        );
+      },
+    );
+
     test(
       'merge_env preserves existing values and fills missing keys',
       () async {

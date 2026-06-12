@@ -1,4 +1,11 @@
 # Restaura o estado operacional apos update silencioso.
+#
+# Exit codes (contrato com setup.iss / install_service.ps1):
+#   0 = sucesso; update_context.json removido ao final
+#   1 = falha generica (exception, NSSM start falhou, etc.)
+#   2 = condicao recuperavel: conta nao-LocalSystem OU servico nao
+#       atingiu RUNNING no polling. update_context.json e PRESERVADO
+#       para retry/debug.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -202,7 +209,10 @@ if ($serviceExists) {
         Start-Sleep -Seconds 2
     }
 
-    Set-NssmValue -Arguments @("install", $ServiceName, $AppPath)
+    & $NssmPath install $ServiceName "`"$AppPath`""
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao executar: $NssmPath install $ServiceName `"$AppPath`""
+    }
     Start-Sleep -Seconds 2
 
     Set-NssmValue -Arguments @(
@@ -317,8 +327,10 @@ if ($serviceExists) {
         if (-not $isRunning) {
             Write-RestoreError -Message (
                 "Servico $ServiceName restaurado mas nao atingiu RUNNING dentro de " +
-                "$script:ServiceStartPollingTimeoutSeconds segundos apos NSSM start."
+                "$script:ServiceStartPollingTimeoutSeconds segundos apos NSSM start. " +
+                "Exit 2: update_context.json preservado para retry."
             )
+            exit 2
         }
     }
 }

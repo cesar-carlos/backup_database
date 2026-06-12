@@ -9,8 +9,13 @@ class ConnectionLogPage extends StatelessWidget {
     return const ScaffoldPage(
       header: PageHeader(title: Text('Log de Conexões')),
       content: Padding(
-        padding: EdgeInsets.all(24),
-        child: ConnectionLogsList(),
+        padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: ConnectionLogsList()),
+          ],
+        ),
       ),
     );
   }

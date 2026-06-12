@@ -133,6 +133,24 @@ void main() {
       expect(await checkInstallReadiness(getIt: locator), isNull);
     });
 
+    test(
+      'blocks update when readiness provider throws (fail-closed)',
+      () async {
+        final backup = _MockBackupProgress();
+        when(() => backup.isRunning).thenThrow(StateError('provider down'));
+        locator.registerSingleton<BackupProgressProvider>(backup);
+
+        final outcome = await checkInstallReadiness(getIt: locator);
+
+        expect(outcome, isNotNull);
+        expect(
+          outcome!.reason,
+          AppUpdateBlockReason.readinessCheckUnavailable,
+        );
+        expect(outcome.message, contains('Não foi possível verificar'));
+      },
+    );
+
     test('local UI backup takes precedence over remote ones', () async {
       // Determinismo: se ambos local e remoto estiverem ativos, o
       // local ganha porque é o caminho mais critico (UI vai sumir

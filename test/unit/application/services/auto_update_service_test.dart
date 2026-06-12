@@ -308,7 +308,7 @@ void main() {
 
         expect(beforeInstallCalls, 1);
         expect(exitCode, 0);
-        expect(lockExistsAtExit, isFalse);
+        expect(lockExistsAtExit, isTrue);
         expect(launchedExecutable, isNotNull);
         expect(
           p.basename(launchedExecutable!),
@@ -368,6 +368,197 @@ void main() {
         expect(updateContextJson['relaunchArguments'], isA<List<dynamic>>());
 
         await subscription.cancel();
+        await service.dispose();
+        await server.close(force: true);
+        await tempDir.delete(recursive: true);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'fails with error when beforeInstallHook exceeds timeout',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_hook_timeout_test',
+        );
+        final locksDir = Directory(p.join(tempDir.path, 'locks'));
+        final updatesDir = Directory(p.join(tempDir.path, 'updates'));
+        final installerBytes = <int>[1, 2, 3, 4, 5, 6];
+        final payloadFile = File(p.join(tempDir.path, 'payload.exe'));
+        await payloadFile.writeAsBytes(installerBytes);
+        final installerSha256 = await FileHashUtils.computeSha256(payloadFile);
+
+        late final HttpServer server;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final baseUrl = 'http://${server.address.address}:${server.port}';
+
+        unawaited(
+          server.forEach((request) async {
+            if (request.uri.path == '/appcast.xml') {
+              request.response.headers.contentType = ContentType(
+                'application',
+                'xml',
+                charset: 'utf-8',
+              );
+              request.response.write(
+                _buildFeed(
+                  items: [
+                    _buildItem(
+                      version: '3.0.2',
+                      length: installerBytes.length,
+                      sha256: installerSha256,
+                      url: '$baseUrl/BackupDatabase-Setup-3.0.2.exe',
+                    ),
+                  ],
+                ),
+              );
+            } else if (request.uri.path == '/BackupDatabase-Setup-3.0.2.exe') {
+              request.response.add(installerBytes);
+            } else {
+              request.response.statusCode = HttpStatus.notFound;
+            }
+            await request.response.close();
+          }),
+        );
+
+        var exitCalled = false;
+        final hookEntered = Completer<void>();
+        final service = AutoUpdateService(
+          dio: Dio(),
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => '$baseUrl/appcast.xml',
+          locksDirectoryResolver: () async => locksDir,
+          updatesDirectoryResolver: () async => updatesDir,
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {
+            exitCalled = true;
+          },
+          beforeInstallHookTimeout: const Duration(milliseconds: 50),
+        );
+        service.beforeInstallHook = () async {
+          hookEntered.complete();
+          await Completer<void>().future;
+        };
+
+        await service.initialize();
+        final checkFuture = service.checkNow(source: AppUpdateSource.manual);
+        await hookEntered.future.timeout(const Duration(seconds: 5));
+        await checkFuture;
+
+        expect(exitCalled, isFalse);
+        expect(service.snapshot.status, AppUpdateStatus.error);
+        expect(service.snapshot.stage, AppUpdateStage.preparingInstall);
+        expect(
+          service.snapshot.errorMessage,
+          contains('tempo limite'),
+        );
+        expect(
+          service.snapshot.errorMessage,
+          isNot(contains('Failure(message:')),
+        );
+        final updateContext = File(
+          p.join(updatesDir.path, 'update_context.json'),
+        );
+        expect(await updateContext.exists(), isFalse);
+
+        await service.dispose();
+        await server.close(force: true);
+        await tempDir.delete(recursive: true);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'keeps global lock while beforeInstallHook is running',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_lock_held_test',
+        );
+        final locksDir = Directory(p.join(tempDir.path, 'locks'));
+        final updatesDir = Directory(p.join(tempDir.path, 'updates'));
+        final installerBytes = <int>[1, 2, 3, 4, 5, 6];
+        final payloadFile = File(p.join(tempDir.path, 'payload.exe'));
+        await payloadFile.writeAsBytes(installerBytes);
+        final installerSha256 = await FileHashUtils.computeSha256(payloadFile);
+
+        late final HttpServer server;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final baseUrl = 'http://${server.address.address}:${server.port}';
+
+        unawaited(
+          server.forEach((request) async {
+            if (request.uri.path == '/appcast.xml') {
+              request.response.headers.contentType = ContentType(
+                'application',
+                'xml',
+                charset: 'utf-8',
+              );
+              request.response.write(
+                _buildFeed(
+                  items: [
+                    _buildItem(
+                      version: '3.0.2',
+                      length: installerBytes.length,
+                      sha256: installerSha256,
+                      url: '$baseUrl/BackupDatabase-Setup-3.0.2.exe',
+                    ),
+                  ],
+                ),
+              );
+            } else if (request.uri.path == '/BackupDatabase-Setup-3.0.2.exe') {
+              request.response.add(installerBytes);
+            } else {
+              request.response.statusCode = HttpStatus.notFound;
+            }
+            await request.response.close();
+          }),
+        );
+
+        final hookEntered = Completer<void>();
+        final releaseHook = Completer<void>();
+        final service = AutoUpdateService(
+          dio: Dio(),
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => '$baseUrl/appcast.xml',
+          locksDirectoryResolver: () async => locksDir,
+          updatesDirectoryResolver: () async => updatesDir,
+          detachedProcessStarter: (executable, arguments) async => null,
+          exitProcess: (code) {},
+          beforeInstallHookTimeout: const Duration(seconds: 30),
+        );
+        service.beforeInstallHook = () async {
+          hookEntered.complete();
+          await releaseHook.future;
+        };
+
+        await service.initialize();
+        final firstCheck = service.checkNow(source: AppUpdateSource.manual);
+        await hookEntered.future.timeout(const Duration(seconds: 5));
+
+        final secondLock = await AutoUpdateService.tryAcquireGlobalLock(
+          locksDir: locksDir,
+          metadata: const {
+            'source': 'periodic',
+            'attempt': '2',
+            'currentVersion': '3.0.1',
+            'stage': 'fetching_feed',
+          },
+        );
+        expect(secondLock, isNull);
+
+        releaseHook.complete();
+        await firstCheck;
+
         await service.dispose();
         await server.close(force: true);
         await tempDir.delete(recursive: true);

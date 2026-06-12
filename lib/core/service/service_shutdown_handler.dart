@@ -30,6 +30,10 @@ typedef ShutdownCallback = Future<void> Function(Duration timeout);
 class ServiceShutdownHandler {
   ServiceShutdownHandler();
 
+  /// Orçamento padrão do shutdown gracioso (SIGINT/SIGTERM e
+  /// `beforeInstallHook` do auto-update em modo serviço).
+  static const Duration defaultGracefulShutdownTimeout = Duration(seconds: 30);
+
   /// Construtor para callers legados (sem DI). Mantém compatibilidade
   /// com o `factory ServiceShutdownHandler()` original que retornava
   /// um singleton implícito.
@@ -73,14 +77,14 @@ class ServiceShutdownHandler {
       _signalSubscriptions.add(
         ProcessSignal.sigint.watch().listen((_) {
           LoggerService.info('SIGINT recebido (Ctrl+C)');
-          unawaited(_handleShutdown(const Duration(seconds: 30)));
+          unawaited(_handleShutdown(defaultGracefulShutdownTimeout));
         }),
       );
 
       _signalSubscriptions.add(
         ProcessSignal.sigterm.watch().listen((_) {
           LoggerService.info('SIGTERM recebido');
-          unawaited(_handleShutdown(const Duration(seconds: 30)));
+          unawaited(_handleShutdown(defaultGracefulShutdownTimeout));
         }),
       );
 
@@ -106,7 +110,7 @@ class ServiceShutdownHandler {
   ///
   /// Use este método para encerrar o serviço de forma controlada.
   Future<void> shutdown({
-    Duration timeout = const Duration(seconds: 30),
+    Duration timeout = defaultGracefulShutdownTimeout,
   }) async {
     if (_isShuttingDown) {
       LoggerService.warning('Shutdown já em andamento');

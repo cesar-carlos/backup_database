@@ -325,9 +325,20 @@ class AppBootstrapDependencies {
             return service_locator.getIt
                 .isRegistered<ITemporaryBackupCleanupScheduler>();
           },
+          shouldSkipCleanup: (fallbackMode) async {
+            final windowsServiceService = service_locator
+                .getIt<IWindowsServiceService>();
+            final cleanupPolicy = UiSchedulerPolicy(
+              windowsServiceService,
+              onWarning: LoggerService.warning,
+              fallbackMode: fallbackMode,
+            );
+            return cleanupPolicy.shouldSkipSchedulerInUiMode();
+          },
           startScheduler: () {
             service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
           },
+          logInfo: LoggerService.info,
           logWarning: LoggerService.warning,
         ),
       ),
@@ -486,7 +497,9 @@ class AppBootstrap {
       await _dependencies.uiServices.socketServerStartupTask.start(
         bootstrapConfig,
       );
-      _dependencies.uiServices.temporaryBackupCleanupStartupTask.start();
+      await _dependencies.uiServices.temporaryBackupCleanupStartupTask.start(
+        bootstrapConfig,
+      );
       _logBootstrapPhase(bootstrapWatch, 'scheduler_and_socket_ready');
 
       _dependencies.runtime.runApp(_dependencies.runtime.createApp());

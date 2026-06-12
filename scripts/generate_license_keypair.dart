@@ -64,7 +64,9 @@ void main(List<String> args) {
     ..writeln()
     ..writeln('   (JSON em uma linha, sem espaços extras.)')
     ..writeln()
-    ..writeln(r'2) PRIVATE KEY — apenas em C:\ProgramData\BackupDatabase\config\.env')
+    ..writeln(
+      r'2) PRIVATE KEY — apenas em C:\ProgramData\BackupDatabase\config\.env',
+    )
     ..writeln('   (NUNCA no `.env` do repositório):')
     ..writeln()
     ..writeln('     BACKUP_DATABASE_LICENSE_PRIVATE_KEY=$privateBase64')
@@ -72,13 +74,17 @@ void main(List<String> args) {
     ..writeln()
     ..writeln('3) Verificação: reinicie o app em modo dev. O log deve mostrar:')
     ..writeln()
-    ..writeln('   LicenseGenerationService initialized with activeKeyId="$keyId"')
+    ..writeln(
+      '   LicenseGenerationService initialized with activeKeyId="$keyId"',
+    )
     ..writeln('   (decoder accepts: <lista incluindo $keyId>)')
     ..writeln()
     ..writeln('4) Para rotação completa, depois que todos os clientes')
     ..writeln('   atualizarem o build com o JSON múltiplas-chaves:')
     ..writeln('   a) Re-emita licenças ativas usando ACTIVE_KEY_ID=$keyId.')
-    ..writeln('   b) Quando todos os clientes tiverem licenças com keyId="$keyId",')
+    ..writeln(
+      '   b) Quando todos os clientes tiverem licenças com keyId="$keyId",',
+    )
     ..writeln('      remova a entrada antiga do JSON PUBLIC_KEYS.')
     ..writeln()
     ..writeln('─' * 70);

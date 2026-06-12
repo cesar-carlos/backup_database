@@ -33,6 +33,7 @@ class ConnectionLogProvider extends ChangeNotifier with AsyncStateMixin {
     if (isLoading) return;
 
     await runAsync<void>(
+      genericErrorMessage: 'Erro ao carregar log de conexões',
       action: () async {
         final result = await _repository.getRecentLogs(_defaultRecentLimit);
         result.fold(

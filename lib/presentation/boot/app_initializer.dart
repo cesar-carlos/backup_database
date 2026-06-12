@@ -280,13 +280,18 @@ Future<AppUpdateBlockOutcome?> checkInstallReadiness({
       }
     }
     return null;
-  } on Object catch (e) {
-    // Falha de leitura desses providers NÃO deve bloquear o update —
-    // pior cenário: deixamos passar uma transferência em curso.
-    // Logamos e seguimos com o caminho normal.
+  } on Object catch (e, s) {
     LoggerService.warning(
-      'Erro ao checar prontidão remota para auto-update: $e',
+      'Erro ao checar prontidão para auto-update: $e',
+      e,
+      s,
     );
-    return null;
+    return const AppUpdateBlockOutcome(
+      reason: AppUpdateBlockReason.readinessCheckUnavailable,
+      message:
+          'Não foi possível verificar se o aplicativo está pronto para '
+          'atualizar. Aguarde alguns instantes e tente novamente, ou use '
+          '"Atualizar agora" quando não houver backups em andamento.',
+    );
   }
 }

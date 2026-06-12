@@ -60,6 +60,7 @@ Source: "encoding_utils.ps1"; Flags: dontcopy
 Source: "capture_update_context.ps1"; Flags: dontcopy
 Source: "restore_update_state.ps1"; Flags: dontcopy
 Source: "merge_env.ps1"; Flags: dontcopy
+Source: "service_utils.ps1"; Flags: dontcopy
 
 [Icons]
 ; Main icons for each mode (all will be created)
@@ -99,7 +100,9 @@ var
   SelectedMode: String;
 
 function IsServiceInstalled(const ServiceName: String): Boolean; forward;
+function WaitForServiceStopped(const ServiceName: String): Boolean; forward;
 function StopService(const ServiceName: String): Boolean; forward;
+function RunTempPowerShellScriptEx(const ScriptName, Parameters: String; var ExitCode: Integer): Boolean; forward;
 function ShouldLaunchPostInstall(): Boolean; forward;
 procedure RemoveLegacyStartupEntries(); forward;
 procedure DeleteClientStartupTask(); forward;
@@ -114,9 +117,8 @@ begin
   Result := ExpandConstant('{commonappdata}\BackupDatabase\staging\updates\update_context.json');
 end;
 
-function RunTempPowerShellScript(const ScriptName, Parameters: String): Boolean;
+function RunTempPowerShellScriptEx(const ScriptName, Parameters: String; var ExitCode: Integer): Boolean;
 var
-  ResultCode: Integer;
   ScriptPath: String;
 begin
   ExtractTemporaryFile('encoding_utils.ps1');
@@ -128,8 +130,15 @@ begin
     '',
     SW_HIDE,
     ewWaitUntilTerminated,
-    ResultCode
-  ) and (ResultCode = 0);
+    ExitCode
+  );
+end;
+
+function RunTempPowerShellScript(const ScriptName, Parameters: String): Boolean;
+var
+  ExitCode: Integer;
+begin
+  Result := RunTempPowerShellScriptEx(ScriptName, Parameters, ExitCode) and (ExitCode = 0);
 end;
 
 // Função auxiliar para encontrar o desinstalador em múltiplos caminhos
@@ -262,10 +271,7 @@ begin
 
   // Parar o serviço do Windows primeiro para liberar nssm.exe e a pasta de instalação
   if IsServiceInstalled('BackupDatabaseService') then
-  begin
     StopService('BackupDatabaseService');
-    Sleep(2000);
-  end;
 
   if WizardSilent() and FileExists(UpdateContextPath) then
   begin
@@ -435,10 +441,7 @@ begin
   // sera substituido — atalho da area de trabalho passa a refletir o
   // icone novo no primeiro launch.
   if IsServiceInstalled('BackupDatabaseService') then
-  begin
     StopService('BackupDatabaseService');
-    Sleep(2000);
-  end;
 
   // Verificar novamente se o aplicativo está rodando antes de instalar
   AppExe := ExpandConstant('{#MyAppExeName}');
@@ -552,6 +555,8 @@ var
   UpdateContextPath: String;
   AppExePath: String;
   NssmPath: String;
+  MergeExitCode: Integer;
+  RestoreExitCode: Integer;
 begin
   // Remover o .lnk antigo da area de trabalho ANTES da secao [Icons] do Inno
   // gerar o novo. Sem isso, o Explorer pode preservar o icone cacheado mesmo
@@ -575,21 +580,37 @@ begin
 
     // merge_env.ps1 retorna:
     //   0 = OK (merge feito ou no-op)
-    //   2 = chaves criticas ausentes apos merge (auto-update ficara desabilitado)
+    //   2 = chaves criticas ausentes apos merge (AUTO_UPDATE_FEED_URL)
     //   outro = falha generica
-    // Loggamos a distincao para troubleshooting pos-install.
-    if RunTempPowerShellScript(
+    if RunTempPowerShellScriptEx(
       'merge_env.ps1',
       '-ExamplePath "' + EnvExamplePath + '" ' +
       '-TargetPath "' + EnvPath + '" ' +
       '-LegacyPath "' + LegacyEnvPath + '" ' +
-      '-BackupPath "' + MigratedBackupPath + '"'
+      '-BackupPath "' + MigratedBackupPath + '"',
+      MergeExitCode
     ) then
-      Log('Merged machine-scope .env with .env.example')
+    begin
+      if MergeExitCode = 0 then
+        Log('Merged machine-scope .env with .env.example')
+      else if MergeExitCode = 2 then
+      begin
+        Log(
+          'Warning: merge_env.ps1 exit 2 — chave critica ausente ' +
+          '(AUTO_UPDATE_FEED_URL); auto-update ficara desabilitado ate ' +
+          'corrigir ' + EnvPath
+        );
+        if WizardSilent() then
+        begin
+          Log('ERROR: instalacao silenciosa abortada por merge_env.ps1 exit 2');
+          Abort;
+        end;
+      end
+      else
+        Log('Warning: merge_env.ps1 failed, exit=' + IntToStr(MergeExitCode));
+    end
     else
-      Log('Warning: Failed to merge machine-scope .env with .env.example ' +
-          '(possivel chave critica ausente como AUTO_UPDATE_FEED_URL; ' +
-          'auto-update ficara desabilitado ate corrigir ' + EnvPath + ')');
+      Log('Warning: failed to launch merge_env.ps1 from installer');
 
     if SelectedMode = '' then
       SelectedMode := 'server';
@@ -616,17 +637,32 @@ begin
 
     if WizardSilent() and FileExists(UpdateContextPath) then
     begin
-      if RunTempPowerShellScript(
+      if RunTempPowerShellScriptEx(
         'restore_update_state.ps1',
         '-ContextPath "' + UpdateContextPath + '" ' +
         '-AppPath "' + AppExePath + '" ' +
         '-AppDirectory "' + ExpandConstant('{app}') + '" ' +
         '-NssmPath "' + NssmPath + '" ' +
-        '-ServiceName "BackupDatabaseService"'
+        '-ServiceName "BackupDatabaseService"',
+        RestoreExitCode
       ) then
-        Log('Restored update operational state from update_context.json')
+      begin
+        if RestoreExitCode = 0 then
+          Log('Restored update operational state from update_context.json')
+        else if RestoreExitCode = 2 then
+          Log(
+            'Warning: restore_update_state.ps1 exit 2 — servico restaurado ' +
+            'mas RUNNING nao confirmado no timeout de polling; ' +
+            'update_context.json preservado para retry'
+          )
+        else
+          Log(
+            'Warning: restore_update_state.ps1 failed, exit=' +
+            IntToStr(RestoreExitCode)
+          );
+      end
       else
-        Log('Warning: Failed to restore update operational state from update_context.json');
+        Log('Warning: failed to launch restore_update_state.ps1 from installer');
     end;
 
     RefreshWindowsIconCache();
@@ -790,6 +826,36 @@ begin
   Result := not IsServiceInstalled(ServiceName);
 end;
 
+function WaitForServiceStopped(const ServiceName: String): Boolean;
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+  Args: String;
+begin
+  Result := False;
+  ExtractTemporaryFile('service_utils.ps1');
+  ScriptPath := ExpandConstant('{tmp}\service_utils.ps1');
+  Args :=
+    '-NoProfile -ExecutionPolicy Bypass -Command ". ''' + ScriptPath +
+    '''; if (Wait-ServiceStopped -ServiceName ''' + ServiceName +
+    ''') { exit 0 } else { exit 1 }"';
+  if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if ResultCode = 0 then
+    begin
+      Log('Service ' + ServiceName + ' STOPPED confirmed');
+      Result := True;
+    end
+    else
+      Log(
+        'Warning: Service ' + ServiceName +
+        ' did not reach STOPPED within polling timeout'
+      );
+  end
+  else
+    Log('Warning: failed to launch Wait-ServiceStopped for ' + ServiceName);
+end;
+
 function StopService(const ServiceName: String): Boolean;
 var
   ResultCode: Integer;
@@ -810,10 +876,9 @@ begin
   begin
     Exec('sc.exe', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
     
-    if ResultCode = 0 then
+    if (ResultCode = 0) or (ResultCode = 1062) then
     begin
-      Sleep(2000);
-      Result := True;
+      Result := WaitForServiceStopped(ServiceName);
       Exit;
     end;
     
@@ -835,10 +900,7 @@ begin
   
   // Parar o serviço do Windows ANTES de qualquer outra ação
   if IsServiceInstalled(ServiceName) then
-  begin
     StopService(ServiceName);
-    Sleep(2000);
-  end;
   
   // Verificar se o aplicativo está em execução durante a desinstalação
   if IsAppRunning(AppExe) then

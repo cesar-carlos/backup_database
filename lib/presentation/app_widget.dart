@@ -24,8 +24,8 @@ import 'package:provider/single_child_widget.dart' show SingleChildWidget;
 /// locais, WindowsServiceProvider, ConnectedClientProvider,
 /// ServerCredentialProvider) também em modo cliente, e providers
 /// client-only (RemoteSchedules, RemoteDatabaseConfig,
-/// RemoteFileTransfer, ServerConnection, ConnectionLog) também em modo
-/// servidor. Os providers são lazy no `getIt` (não causavam I/O
+/// RemoteFileTransfer, ServerConnection) também em modo servidor.
+/// Os providers são lazy no `getIt` (não causavam I/O
 /// imediato), mas:
 ///   - poluíam o DI graph e a leitura do código;
 ///   - permitiam uso acidental via `context.read<...>()` em rotas que
@@ -142,6 +142,9 @@ class BackupDatabaseApp extends StatelessWidget {
       ChangeNotifierProvider(
         create: (_) => service_locator.getIt<LicenseProvider>(),
       ),
+      ChangeNotifierProvider(
+        create: (_) => service_locator.getIt<ConnectionLogProvider>(),
+      ),
     ];
   }
 
@@ -189,14 +192,26 @@ class BackupDatabaseApp extends StatelessWidget {
     ];
   }
 
+  @visibleForTesting
+  List<SingleChildWidget> debugCommonProviders() => _commonProviders();
+
+  @visibleForTesting
+  List<SingleChildWidget> debugServerOnlyProviders() => _serverOnlyProviders();
+
+  @visibleForTesting
+  List<SingleChildWidget> debugClientOnlyProviders() => _clientOnlyProviders();
+
+  @visibleForTesting
+  List<SingleChildWidget> debugProvidersForServerMode() => [
+    ..._commonProviders(),
+    ..._serverOnlyProviders(),
+  ];
+
   /// Providers que só fazem sentido para conectar a um servidor
   /// remoto. **Não** são montados em modo servidor — server não conecta
   /// em outros servers.
   List<SingleChildWidget> _clientOnlyProviders() {
     return [
-      ChangeNotifierProvider(
-        create: (_) => service_locator.getIt<ConnectionLogProvider>(),
-      ),
       ChangeNotifierProvider(
         create: (_) => service_locator.getIt<RemoteSchedulesProvider>(),
       ),
