@@ -106,12 +106,26 @@ void main() {
         return const rd.Success(_runningStatus);
       });
 
-      // dispara duas chamadas concorrentes
       final f1 = provider.checkStatus();
       final f2 = provider.checkStatus();
       await Future.wait([f1, f2]);
 
       expect(callCount, 1);
+    });
+
+    test('forceRefresh proceeds even when already loading', () async {
+      var callCount = 0;
+      when(service.getStatus).thenAnswer((_) async {
+        callCount++;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return const rd.Success(_runningStatus);
+      });
+
+      final f1 = provider.checkStatus();
+      final f2 = provider.checkStatus(forceRefresh: true);
+      await Future.wait([f1, f2]);
+
+      expect(callCount, 2);
     });
   });
 
@@ -136,6 +150,33 @@ void main() {
       when(
         () => eventLog.logInstallFailed(error: any(named: 'error')),
       ).thenAnswer((_) async {});
+      when(() => eventLog.logStartStarted()).thenAnswer((_) async {});
+      when(() => eventLog.logStartSucceeded()).thenAnswer((_) async {});
+      when(
+        () => eventLog.logStartFailed(error: any(named: 'error')),
+      ).thenAnswer((_) async {});
+    });
+
+    test('calls startService after successful install', () async {
+      when(
+        () => service.installService(
+          serviceUser: any(named: 'serviceUser'),
+          servicePassword: any(named: 'servicePassword'),
+        ),
+      ).thenAnswer((_) async => const rd.Success(rd.unit));
+      when(service.startService).thenAnswer(
+        (_) async => const rd.Success(rd.unit),
+      );
+      when(service.getStatus).thenAnswer(
+        (_) async => const rd.Success(_runningStatus),
+      );
+
+      final ok = await provider.installService();
+
+      expect(ok, isTrue);
+      verify(service.startService).called(1);
+      verify(() => eventLog.logStartStarted()).called(1);
+      verify(() => eventLog.logStartSucceeded()).called(1);
     });
 
     test('records install_to_running metric on successful install', () async {
@@ -145,6 +186,9 @@ void main() {
           servicePassword: any(named: 'servicePassword'),
         ),
       ).thenAnswer((_) async => const rd.Success(rd.unit));
+      when(service.startService).thenAnswer(
+        (_) async => const rd.Success(rd.unit),
+      );
       when(service.getStatus).thenAnswer(
         (_) async => const rd.Success(_runningStatus),
       );
@@ -169,6 +213,9 @@ void main() {
           servicePassword: any(named: 'servicePassword'),
         ),
       ).thenAnswer((_) async => const rd.Success(rd.unit));
+      when(service.startService).thenAnswer(
+        (_) async => const rd.Success(rd.unit),
+      );
       when(service.getStatus).thenAnswer(
         (_) async => const rd.Success(_stoppedStatus),
       );
@@ -176,6 +223,7 @@ void main() {
       final ok = await provider.installService();
 
       expect(ok, isTrue);
+      verify(service.startService).called(1);
       verifyNever(
         () => metrics.recordHistogram(
           'windows_service_install_to_running_seconds',
@@ -220,6 +268,9 @@ void main() {
           await firstReleased.future;
           return const rd.Success(rd.unit);
         });
+        when(service.startService).thenAnswer(
+          (_) async => const rd.Success(rd.unit),
+        );
         when(service.getStatus).thenAnswer(
           (_) async => const rd.Success(_notInstalledStatus),
         );

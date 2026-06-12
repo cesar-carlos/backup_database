@@ -10,7 +10,8 @@ param(
     [string]$Description = "Servico de backup automatico para SQL Server, Sybase, PostgreSQL e Firebird",
     [string]$ServiceUser = "",
     [SecureString]$ServicePassword,
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$StartAfterInstall
 )
 
 function Pause-IfInteractive {
@@ -177,11 +178,39 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "Serviço instalado com sucesso!" -ForegroundColor Green
 Write-Host ""
+Write-Host "Logs do serviço estão em: $logPath" -ForegroundColor Cyan
+Write-Host ""
+
+if ($StartAfterInstall) {
+    $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
+    if (-not (Test-Path $serviceUtilsPath)) {
+        Write-Host "ERRO: service_utils.ps1 nao encontrado em: $serviceUtilsPath" -ForegroundColor Red
+        Pause-IfInteractive
+        exit 1
+    }
+
+    . $serviceUtilsPath
+
+    Write-Host "Iniciando servico e aguardando RUNNING..." -ForegroundColor Green
+    $isRunning = Start-WindowsServiceWithPolling -ServiceName $ServiceName
+    if (-not $isRunning) {
+        Write-Host (
+            "AVISO: servico instalado mas nao confirmou RUNNING dentro de " +
+            "$script:ServiceStartPollingTimeoutSeconds segundos."
+        ) -ForegroundColor Yellow
+        Pause-IfInteractive
+        exit 2
+    }
+
+    Write-Host "Servico em execucao (RUNNING confirmado)." -ForegroundColor Green
+    Write-Host ""
+    Pause-IfInteractive
+    exit 0
+}
+
 Write-Host "Para iniciar o serviço manualmente:" -ForegroundColor Cyan
 Write-Host "  sc start $ServiceName" -ForegroundColor White
 Write-Host ""
 Write-Host "Ou use o Gerenciador de Serviços do Windows (services.msc)" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Logs do serviço estão em: $logPath" -ForegroundColor Cyan
 Write-Host ""
 Pause-IfInteractive

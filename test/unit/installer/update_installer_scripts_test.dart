@@ -60,8 +60,9 @@ void main() {
         );
         expect(setup, contains('InstallAndStartServiceFromInstaller'));
         expect(setup, contains('-NonInteractive'));
-        expect(setup, contains('sc.exe'));
-        expect(setup, contains('start BackupDatabaseService'));
+        expect(setup, contains('-StartAfterInstall'));
+        expect(setup, contains('RUNNING confirmed'));
+        expect(setup, contains('did not reach RUNNING within polling timeout'));
       },
     );
 

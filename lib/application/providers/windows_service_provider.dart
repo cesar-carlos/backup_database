@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/domain/services/i_metrics_collector.dart';
@@ -59,7 +61,13 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   }
 
   Future<void> checkStatus({bool forceRefresh = false}) async {
-    if (isLoading) return;
+    if (isLoading && !forceRefresh) {
+      developer.log(
+        'checkStatus skipped: operation in progress',
+        name: 'WindowsServiceProvider',
+      );
+      return;
+    }
 
     final cacheValid =
         !forceRefresh &&
@@ -100,9 +108,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     if (isLoading) return false;
     await _eventLog.logInstallStarted();
 
-    // S16: medir tempo total install → RUNNING. Este stopwatch difere
-    // do `windowsServiceStartConvergenceSeconds` (que só mede o polling
-    // do start). Representa UX real do clique "Instalar".
+    // S16: medir tempo total install → RUNNING (install + auto-start).
     final installToRunningWatch = Stopwatch()..start();
 
     final success = await _runOperation<bool>(
@@ -122,10 +128,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     final ok = success ?? false;
     if (ok) {
       await _eventLog.logInstallSucceeded();
-      _invalidateStatusCache();
-      await checkStatus(forceRefresh: true);
-      // Após install bem-sucedido, o status já reflete o RUNNING (NSSM
-      // faz auto-start). Registramos a métrica end-to-end.
+      await startService();
       if (_status?.isRunning ?? false) {
         installToRunningWatch.stop();
         _metrics?.recordHistogram(
@@ -158,7 +161,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     if (ok) {
       await _eventLog.logUninstallSucceeded();
       _invalidateStatusCache();
-      await checkStatus(forceRefresh: true);
+      await _refreshStatusSilently();
     } else {
       await _eventLog.logUninstallFailed(error: error ?? 'Erro desconhecido');
     }

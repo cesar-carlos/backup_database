@@ -30,6 +30,8 @@ class ConnectionLogProvider extends ChangeNotifier with AsyncStateMixin {
   }
 
   Future<void> loadLogs() async {
+    if (isLoading) return;
+
     await runAsync<void>(
       action: () async {
         final result = await _repository.getRecentLogs(_defaultRecentLimit);

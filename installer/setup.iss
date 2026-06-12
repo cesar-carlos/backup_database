@@ -54,6 +54,7 @@ Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "service_utils.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "encoding_utils.ps1"; Flags: dontcopy
 Source: "capture_update_context.ps1"; Flags: dontcopy
@@ -724,13 +725,16 @@ begin
   Args :=
     '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' +
     '-NonInteractive ' +
+    '-StartAfterInstall ' +
     '-AppPath "' + AppExePath + '" ' +
     '-AppDirectory "' + AppDirectory + '" ' +
     '-NssmPath "' + NssmPath + '"';
   if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
     if ResultCode = 0 then
-      Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode)
+      Log('BackupDatabaseService installed and RUNNING confirmed')
+    else if ResultCode = 2 then
+      Log('Warning: BackupDatabaseService installed but did not reach RUNNING within polling timeout')
     else
       Log('Warning: install_service.ps1 failed, exit=' + IntToStr(ResultCode));
   end

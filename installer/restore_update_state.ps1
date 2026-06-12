@@ -301,6 +301,26 @@ if ($serviceExists) {
     Set-NssmValue -Arguments @("set", $ServiceName, "ObjectName", "LocalSystem")
 
     & $NssmPath start $ServiceName | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao iniciar servico $ServiceName via NSSM (exit $LASTEXITCODE)"
+    }
+
+    $serviceUtilsPath = Join-Path $AppDirectory 'tools\service_utils.ps1'
+    if (-not (Test-Path $serviceUtilsPath)) {
+        Write-RestoreError -Message (
+            "service_utils.ps1 ausente em $serviceUtilsPath; " +
+            "servico iniciado mas RUNNING nao foi confirmado por polling."
+        )
+    } else {
+        . $serviceUtilsPath
+        $isRunning = Wait-ServiceRunning -ServiceName $ServiceName
+        if (-not $isRunning) {
+            Write-RestoreError -Message (
+                "Servico $ServiceName restaurado mas nao atingiu RUNNING dentro de " +
+                "$script:ServiceStartPollingTimeoutSeconds segundos apos NSSM start."
+            )
+        }
+    }
 }
 
 if ($origin -eq "ui") {

@@ -6,6 +6,7 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -184,6 +185,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_isUacElevatedOperation(provider)) ...[
+                _ServiceUacWaitingBanner(operation: provider.operation),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               if (!serviceUiOk) ...[
                 InfoBar(
                   title: Text(
@@ -285,20 +290,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         'Estado atual do processo em background e da instalação do serviço.',
         'Current background process state and service installation state.',
       ),
-      banner: _shouldShowUacInfoBar(provider)
-          ? InfoBar(
-              title: Text(
-                appLocaleString(
-                  context,
-                  'Aguardando confirmação do Administrador (UAC)',
-                  'Waiting for Administrator confirmation (UAC)',
-                ),
-              ),
-              content: Text(_getUacInfoBarMessage(provider)),
-              severity: InfoBarSeverity.warning,
-              isLong: true,
-            )
-          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -447,30 +438,70 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     }
 
     if (!provider.isInstalled) {
-      return FilledButton(
-        onPressed: actionsDisabled
-            ? null
-            : () => unawaited(_installService(context, provider)),
-        child: Text(
-          appLocaleString(context, 'Instalar serviço', 'Install service'),
+      return _buildPrimaryFilledButton(
+        context: context,
+        provider: provider,
+        actionsDisabled: actionsDisabled,
+        idleLabel: appLocaleString(
+          context,
+          'Instalar serviço',
+          'Install service',
         ),
+        onPressed: () => unawaited(_installService(context, provider)),
       );
     }
 
     if (!provider.isRunning) {
-      return FilledButton(
-        onPressed: actionsDisabled
-            ? null
-            : () => unawaited(_startService(context, provider)),
-        child: Text(appLocaleString(context, 'Iniciar', 'Start')),
+      return _buildPrimaryFilledButton(
+        context: context,
+        provider: provider,
+        actionsDisabled: actionsDisabled,
+        idleLabel: appLocaleString(context, 'Iniciar', 'Start'),
+        onPressed: () => unawaited(_startService(context, provider)),
       );
     }
 
+    return _buildPrimaryFilledButton(
+      context: context,
+      provider: provider,
+      actionsDisabled: actionsDisabled,
+      idleLabel: appLocaleString(context, 'Reiniciar', 'Restart'),
+      onPressed: () => unawaited(_restartService(context, provider)),
+    );
+  }
+
+  Widget _buildPrimaryFilledButton({
+    required BuildContext context,
+    required WindowsServiceProvider provider,
+    required bool actionsDisabled,
+    required String idleLabel,
+    required VoidCallback onPressed,
+  }) {
+    final isUacWait =
+        provider.isLoading && _isUacElevatedOperationType(provider.operation);
+
     return FilledButton(
-      onPressed: actionsDisabled
-          ? null
-          : () => unawaited(_restartService(context, provider)),
-      child: Text(appLocaleString(context, 'Reiniciar', 'Restart')),
+      onPressed: actionsDisabled ? null : onPressed,
+      child: isUacWait
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: ProgressRing(strokeWidth: 2),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(
+                    _getLoadingActionLabel(provider.operation),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            )
+          : Text(idleLabel),
     );
   }
 
@@ -660,49 +691,49 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     return appLocaleString(context, 'Não instalado', 'Not installed');
   }
 
-  bool _shouldShowUacInfoBar(WindowsServiceProvider provider) {
+  bool _isUacElevatedOperation(WindowsServiceProvider provider) {
     if (!provider.isLoading) {
       return false;
     }
-    return provider.operation == WindowsServiceOperation.install ||
-        provider.operation == WindowsServiceOperation.uninstall ||
-        provider.operation == WindowsServiceOperation.start ||
-        provider.operation == WindowsServiceOperation.stop ||
-        provider.operation == WindowsServiceOperation.restart;
+    return _isUacElevatedOperationType(provider.operation);
   }
 
-  String _getUacInfoBarMessage(WindowsServiceProvider provider) {
-    return switch (provider.operation) {
+  bool _isUacElevatedOperationType(WindowsServiceOperation operation) {
+    return operation == WindowsServiceOperation.install ||
+        operation == WindowsServiceOperation.uninstall ||
+        operation == WindowsServiceOperation.start ||
+        operation == WindowsServiceOperation.stop ||
+        operation == WindowsServiceOperation.restart;
+  }
+
+  String _getLoadingActionLabel(WindowsServiceOperation operation) {
+    return switch (operation) {
       WindowsServiceOperation.install => appLocaleString(
         context,
-        'Confirme o prompt do Windows para instalar o serviço.',
-        'Confirm the Windows prompt to install the service.',
+        'Aguardando confirmação do Windows (UAC)...',
+        'Waiting for Windows confirmation (UAC)...',
       ),
       WindowsServiceOperation.uninstall => appLocaleString(
         context,
-        'Confirme o prompt do Windows para remover o serviço.',
-        'Confirm the Windows prompt to remove the service.',
+        'Aguardando confirmação do Windows (UAC)...',
+        'Waiting for Windows confirmation (UAC)...',
       ),
       WindowsServiceOperation.start => appLocaleString(
         context,
-        'Confirme o prompt do Windows para iniciar o serviço.',
-        'Confirm the Windows prompt to start the service.',
+        'Iniciando... aguardando UAC',
+        'Starting... waiting for UAC',
       ),
       WindowsServiceOperation.stop => appLocaleString(
         context,
-        'Confirme o prompt do Windows para parar o serviço.',
-        'Confirm the Windows prompt to stop the service.',
+        'Parando... aguardando UAC',
+        'Stopping... waiting for UAC',
       ),
       WindowsServiceOperation.restart => appLocaleString(
         context,
-        'Confirme o prompt do Windows para reiniciar o serviço.',
-        'Confirm the Windows prompt to restart the service.',
+        'Reiniciando... aguardando UAC',
+        'Restarting... waiting for UAC',
       ),
-      _ => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para continuar.',
-        'Confirm the Windows prompt to continue.',
-      ),
+      _ => appLocaleString(context, 'Processando...', 'Processing...'),
     };
   }
 
@@ -728,11 +759,17 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     if (!confirmed || !mounted) {
       return;
     }
-    final successText = appLocaleString(
-      this.context,
-      'Serviço instalado com sucesso!\n\nO serviço foi configurado e iniciará automaticamente com o Windows.',
-      'Service installed successfully!\n\nThe service was configured and will start automatically with Windows.',
-    );
+    final successText = provider.isRunning
+        ? appLocaleString(
+            this.context,
+            'Serviço instalado com sucesso!\n\nO serviço está em execução e iniciará automaticamente com o Windows.',
+            'Service installed successfully!\n\nThe service is running and will start automatically with Windows.',
+          )
+        : appLocaleString(
+            this.context,
+            'Serviço instalado com sucesso!\n\nClique em "Iniciar" para colocar o serviço em execução agora. Ele também iniciará automaticamente com o Windows.',
+            'Service installed successfully!\n\nClick "Start" to run the service now. It will also start automatically with Windows.',
+          );
     final fallbackError = appLocaleString(
       this.context,
       'Erro desconhecido ao instalar serviço.',
@@ -920,5 +957,104 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return;
     }
     await MessageModal.showError(context, message: errorMessage);
+  }
+}
+
+class _ServiceUacWaitingBanner extends StatelessWidget {
+  const _ServiceUacWaitingBanner({required this.operation});
+
+  final WindowsServiceOperation operation;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.warning.withValues(alpha: 0.08),
+        borderRadius: AppRadius.circularMd,
+        border: Border.all(
+          color: colors.warning.withValues(alpha: 0.28),
+        ),
+      ),
+      child: InfoBar(
+        title: Text(
+          appLocaleString(
+            context,
+            'Aguardando confirmação do Windows (UAC)...',
+            'Waiting for Windows confirmation (UAC)...',
+          ),
+        ),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: ProgressRing(
+                      strokeWidth: 2,
+                      activeColor: colors.warning,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text(_message(context))),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              appLocaleString(
+                context,
+                'Se nada acontecer, verifique se o prompt do Windows não ficou atrás desta janela. A operação pode levar até cerca de 90 segundos.',
+                'If nothing happens, check whether the Windows prompt is hidden behind this window. The operation may take up to about 90 seconds.',
+              ),
+              style: FluentTheme.of(context).typography.caption,
+            ),
+          ],
+        ),
+        severity: InfoBarSeverity.warning,
+        isLong: true,
+      ),
+    );
+  }
+
+  String _message(BuildContext context) {
+    return switch (operation) {
+      WindowsServiceOperation.install => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para instalar o serviço.',
+        'Confirm the Windows prompt to install the service.',
+      ),
+      WindowsServiceOperation.uninstall => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para remover o serviço.',
+        'Confirm the Windows prompt to remove the service.',
+      ),
+      WindowsServiceOperation.start => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para iniciar o serviço.',
+        'Confirm the Windows prompt to start the service.',
+      ),
+      WindowsServiceOperation.stop => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para parar o serviço.',
+        'Confirm the Windows prompt to stop the service.',
+      ),
+      WindowsServiceOperation.restart => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para reiniciar o serviço.',
+        'Confirm the Windows prompt to restart the service.',
+      ),
+      _ => appLocaleString(
+        context,
+        'Confirme o prompt do Windows para continuar.',
+        'Confirm the Windows prompt to continue.',
+      ),
+    };
   }
 }
