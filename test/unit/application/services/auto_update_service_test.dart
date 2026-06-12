@@ -1125,12 +1125,19 @@ void _registerDisabledReasonTests() {
         await service.initialize();
 
         expect(service.snapshot.status, AppUpdateStatus.disabled);
-        expect(
-          service.snapshot.disabledReason,
-          AppUpdateDisabledReason.feedReaderException,
-        );
-        expect(service.snapshot.stage, AppUpdateStage.completed);
-        expect(service.snapshot.errorMessage, isNotNull);
+        if (Platform.isWindows) {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.feedReaderException,
+          );
+          expect(service.snapshot.stage, AppUpdateStage.completed);
+          expect(service.snapshot.errorMessage, isNotNull);
+        } else {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.nonWindowsPlatform,
+          );
+        }
       },
     );
 
@@ -1162,11 +1169,18 @@ void _registerDisabledReasonTests() {
         await service.initialize();
 
         expect(service.snapshot.status, AppUpdateStatus.disabled);
-        expect(
-          service.snapshot.disabledReason,
-          AppUpdateDisabledReason.feedUrlMissing,
-        );
-        expect(service.snapshot.stage, AppUpdateStage.completed);
+        if (Platform.isWindows) {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.feedUrlMissing,
+          );
+          expect(service.snapshot.stage, AppUpdateStage.completed);
+        } else {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.nonWindowsPlatform,
+          );
+        }
       },
     );
 
@@ -1198,10 +1212,17 @@ void _registerDisabledReasonTests() {
         await service.initialize();
 
         expect(service.snapshot.status, AppUpdateStatus.disabled);
-        expect(
-          service.snapshot.disabledReason,
-          AppUpdateDisabledReason.feedUrlMissing,
-        );
+        if (Platform.isWindows) {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.feedUrlMissing,
+          );
+        } else {
+          expect(
+            service.snapshot.disabledReason,
+            AppUpdateDisabledReason.nonWindowsPlatform,
+          );
+        }
       },
     );
 
