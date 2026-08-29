@@ -266,6 +266,102 @@ void main() {
       },
       skip: !Platform.isWindows,
     );
+
+    test(
+      'overlays license public key from bundled reader when ProgramData '
+      'already has AUTO_UPDATE_FEED_URL',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'env_license_overlay_',
+        );
+        addTearDown(() async {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        });
+
+        final externalEnv = File(p.join(tempDir.path, 'config', '.env'));
+        await externalEnv.parent.create(recursive: true);
+        await externalEnv.writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+        );
+
+        EnvironmentLoader.machineEnvironmentFileOverrideForTest = externalEnv;
+        EnvironmentLoader.bundledAssetReader = (key) async {
+          expect(key, EnvironmentLoader.bundledAssetFileName);
+          return 'AUTO_UPDATE_FEED_URL=https://bundle.example/appcast.xml\n'
+              'BACKUP_DATABASE_LICENSE_PUBLIC_KEY='
+              'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n';
+        };
+
+        final outcome = await EnvironmentLoader.loadIfNeeded(
+          logPrefix: '[license-overlay-test]',
+        );
+
+        expect(outcome.attemptedFallback, isTrue);
+        expect(outcome.isHealthy, isTrue);
+        expect(outcome.missingRequiredKeys, isEmpty);
+        expect(
+          dotenv.env['BACKUP_DATABASE_LICENSE_PUBLIC_KEY'],
+          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        );
+        expect(
+          dotenv.env['AUTO_UPDATE_FEED_URL'],
+          'https://example.com/appcast.xml',
+        );
+        expect(dotenv.env['BACKUP_DATABASE_LICENSE_PRIVATE_KEY'], isNull);
+        expect(outcome.leakedBundledSecretKeys, isEmpty);
+        expect(
+          EnvironmentLoader.lastLoadOutcome?.sourceDescription,
+          externalEnv.path,
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'keeps ProgramData license public key when already set',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'env_license_keep_',
+        );
+        addTearDown(() async {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        });
+
+        final externalEnv = File(p.join(tempDir.path, 'config', '.env'));
+        await externalEnv.parent.create(recursive: true);
+        await externalEnv.writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+          'BACKUP_DATABASE_LICENSE_PUBLIC_KEY=from-machine\n',
+        );
+
+        EnvironmentLoader.machineEnvironmentFileOverrideForTest = externalEnv;
+        EnvironmentLoader.bundledAssetReader = (key) async {
+          expect(key, EnvironmentLoader.bundledAssetFileName);
+          return 'BACKUP_DATABASE_LICENSE_PUBLIC_KEY=from-bundle\n'
+              'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS='
+              '{"ed25519-2":"from-bundle-map"}\n';
+        };
+
+        final outcome = await EnvironmentLoader.loadIfNeeded(
+          logPrefix: '[license-keep-test]',
+        );
+
+        expect(
+          dotenv.env['BACKUP_DATABASE_LICENSE_PUBLIC_KEY'],
+          'from-machine',
+        );
+        expect(
+          dotenv.env['BACKUP_DATABASE_LICENSE_PUBLIC_KEYS'],
+          '{"ed25519-2":"from-bundle-map"}',
+        );
+        expect(outcome.attemptedFallback, isTrue);
+      },
+      skip: !Platform.isWindows,
+    );
   });
 
   group('EnvironmentLoader bundled secret leak guard', () {
@@ -290,6 +386,31 @@ void main() {
         }),
       );
     });
+
+    test(
+      'overlayFromBundledKeys is public license keys only, not secrets',
+      () {
+        expect(
+          EnvironmentLoader.overlayFromBundledKeys,
+          containsAll(<String>{
+            'BACKUP_DATABASE_LICENSE_PUBLIC_KEY',
+            'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS',
+          }),
+        );
+        expect(
+          EnvironmentLoader.overlayFromBundledKeys.intersection(
+            EnvironmentLoader.forbiddenInBundledAssetKeys,
+          ),
+          isEmpty,
+        );
+        expect(
+          EnvironmentLoader.overlayFromBundledKeys.contains(
+            'AUTO_UPDATE_FEED_URL',
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test(
       'overlay do bundled asset ignora chaves forbidden mesmo se faltarem',

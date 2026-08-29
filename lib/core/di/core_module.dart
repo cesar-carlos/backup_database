@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hint.dart';
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -156,15 +157,22 @@ Future<void> setupCoreModule(GetIt getIt) async {
   final licenseDecoder = licenseDecoderResult.fold(
     (decoder) => decoder,
     (error) {
-      LoggerService.error('Failed to initialize license decoder: $error');
-      LoggerService.warning(
-        'License validation/generation bootstrap will run in degraded mode. '
-        'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY to re-enable signed '
-        'license decoding without reinstalling the app.',
-      );
       final message = error is Failure
           ? error.message
           : 'Chave publica de licenca indisponivel.';
+      final source =
+          EnvironmentLoader.lastLoadOutcome?.sourceDescription ?? 'unknown';
+      LoggerService.error(
+        'event=license_decoder_unavailable source=$source '
+        'message=$message',
+      );
+      LoggerService.warning(
+        'event=license_decoder_degraded '
+        'Configure ${LicenseConstants.envLicensePublicKey} in the active '
+        r'.env (Windows: C:\ProgramData\BackupDatabase\config\.env takes '
+        'precedence over the bundled asset) to re-enable signed license '
+        'decoding without reinstalling the app.',
+      );
       return LicenseDecoder.unavailable(message: message);
     },
   );

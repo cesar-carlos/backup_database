@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -92,9 +93,13 @@ class EnvironmentLoadOutcome {
 /// **Defesa em profundidade** (audit 2026-05-28):
 /// - `requiredKeys` lista as chaves cuja ausência inviabiliza features
 ///   críticas (atualmente: `AUTO_UPDATE_FEED_URL`).
-/// - Se o arquivo externo for carregado mas alguma `requiredKey` estiver
-///   ausente/vazia, [loadIfNeeded] tenta automaticamente o asset bundled
-///   como fallback (`dotenv.load`) — útil quando o `.env` em ProgramData
+/// - `overlayFromBundledKeys` lista chaves **não-secretas** (chave pública
+///   de licença) que o ProgramData antigo frequentemente omite. O overlay
+///   as completa a partir do asset bundled **sem** marcar o outcome como
+///   unhealthy — o decoder já sobe em modo degradado se ainda faltarem.
+/// - Se o arquivo externo for carregado mas alguma `requiredKey` ou
+///   `overlayFromBundledKey` estiver ausente/vazia, [loadIfNeeded] tenta
+///   o asset bundled como fallback — útil quando o `.env` em ProgramData
 ///   foi parcialmente escrito por uma corrida do `merge_env.ps1` ou ainda
 ///   não recebeu chaves adicionadas em `.env.example`.
 /// - O [EnvironmentLoadOutcome] retornado expõe diagnósticos para que o
@@ -112,8 +117,21 @@ class EnvironmentLoader {
   /// dispara fallback para o asset bundled antes de seguir.
   ///
   /// **Não adicione aqui chaves opcionais** — apenas as que travariam
-  /// uma feature inteira no boot.
+  /// uma feature inteira no boot. A chave pública de licença fica em
+  /// [overlayFromBundledKeys]: o app deve subir mesmo sem ela.
   static const Set<String> requiredKeys = <String>{'AUTO_UPDATE_FEED_URL'};
+
+  /// Chaves não-secretas completadas a partir do asset bundled quando o
+  /// `.env` de ProgramData existe mas as omite (arquivo antigo / merge
+  /// a partir de `.env.example` vazio).
+  ///
+  /// Distinto de [requiredKeys]: ausência após o overlay **não** marca
+  /// [EnvironmentLoadOutcome.isHealthy] como falso. Não incluir chaves
+  /// de [forbiddenInBundledAssetKeys].
+  static const Set<String> overlayFromBundledKeys = <String>{
+    LicenseConstants.envLicensePublicKey,
+    LicenseConstants.envLicensePublicKeys,
+  };
 
   /// Chaves cuja **presença** no asset bundled é proibida — vazá-las em
   /// `flutter_assets/.env` é um leak crítico (chave privada Ed25519 de
@@ -146,6 +164,10 @@ class EnvironmentLoader {
   /// Override de `C:\ProgramData\...\config\.env` para testes de overlay.
   @visibleForTesting
   static File? machineEnvironmentFileOverrideForTest;
+
+  /// Último [EnvironmentLoadOutcome] produzido por [loadIfNeeded].
+  /// Usado pelo bootstrap de licença para logar a origem efetiva do `.env`.
+  static EnvironmentLoadOutcome? lastLoadOutcome;
 
   static File resolveBundledAssetFile({
     required String assetFileName,
@@ -298,22 +320,34 @@ class EnvironmentLoader {
     }
 
     final missingAfterPrimary = _missingRequiredKeys();
+    final missingOverlayKeys = _missingOverlayKeys();
+    final keysToOverlay = <String>{
+      ...missingAfterPrimary,
+      ...missingOverlayKeys,
+    };
 
     final shouldAttemptFallback =
         loadPlan?.source == EnvironmentSource.externalMachineFile &&
-        (!dotenv.isInitialized || missingAfterPrimary.isNotEmpty);
+        (!dotenv.isInitialized || keysToOverlay.isNotEmpty);
     var fallbackAttempted = false;
 
     if (shouldAttemptFallback) {
       fallbackAttempted = true;
-      LoggerService.error(
-        '$prefix arquivo externo carregado mas chaves obrigatorias '
-        'ausentes: $missingAfterPrimary. Tentando fallback para asset '
-        'bundled (preservando chaves existentes).',
-      );
+      if (missingAfterPrimary.isNotEmpty || !dotenv.isInitialized) {
+        LoggerService.error(
+          '$prefix arquivo externo carregado mas chaves obrigatorias '
+          'ausentes: $missingAfterPrimary. Tentando fallback para asset '
+          'bundled (preservando chaves existentes).',
+        );
+      } else {
+        LoggerService.info(
+          '$prefix arquivo externo sem chaves de overlay do bundle: '
+          '$missingOverlayKeys. Completando a partir do asset bundled.',
+        );
+      }
       try {
         await _overlayBundledAsset(
-          missingKeys: missingAfterPrimary,
+          missingKeys: keysToOverlay,
           leakedSecretKeys: leakedSecretKeys,
           logPrefix: prefix,
         );
@@ -441,11 +475,16 @@ class EnvironmentLoader {
     return null;
   }
 
-  static Set<String> _missingRequiredKeys() {
+  static Set<String> _missingRequiredKeys() => _missingKeysFrom(requiredKeys);
+
+  static Set<String> _missingOverlayKeys() =>
+      _missingKeysFrom(overlayFromBundledKeys);
+
+  static Set<String> _missingKeysFrom(Set<String> keys) {
     if (!dotenv.isInitialized) {
-      return Set<String>.unmodifiable(requiredKeys);
+      return Set<String>.unmodifiable(keys);
     }
-    return requiredKeys.where((key) {
+    return keys.where((key) {
       final value = dotenv.env[key];
       return value == null || value.trim().isEmpty;
     }).toSet();
@@ -459,7 +498,7 @@ class EnvironmentLoader {
     Set<String> leakedBundledSecretKeys = const <String>{},
   }) {
     final missing = _missingRequiredKeys();
-    return EnvironmentLoadOutcome(
+    final outcome = EnvironmentLoadOutcome(
       source: source,
       sourceDescription: sourceDescription,
       loadedKeyCount: dotenv.isInitialized ? dotenv.env.length : 0,
@@ -471,11 +510,14 @@ class EnvironmentLoader {
         leakedBundledSecretKeys,
       ),
     );
+    lastLoadOutcome = outcome;
+    return outcome;
   }
 
   /// Reseta o estado mantido pelo loader. Apenas para testes.
   static void resetForTesting() {
     bundledAssetReader = null;
     machineEnvironmentFileOverrideForTest = null;
+    lastLoadOutcome = null;
   }
 }
