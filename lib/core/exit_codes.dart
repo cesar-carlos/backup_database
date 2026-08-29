@@ -27,6 +27,10 @@ abstract final class ServiceModeExitCode {
 }
 
 abstract final class UiBootstrapExitCode {
+  /// Normal UI shutdown **and** a handled second instance (manual or
+  /// `--launch-origin=windows-startup`). The Windows runner is already in
+  /// `GetMessage`; without `exit(0)` the duplicate process stays alive.
+  /// The smoke script `windows_single_instance_smoke.ps1` asserts this 0.
   static const int success = 0;
   static const int fatalBootstrapError = 1;
 }

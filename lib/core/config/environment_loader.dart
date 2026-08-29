@@ -142,6 +142,21 @@ class EnvironmentLoader {
   /// puros sem TestWidgetsFlutterBinding).
   static Future<String> Function(String key)? bundledAssetReader;
 
+  static File resolveBundledAssetFile({
+    required String assetFileName,
+    String? executablePath,
+  }) {
+    final resolved = executablePath ?? Platform.resolvedExecutable;
+    final exeDir = File(resolved).parent.path;
+    return File(p.join(exeDir, 'data', 'flutter_assets', assetFileName));
+  }
+
+  /// Headless/service fallback: read `data/flutter_assets/<key>` next to
+  /// the executable without `WidgetsFlutterBinding` / `rootBundle`.
+  static Future<String> readBundledAssetFromInstallLayout(String key) {
+    return resolveBundledAssetFile(assetFileName: key).readAsString();
+  }
+
   static EnvironmentLoadPlan resolveLoadPlan({
     required bool isWindows,
     required bool externalFileExists,

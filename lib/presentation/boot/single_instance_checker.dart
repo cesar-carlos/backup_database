@@ -1,4 +1,5 @@
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/uuid_validator.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
@@ -6,7 +7,6 @@ import 'package:backup_database/domain/services/i_single_instance_ipc_client.dar
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
 import 'package:backup_database/presentation/boot/launch_bootstrap_context.dart';
-import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 
 class SingleInstanceChecker {
   SingleInstanceChecker({
@@ -17,6 +17,7 @@ class SingleInstanceChecker {
     this._exitProcess,
     this._launchOrigin = LaunchOrigin.manual,
     this._scheduledScheduleId,
+    this._lockFallbackMode,
     int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
     this._retryDelay = SingleInstanceConfig.retryDelay,
     int ownerInfoMaxAttempts = _defaultOwnerInfoMaxAttempts,
@@ -29,10 +30,9 @@ class SingleInstanceChecker {
            : 1;
 
   /// F4: tenta múltiplas vezes obter info da instância existente. Cobre a
-  /// race entre `checkAndLock` (que adquire o mutex cedo no boot) e o
-  /// `startIpcServer` (que sobe ~300ms depois, após `setupServiceLocator`).
-  /// Sem retry, a 2ª UI mostra "Unknown user" mesmo quando o dono está
-  /// literalmente abrindo agora.
+  /// race entre `checkAndLock` (mutex cedo) e `startIpcServer` (logo após
+  /// o DI). Sem retry, a 2ª UI mostra "Unknown user" se o dono ainda está
+  /// subindo o IPC.
   static const int _defaultOwnerInfoMaxAttempts = 3;
   static const Duration _defaultOwnerInfoRetryDelay = Duration(
     milliseconds: 250,
@@ -45,6 +45,7 @@ class SingleInstanceChecker {
   final void Function(int code)? _exitProcess;
   final LaunchOrigin _launchOrigin;
   final String? _scheduledScheduleId;
+  final SingleInstanceLockFallbackMode? _lockFallbackMode;
   final int _maxRetryAttempts;
   final Duration _retryDelay;
   final int _ownerInfoMaxAttempts;
@@ -80,7 +81,9 @@ class SingleInstanceChecker {
       'servi\u00E7o estiver ativo.';
 
   Future<bool> checkAndHandleSecondInstance() async {
-    final isFirstInstance = await _singleInstanceService.checkAndLock();
+    final isFirstInstance = await _singleInstanceService.checkAndLock(
+      fallbackMode: _lockFallbackMode,
+    );
 
     if (isFirstInstance) {
       return true;
@@ -95,6 +98,7 @@ class SingleInstanceChecker {
       LoggerService.infoWithContext(
         'event=duplicate_launch_suppressed launchOrigin=windows-startup',
       );
+      _exitDuplicateUi();
       return;
     }
 
@@ -180,6 +184,11 @@ class SingleInstanceChecker {
       wasExistingWindowNotified: wasExistingWindowNotified,
     );
     _messageBox.showWarning(dialogTitle, dialogMessage);
+    _exitDuplicateUi();
+  }
+
+  void _exitDuplicateUi() {
+    _exitProcess?.call(UiBootstrapExitCode.success);
   }
 
   Future<void> _handleScheduledSecondInstance() async {

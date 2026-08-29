@@ -62,6 +62,10 @@ typedef InitializeUiServicesFn = Future<void> Function({
   required LaunchConfig launchConfig,
   required BootstrapConfig bootstrapConfig,
 });
+typedef CheckSingleInstanceFn = Future<bool> Function({
+  required LaunchBootstrapContext bootstrapContext,
+  required BootstrapConfig bootstrapConfig,
+});
 
 class BootstrapEnvironment {
   const BootstrapEnvironment({
@@ -119,30 +123,31 @@ class UiBootstrapServices {
     required this.getLaunchConfig,
     required this.executeScheduledBackupAndExit,
     required this.initializeUiServices,
+    required this.ipcServerStartupTask,
     required this.localSchedulerStartupTask,
     required this.socketServerStartupTask,
     required this.temporaryBackupCleanupStartupTask,
   });
 
-  final Future<bool> Function(LaunchBootstrapContext bootstrapContext)
-  checkSingleInstance;
+  final CheckSingleInstanceFn checkSingleInstance;
   final void Function() checkOsCompatibility;
   final InitializeAppFn initializeApp;
   final GetLaunchConfigFn getLaunchConfig;
   final Future<void> Function(String scheduleId) executeScheduledBackupAndExit;
   final InitializeUiServicesFn initializeUiServices;
+  final IpcServerStartupTask ipcServerStartupTask;
   final UiSchedulerStartupTask localSchedulerStartupTask;
   final SocketServerStartupTask socketServerStartupTask;
   final TemporaryBackupCleanupStartupTask temporaryBackupCleanupStartupTask;
 
   UiBootstrapServices copyWith({
-    Future<bool> Function(LaunchBootstrapContext bootstrapContext)?
-    checkSingleInstance,
+    CheckSingleInstanceFn? checkSingleInstance,
     void Function()? checkOsCompatibility,
     InitializeAppFn? initializeApp,
     GetLaunchConfigFn? getLaunchConfig,
     Future<void> Function(String scheduleId)? executeScheduledBackupAndExit,
     InitializeUiServicesFn? initializeUiServices,
+    IpcServerStartupTask? ipcServerStartupTask,
     UiSchedulerStartupTask? localSchedulerStartupTask,
     SocketServerStartupTask? socketServerStartupTask,
     TemporaryBackupCleanupStartupTask? temporaryBackupCleanupStartupTask,
@@ -155,6 +160,7 @@ class UiBootstrapServices {
       executeScheduledBackupAndExit:
           executeScheduledBackupAndExit ?? this.executeScheduledBackupAndExit,
       initializeUiServices: initializeUiServices ?? this.initializeUiServices,
+      ipcServerStartupTask: ipcServerStartupTask ?? this.ipcServerStartupTask,
       localSchedulerStartupTask:
           localSchedulerStartupTask ?? this.localSchedulerStartupTask,
       socketServerStartupTask:
@@ -253,7 +259,12 @@ class AppBootstrapDependencies {
         applyBootstrapConfig: (config) {
           setAppMode(config.appMode);
         },
-        setupServiceLocator: service_locator.setupServiceLocator,
+        setupServiceLocator: () async {
+          await service_locator.setupServiceLocator();
+          await service_locator.bindLockedSingleInstanceService(
+            SingleInstanceService(),
+          );
+        },
       ),
       uiServices: UiBootstrapServices(
         checkSingleInstance: AppBootstrap._defaultCheckSingleInstance,
@@ -267,6 +278,7 @@ class AppBootstrapDependencies {
         getLaunchConfig: AppInitializer.getLaunchConfig,
         executeScheduledBackupAndExit: ScheduledBackupExecutor.executeAndExit,
         initializeUiServices: AppBootstrap._defaultInitializeUiServices,
+        ipcServerStartupTask: AppBootstrap._buildIpcServerStartupTask(),
         localSchedulerStartupTask: UiSchedulerStartupTask(
           isTaskSchedulerEnabled: () {
             return service_locator
@@ -450,7 +462,8 @@ class AppBootstrap {
 
     if (bootstrapConfig.singleInstanceEnabled) {
       final canContinue = await _dependencies.uiServices.checkSingleInstance(
-        bootstrapContext,
+        bootstrapContext: bootstrapContext,
+        bootstrapConfig: bootstrapConfig,
       );
       if (!canContinue) {
         return;
@@ -466,6 +479,11 @@ class AppBootstrap {
     _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
 
     try {
+      await _dependencies.uiServices.ipcServerStartupTask.start(
+        bootstrapConfig,
+      );
+      _logBootstrapPhase(bootstrapWatch, 'ipc_ready');
+
       await _dependencies.uiServices.initializeApp(
         appMode: bootstrapConfig.appMode,
       );
@@ -548,15 +566,17 @@ class AppBootstrap {
     }
   }
 
-  static Future<bool> _defaultCheckSingleInstance(
-    LaunchBootstrapContext bootstrapContext,
-  ) async {
+  static Future<bool> _defaultCheckSingleInstance({
+    required LaunchBootstrapContext bootstrapContext,
+    required BootstrapConfig bootstrapConfig,
+  }) async {
     final singleInstanceChecker = SingleInstanceChecker(
       singleInstanceService: SingleInstanceService(),
       ipcClient: SingleInstanceIpcClient(),
       messageBox: const WindowsMessageBox(),
       launchOrigin: bootstrapContext.launchOrigin,
       scheduledScheduleId: ScheduleArgs.extract(bootstrapContext.rawArgs),
+      lockFallbackMode: bootstrapConfig.uiSingleInstanceLockFallbackMode,
       exitProcess: exit,
     );
 
@@ -604,13 +624,7 @@ class AppBootstrap {
       appMode: bootstrapConfig.appMode,
     ).start();
 
-    await Future.wait([
-      _buildIpcServerStartupTask(
-        features: features,
-        windowManager: windowManager,
-      ).start(bootstrapConfig),
-      _buildTrayManagerStartupTask(features: features).start(),
-    ]);
+    await _buildTrayManagerStartupTask(features: features).start();
 
     windowManager.setCallbacks(
       onClose: () async {
@@ -649,14 +663,14 @@ class AppBootstrap {
     );
   }
 
-  static IpcServerStartupTask _buildIpcServerStartupTask({
-    required FeatureAvailabilityService features,
-    required WindowManagerService windowManager,
-  }) {
+  static IpcServerStartupTask _buildIpcServerStartupTask() {
     return IpcServerStartupTask(
-      isWindowManagementEnabled: () =>
-          features.isWindowManagementEnabled && windowManager.isInitialized,
-      showWindow: windowManager.show,
+      isWindowManagementEnabled: () {
+        final features = service_locator.getIt<FeatureAvailabilityService>();
+        return features.isWindowManagementEnabled &&
+            WindowManagerService().isInitialized;
+      },
+      showWindow: () => WindowManagerService().show(),
       runSchedule: ScheduledBackupExecutor.execute,
       startIpcServer:
           ({

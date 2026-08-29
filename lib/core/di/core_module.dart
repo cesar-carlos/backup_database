@@ -115,7 +115,6 @@ Future<void> setupCoreModule(GetIt getIt) async {
   getIt.registerLazySingleton<ISingleInstanceIpcClient>(
     SingleInstanceIpcClient.new,
   );
-  getIt.registerLazySingleton<IIpcService>(IpcService.new);
   getIt.registerLazySingleton<IWindowsMessageBox>(WindowsMessageBox.new);
 
   getIt.registerLazySingleton<Dio>(Dio.new);

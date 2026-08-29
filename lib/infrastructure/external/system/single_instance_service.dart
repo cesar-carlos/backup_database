@@ -97,7 +97,10 @@ class SingleInstanceService implements ISingleInstanceService {
   final Future<bool> Function() _ipcServerProbe;
 
   @override
-  Future<bool> checkAndLock({bool isServiceMode = false}) async {
+  Future<bool> checkAndLock({
+    bool isServiceMode = false,
+    SingleInstanceLockFallbackMode? fallbackMode,
+  }) async {
     // F3: guard idempotente. Sem isso, uma 2ª chamada sobrescreveria
     // `_mutexHandle` (vazando o handle anterior) e inverteria
     // `_isFirstInstance` baseando-se em `ERROR_ALREADY_EXISTS` do próprio
@@ -132,6 +135,7 @@ class SingleInstanceService implements ISingleInstanceService {
           modeName: modeName,
           lastError: lastError,
           isServiceMode: isServiceMode,
+          fallbackMode: fallbackMode,
         );
       }
 
@@ -157,10 +161,11 @@ class SingleInstanceService implements ISingleInstanceService {
       return true;
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao verificar instância única', e, stackTrace);
-      final fallbackMode = isServiceMode
-          ? SingleInstanceLockFallbackMode.failSafe
-          : _lockFallbackModeProvider();
-      if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
+      final resolvedFallback = _resolveLockFallback(
+        isServiceMode: isServiceMode,
+        fallbackMode: fallbackMode,
+      );
+      if (resolvedFallback == SingleInstanceLockFallbackMode.failSafe) {
         LoggerService.error(
           '[SingleInstance] Fallback mode fail_safe: refusing startup after '
           'exception to preserve exclusivity.',
@@ -210,14 +215,29 @@ class SingleInstanceService implements ISingleInstanceService {
     return _LockResult(handle: handle, lastError: lastError);
   }
 
+  SingleInstanceLockFallbackMode _resolveLockFallback({
+    required bool isServiceMode,
+    SingleInstanceLockFallbackMode? fallbackMode,
+  }) {
+    if (fallbackMode != null) {
+      return fallbackMode;
+    }
+    if (isServiceMode) {
+      return SingleInstanceConfig.lockFallbackModeFor(isServiceMode: true);
+    }
+    return _lockFallbackModeProvider();
+  }
+
   Future<bool> _handleMutexCreationFailure({
     required String modeName,
     required int lastError,
     required bool isServiceMode,
+    SingleInstanceLockFallbackMode? fallbackMode,
   }) async {
-    final fallbackMode = isServiceMode
-        ? SingleInstanceLockFallbackMode.failSafe
-        : _lockFallbackModeProvider();
+    final resolvedFallback = _resolveLockFallback(
+      isServiceMode: isServiceMode,
+      fallbackMode: fallbackMode,
+    );
 
     // F1 (log): diferencia ACL denied de outros erros para facilitar
     // triagem no campo. ERROR_ACCESS_DENIED (5) tipicamente significa que
@@ -227,7 +247,7 @@ class SingleInstanceService implements ISingleInstanceService {
         ? 'single_instance_lock_acl_denied'
         : 'single_instance_lock_error';
 
-    if (fallbackMode == SingleInstanceLockFallbackMode.failSafe) {
+    if (resolvedFallback == SingleInstanceLockFallbackMode.failSafe) {
       LoggerService.error(
         'event=$lockEventName ownerRole=$modeName '
         'handle=$_mutexHandle getLastError=$lastError '

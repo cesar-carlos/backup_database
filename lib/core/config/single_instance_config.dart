@@ -93,6 +93,16 @@ class SingleInstanceConfig {
   static const String uiMutexName = instanceMutexName;
   static const String serviceMutexName = instanceMutexName;
 
+  /// UI and Windows service compete for [instanceMutexName]. They do not
+  /// run at the same time on one machine.
+  static const bool coexistsWithUi = false;
+
+  static const String lockScopeMachineGlobal = 'machine_global';
+
+  static const String coexistenceLogToken = 'coexists_with_ui=false';
+
+  static const String lockScopeLogToken = 'lock_scope=$lockScopeMachineGlobal';
+
   // IPC configuration
   static const int ipcBasePort = 58724;
   static const List<int> ipcAlternativePorts = [

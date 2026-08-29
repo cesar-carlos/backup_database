@@ -38,9 +38,15 @@ Procure por:
 [main] args=[--minimized, --mode=server, --run-as-service]
 [main] env: SERVICE_MODE=server, ...
 [ServiceModeDetector] MATCH layer-1: Session 0
-==> Modo Servico detectado - inicializando sem UI
->>> [8/8] Servico de agendamento iniciado
+[main] processRole=service bootstrap=service_no_ui_surface
+[bootstrap] processRole=service ... coexists_with_ui=false lock_scope=machine_global
+>>> [10/11] OK Iniciando scheduler, health, fila persistida e limpeza de staging
+>>> [11/11] OK Inicializando auto update do servico
 ```
+
+UI e servico compartilham o mesmo mutex global. Com o servico rodando, a UI
+nao sobe (dialog ou exit 0 no atalho de startup). `exit 77` no servico significa
+que outro processo ja detem o lock.
 
 ## Problema: app entrou em modo UI
 
@@ -79,11 +85,17 @@ nssm restart BackupDatabaseService
 
 | Passo | Descricao | Causa comum |
 |------|-----------|-------------|
-| 1-2 | Carregamento de ambiente | `C:\ProgramData\BackupDatabase\config\.env` ausente ou invalido |
-| 4 | Single instance | Outro processo manteve o mutex |
-| 5 | Dependencias | Banco travado ou configuracao invalida |
-| 7 | Event Log | Falta permissao para registrar fonte |
-| 8 | Scheduler | Falha ao iniciar tarefas agendadas |
+| 1 | Init | Falha muito cedo no `ServiceBootstrapLog` |
+| 2 | Carregamento de ambiente | `C:\ProgramData\BackupDatabase\config\.env` ausente ou invalido |
+| 3 | Modo do aplicativo | `.install_mode` / `APP_MODE` inconsistente |
+| 4 | Single instance | Outro processo (UI ou servico) manteve o mutex compartilhado |
+| 5 | Dependencias (DI) | Banco travado ou configuracao invalida |
+| 6 | Resolve servicos | Registro GetIt ausente |
+| 7 | IPC | Porta loopback 58724-58729 ocupada |
+| 8 | Event Log | Falta permissao para registrar fonte |
+| 9 | Shutdown handler | Falha ao registrar Ctrl+C / SCM stop |
+| 10 | Scheduler / health / fila / socket | Falha ao iniciar tarefas agendadas ou socket |
+| 11 | Auto update | Feed ou conta de servico bloqueada |
 
 ## Teste manual sem NSSM
 
@@ -148,7 +160,7 @@ Get-Content "C:\ProgramData\BackupDatabase\logs\service_stdout.log" -Wait
 
 1. Veja qual passo parou nos logs.
 2. Se travou no passo 5, valide banco e credenciais.
-3. Se travou no passo 8, valide scheduler e dependencias.
+3. Se travou no passo 10, valide scheduler, fila e socket.
 4. Confirme que `C:\ProgramData\BackupDatabase\config\.env` existe.
 
 ### "Servico nao retornou um erro"

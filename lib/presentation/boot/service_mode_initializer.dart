@@ -80,7 +80,8 @@ class ServiceModeInitializer {
       LoggerService.info(
         '[bootstrap] processRole=service single_instance_mutex='
         '${SingleInstanceConfig.serviceMutexName.split(r'\').last} '
-        'coexists_with_ui=independent_mutex',
+        '${SingleInstanceConfig.coexistenceLogToken} '
+        '${SingleInstanceConfig.lockScopeLogToken}',
       );
 
       await stepRunner.run(
@@ -93,6 +94,8 @@ class ServiceModeInitializer {
         step: _ServiceBootstrapStep.loadEnv.oneBased,
         label: 'Carregando variaveis de ambiente',
         action: () async {
+          EnvironmentLoader.bundledAssetReader ??=
+              EnvironmentLoader.readBundledAssetFromInstallLayout;
           final outcome = await EnvironmentLoader.loadIfNeeded(
             logPrefix: '[service]',
           );
@@ -160,19 +163,9 @@ class ServiceModeInitializer {
         label: 'Configurando dependencias (DI)',
         action: () async {
           await service_locator.setupServiceLocatorForServiceMode();
-          // §2.3: o `SingleInstanceService` foi instanciado na step
-          // anterior (antes do DI estar pronto) para adquirir o lock cedo.
-          // Se o DI registrou uma `ISingleInstanceService` lazy (via
-          // `infrastructure_module`), substituímos pelo instance que
-          // realmente detém o lock — caso contrário consumidores de
-          // `getIt<ISingleInstanceService>()` recebem outro objeto sem o
-          // lock e o serviço pode tentar duplicar o IPC.
           final lockedInstance = singleInstanceService;
           if (lockedInstance != null) {
-            if (service_locator.getIt.isRegistered<ISingleInstanceService>()) {
-              await service_locator.getIt.unregister<ISingleInstanceService>();
-            }
-            service_locator.getIt.registerSingleton<ISingleInstanceService>(
+            await service_locator.bindLockedSingleInstanceService(
               lockedInstance,
             );
           }

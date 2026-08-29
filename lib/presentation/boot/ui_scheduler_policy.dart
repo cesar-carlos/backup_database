@@ -7,6 +7,12 @@ typedef UiSchedulerPolicyWarning = void Function(String message);
 
 enum UiSchedulerFallbackMode { failOpen, failSafe }
 
+/// Decides whether the UI process should start the local scheduler.
+///
+/// On the happy path UI and service never coexist (shared mutex), so this
+/// skip does not run. It still matters when the UI passed the lock
+/// (debug with single-instance off, `fail_open` without an IPC owner,
+/// or an SCM vs process race).
 class UiSchedulerPolicy {
   UiSchedulerPolicy(
     this._windowsServiceService, {

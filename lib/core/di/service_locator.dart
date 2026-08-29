@@ -4,6 +4,7 @@ import 'package:backup_database/core/di/core_module.dart';
 import 'package:backup_database/core/di/domain_module.dart';
 import 'package:backup_database/core/di/infrastructure_module.dart';
 import 'package:backup_database/core/di/presentation_module.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:get_it/get_it.dart';
 
 final GetIt getIt = GetIt.instance;
@@ -44,4 +45,16 @@ Future<void> setupServiceLocatorForServiceMode() async {
   await setupDomainModule(getIt);
   await setupInfrastructureModule(getIt);
   await setupApplicationModule(getIt);
+}
+
+/// Replaces the lazy `ISingleInstanceService` with the instance that already
+/// holds the Win32 mutex (acquired before DI). Without this, `getIt` can
+/// resolve a different object that never called `checkAndLock`.
+Future<void> bindLockedSingleInstanceService(
+  ISingleInstanceService lockedInstance,
+) async {
+  if (getIt.isRegistered<ISingleInstanceService>()) {
+    await getIt.unregister<ISingleInstanceService>();
+  }
+  getIt.registerSingleton<ISingleInstanceService>(lockedInstance);
 }

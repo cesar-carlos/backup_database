@@ -45,6 +45,27 @@ void main() {
     );
   });
 
+  group('EnvironmentLoader.resolveBundledAssetFile', () {
+    test('resolves data/flutter_assets next to the executable', () {
+      final file = EnvironmentLoader.resolveBundledAssetFile(
+        assetFileName: '.env',
+        executablePath: r'C:\Program Files\Backup Database\backup_database.exe',
+      );
+
+      expect(
+        file.path,
+        equals(
+          p.join(
+            r'C:\Program Files\Backup Database',
+            'data',
+            'flutter_assets',
+            '.env',
+          ),
+        ),
+      );
+    });
+  });
+
   group('EnvironmentLoader.migrateLegacyWindowsEnvironmentIfNeeded', () {
     test(
       'copies legacy app env into ProgramData and preserves a backup',

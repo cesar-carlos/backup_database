@@ -67,6 +67,8 @@ void main() {
       await AppBootstrap(dependencies: dependencies).start();
 
       expect(events, contains('single_instance'));
+      expect(events, isNot(contains('di')));
+      expect(events, isNot(contains('ipc')));
       expect(events, isNot(contains('app_init')));
       expect(events, isNot(contains('run_app')));
     });
@@ -85,6 +87,11 @@ void main() {
 
       await AppBootstrap(dependencies: dependencies).start();
 
+      expect(events, contains('ipc'));
+      expect(
+        events.indexOf('ipc'),
+        lessThan(events.indexOf('scheduled:job-1')),
+      );
       expect(events, contains('scheduled:job-1'));
       expect(events, isNot(contains('ui_services')));
       expect(events, isNot(contains('run_app')));
@@ -138,6 +145,7 @@ void main() {
           'os',
           'single_instance',
           'di',
+          'ipc',
           'app_init:server',
           'launch_config',
           'ui_services',
@@ -172,6 +180,7 @@ void main() {
           contains('phase=context_resolved'),
           contains('phase=single_instance_ok'),
           contains('phase=service_locator_ready'),
+          contains('phase=ipc_ready'),
           contains('phase=app_initializer_done'),
           contains('phase=launch_config_ready'),
           contains('phase=scheduler_and_socket_ready'),
@@ -239,10 +248,14 @@ AppBootstrapDependencies _buildDependencies({
   );
 
   final uiServices = UiBootstrapServices(
-    checkSingleInstance: (bootstrapContext) async {
-      events.add('single_instance');
-      return canContinueAfterSingleInstanceCheck;
-    },
+    checkSingleInstance:
+        ({
+          required bootstrapContext,
+          required bootstrapConfig,
+        }) async {
+          events.add('single_instance');
+          return canContinueAfterSingleInstanceCheck;
+        },
     checkOsCompatibility: () {
       events.add('os');
     },
@@ -263,6 +276,21 @@ AppBootstrapDependencies _buildDependencies({
         }) async {
           events.add('ui_services');
         },
+    ipcServerStartupTask: IpcServerStartupTask(
+      isWindowManagementEnabled: () => false,
+      showWindow: () async {},
+      runSchedule: (id) async => 0,
+      startIpcServer:
+          ({
+            required onShowWindow,
+            required onRunSchedule,
+          }) async {
+            events.add('ipc');
+          },
+      logInfo: _ignoreLog,
+      logWarning: _ignoreLogWithError,
+      logError: _ignoreLogWithError,
+    ),
     localSchedulerStartupTask: UiSchedulerStartupTask(
       isTaskSchedulerEnabled: () => true,
       shouldSkipScheduler: (fallbackMode) async {

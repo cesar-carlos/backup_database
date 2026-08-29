@@ -1,3 +1,5 @@
+import 'package:backup_database/core/config/single_instance_config.dart';
+
 /// Interface for single instance management service.
 ///
 typedef RunScheduleIpcHandler = Future<int> Function(String scheduleId);
@@ -12,7 +14,12 @@ abstract class ISingleInstanceService {
   ///
   /// [isServiceMode] only affects fallback/logging policy; UI and service
   /// compete for the same machine-global mutex.
-  Future<bool> checkAndLock({bool isServiceMode = false});
+  ///
+  /// [fallbackMode] overrides env/provider resolution when set.
+  Future<bool> checkAndLock({
+    bool isServiceMode = false,
+    SingleInstanceLockFallbackMode? fallbackMode,
+  });
 
   /// Starts the IPC server to receive commands from other instances.
   ///

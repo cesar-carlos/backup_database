@@ -121,7 +121,7 @@ void main() {
           iss.routineContains('InitializeSetup', 'unins000.exe'),
           isFalse,
         );
-        expect(setup, contains(r'{param:MODE}'));
+        expect(setup, contains('{param:MODE}'));
         expect(setup, contains(r'{app}\.install_mode'));
         expect(setup, contains('read_json_app_mode.ps1'));
         expect(setup, contains('ResolveSelectedMode'));

@@ -43,6 +43,8 @@ class UiSchedulerStartupTask {
         config.uiSchedulerFallbackMode,
       );
       if (shouldSkip) {
+        // Defense in depth: only reached if this UI already passed the
+        // shared mutex (not the happy path with a running service).
         logInfo(
           '[main] processRole=${ProcessRole.ui.name} '
           'scheduler_local_skipped=windows_service_installed_and_running',

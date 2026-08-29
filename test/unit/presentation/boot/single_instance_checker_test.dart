@@ -1,3 +1,5 @@
+import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_windows_message_box.dart';
@@ -128,6 +130,52 @@ void main() {
         expect(ipcClient.getExistingInstanceUserCallCount, 0);
         expect(ipcClient.notifyAttemptCount, 0);
         expect(messageBox.warningMessage, isNull);
+      },
+    );
+
+    test(
+      'should exit with success when duplicate launch is windowsStartup',
+      () async {
+        final exitCodes = <int>[];
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: _FakeSingleInstanceIpcClient(),
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.windowsStartup,
+          exitProcess: exitCodes.add,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(exitCodes, [UiBootstrapExitCode.success]);
+      },
+    );
+
+    test(
+      'should exit with success after showing manual duplicate dialog',
+      () async {
+        final exitCodes = <int>[];
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: _FakeSingleInstanceIpcClient(
+            existingUser: 'user_a',
+            notifyResults: [true],
+          ),
+          messageBox: _FakeWindowsMessageBox(),
+          getCurrentUsername: () => 'user_a',
+          maxRetryAttempts: 1,
+          exitProcess: exitCodes.add,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(exitCodes, [UiBootstrapExitCode.success]);
       },
     );
 
@@ -317,7 +365,10 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
   final bool checkAndLockResult;
 
   @override
-  Future<bool> checkAndLock({bool isServiceMode = false}) async {
+  Future<bool> checkAndLock({
+    bool isServiceMode = false,
+    SingleInstanceLockFallbackMode? fallbackMode,
+  }) async {
     return checkAndLockResult;
   }
 

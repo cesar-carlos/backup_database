@@ -28,6 +28,8 @@ class TemporaryBackupCleanupStartupTask {
         config.uiSchedulerFallbackMode,
       );
       if (shouldSkip) {
+        // Defense in depth: only reached if this UI already passed the
+        // shared mutex (not the happy path with a running service).
         logInfo(
           '[main] processRole=${ProcessRole.ui.name} '
           'temp_backup_cleanup_skipped=windows_service_installed_and_running',

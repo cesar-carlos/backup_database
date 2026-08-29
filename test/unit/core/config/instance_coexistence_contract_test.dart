@@ -27,5 +27,17 @@ void main() {
         );
       },
     );
+
+    test('should advertise that UI and service do not coexist', () {
+      expect(SingleInstanceConfig.coexistsWithUi, isFalse);
+      expect(
+        SingleInstanceConfig.coexistenceLogToken,
+        equals('coexists_with_ui=false'),
+      );
+      expect(
+        SingleInstanceConfig.lockScopeLogToken,
+        equals('lock_scope=machine_global'),
+      );
+    });
   });
 }
