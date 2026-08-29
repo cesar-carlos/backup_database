@@ -54,9 +54,9 @@ enum EventLogEntryType {
 /// são ignorados silenciosamente.
 class WindowsEventLogService implements IWindowsServiceEventLogger {
   WindowsEventLogService({
-    required ps.ProcessService processService,
+    required this._processService,
     this.sourceName = 'BackupDatabase',
-  }) : _processService = processService;
+  });
 
   final ps.ProcessService _processService;
   final String sourceName;

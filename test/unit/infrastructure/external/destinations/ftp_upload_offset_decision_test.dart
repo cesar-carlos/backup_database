@@ -47,13 +47,19 @@ void main() {
 
     test('returns Resume with correct offset for various partial sizes', () {
       expect(
-        (computeFtpUploadOffsetDecision(1, 100, true) as FtpUploadResume)
-            .offset,
+        (computeFtpUploadOffsetDecision(
+          1,
+          100,
+          true,
+        ) as FtpUploadResume).offset,
         1,
       );
       expect(
-        (computeFtpUploadOffsetDecision(99, 100, true) as FtpUploadResume)
-            .offset,
+        (computeFtpUploadOffsetDecision(
+          99,
+          100,
+          true,
+        ) as FtpUploadResume).offset,
         99,
       );
     });

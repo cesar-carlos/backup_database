@@ -42,18 +42,21 @@ class NextcloudWebdavUtils {
 
     final requestedName = extractLastSegment(requestedPath);
     final document = xml.XmlDocument.parse(xmlStr);
-    final responses = document.findAllElements('response', namespace: 'DAV:');
+    final responses = document.findAllElements(
+      'response',
+      namespaceUri: 'DAV:',
+    );
 
     final folderNames = <String>[];
     for (final res in responses) {
       final href = res
-          .findElements('href', namespace: 'DAV:')
+          .findElements('href', namespaceUri: 'DAV:')
           .firstOrNull
           ?.innerText;
       if (href == null || href.isEmpty) continue;
 
       final isCollection = res
-          .findAllElements('collection', namespace: 'DAV:')
+          .findAllElements('collection', namespaceUri: 'DAV:')
           .isNotEmpty;
       if (!isCollection) continue;
 
@@ -75,12 +78,15 @@ class NextcloudWebdavUtils {
 
     final requestedName = extractLastSegment(requestedPath);
     final document = xml.XmlDocument.parse(xmlStr);
-    final responses = document.findAllElements('response', namespace: 'DAV:');
+    final responses = document.findAllElements(
+      'response',
+      namespaceUri: 'DAV:',
+    );
 
     final names = <String>[];
     for (final res in responses) {
       final href = res
-          .findElements('href', namespace: 'DAV:')
+          .findElements('href', namespaceUri: 'DAV:')
           .firstOrNull
           ?.innerText;
       if (href == null || href.isEmpty) continue;

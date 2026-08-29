@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'schedule.dart';
@@ -9,6 +9,7 @@ part of 'schedule.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -56,20 +57,20 @@ class _$ScheduleCopyWithImpl<$Res>
 /// Create a copy of Schedule
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? databaseConfigId = null,Object? databaseType = null,Object? scheduleType = null,Object? scheduleConfig = null,Object? destinationIds = null,Object? backupFolder = null,Object? compressionFormat = null,Object? backupType = null,Object? truncateLog = null,Object? compressBackup = null,Object? enabled = null,Object? enableChecksum = null,Object? verifyAfterBackup = null,Object? verifyPolicy = null,Object? postBackupScript = freezed,Object? backupTimeout = null,Object? verifyTimeout = null,Object? lastRunAt = freezed,Object? nextRunAt = freezed,Object? createdAt = freezed,Object? updatedAt = freezed,Object? isConvertedDifferential = null,Object? firebirdNbackupPhysicalLevel = freezed,Object? sqlServerBackupOptions = freezed,Object? sybaseBackupOptions = freezed,}) {
-  return _then(_self.copyWith(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+  return _then(Schedule(
+name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,databaseConfigId: null == databaseConfigId ? _self.databaseConfigId : databaseConfigId // ignore: cast_nullable_to_non_nullable
 as String,databaseType: null == databaseType ? _self.databaseType : databaseType // ignore: cast_nullable_to_non_nullable
 as DatabaseType,scheduleType: null == scheduleType ? _self.scheduleType : scheduleType // ignore: cast_nullable_to_non_nullable
 as String,scheduleConfig: null == scheduleConfig ? _self.scheduleConfig : scheduleConfig // ignore: cast_nullable_to_non_nullable
 as String,destinationIds: null == destinationIds ? _self.destinationIds : destinationIds // ignore: cast_nullable_to_non_nullable
 as List<String>,backupFolder: null == backupFolder ? _self.backupFolder : backupFolder // ignore: cast_nullable_to_non_nullable
-as String,compressionFormat: null == compressionFormat ? _self.compressionFormat : compressionFormat // ignore: cast_nullable_to_non_nullable
-as CompressionFormat,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
+as String,id: freezed == id ? _self.id! : id // ignore: cast_nullable_to_non_nullable
+as String?,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
 as BackupType,truncateLog: null == truncateLog ? _self.truncateLog : truncateLog // ignore: cast_nullable_to_non_nullable
 as bool,compressBackup: null == compressBackup ? _self.compressBackup : compressBackup // ignore: cast_nullable_to_non_nullable
-as bool,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,compressionFormat: freezed == compressionFormat ? _self.compressionFormat! : compressionFormat // ignore: cast_nullable_to_non_nullable
+as CompressionFormat?,enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
 as bool,enableChecksum: null == enableChecksum ? _self.enableChecksum : enableChecksum // ignore: cast_nullable_to_non_nullable
 as bool,verifyAfterBackup: null == verifyAfterBackup ? _self.verifyAfterBackup : verifyAfterBackup // ignore: cast_nullable_to_non_nullable
 as bool,verifyPolicy: null == verifyPolicy ? _self.verifyPolicy : verifyPolicy // ignore: cast_nullable_to_non_nullable
@@ -225,7 +226,7 @@ return raw(_that.id,_that.name,_that.databaseConfigId,_that.databaseType,_that.s
 
 
 class _Schedule extends Schedule {
-  const _Schedule({required this.id, required this.name, required this.databaseConfigId, required this.databaseType, required this.scheduleType, required this.scheduleConfig, required final  List<String> destinationIds, required this.backupFolder, required this.compressionFormat, this.backupType = BackupType.full, this.truncateLog = true, this.compressBackup = true, this.enabled = true, this.enableChecksum = false, this.verifyAfterBackup = false, this.verifyPolicy = VerifyPolicy.bestEffort, this.postBackupScript, this.backupTimeout = const Duration(hours: 2), this.verifyTimeout = const Duration(minutes: 30), this.lastRunAt, this.nextRunAt, this.createdAt, this.updatedAt, this.isConvertedDifferential = false, this.firebirdNbackupPhysicalLevel, this.sqlServerBackupOptions, this.sybaseBackupOptions}): _destinationIds = destinationIds,super._();
+  const _Schedule({required this.id, required this.name, required this.databaseConfigId, required this.databaseType, required this.scheduleType, required this.scheduleConfig, required  List<String> destinationIds, required this.backupFolder, required this.compressionFormat, this.backupType = BackupType.full, this.truncateLog = true, this.compressBackup = true, this.enabled = true, this.enableChecksum = false, this.verifyAfterBackup = false, this.verifyPolicy = VerifyPolicy.bestEffort, this.postBackupScript, this.backupTimeout = const Duration(hours: 2), this.verifyTimeout = const Duration(minutes: 30), this.lastRunAt, this.nextRunAt, this.createdAt, this.updatedAt, this.isConvertedDifferential = false, this.firebirdNbackupPhysicalLevel, this.sqlServerBackupOptions, this.sybaseBackupOptions}): _destinationIds = destinationIds,super._();
   
 
 @override final  String id;

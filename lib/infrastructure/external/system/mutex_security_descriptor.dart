@@ -2,7 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:ffi/ffi.dart';
-import 'package:win32/win32.dart' show LocalFree;
+import 'package:win32/win32.dart' show HLOCAL, LocalFree;
 
 /// SDDL string que concede `MUTEX_ALL_ACCESS` (0x1F0001) ao grupo
 /// `WD` (Everyone / S-1-1-0).
@@ -46,8 +46,8 @@ final class SecurityAttributesStruct extends Struct {
 class MutexSecurityAttributes {
   MutexSecurityAttributes._({
     required this.pointer,
-    required void Function() dispose,
-  }) : _dispose = dispose;
+    required this._dispose,
+  });
 
   /// Ponteiro pronto para ser passado como `lpMutexAttributes` em
   /// `CreateMutexW`. Pode ser `nullptr` se a construção falhar (caller
@@ -124,7 +124,7 @@ class MutexSecurityDescriptor {
       return MutexSecurityAttributes._(
         pointer: attrs.cast(),
         dispose: () {
-          LocalFree(sdPtr);
+          LocalFree(HLOCAL(sdPtr));
           calloc.free(attrs);
         },
       );

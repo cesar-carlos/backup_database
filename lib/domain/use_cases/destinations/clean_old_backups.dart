@@ -34,16 +34,12 @@ class CleanOldBackupsResult {
 
 class CleanOldBackups {
   CleanOldBackups({
-    required ILocalDestinationService localService,
-    required IFtpService ftpService,
-    required IGoogleDriveDestinationService googleDriveService,
-    required IDropboxDestinationService dropboxService,
-    required INextcloudDestinationService nextcloudService,
-  }) : _localService = localService,
-       _ftpService = ftpService,
-       _googleDriveService = googleDriveService,
-       _dropboxService = dropboxService,
-       _nextcloudService = nextcloudService;
+    required this._localService,
+    required this._ftpService,
+    required this._googleDriveService,
+    required this._dropboxService,
+    required this._nextcloudService,
+  });
   final ILocalDestinationService _localService;
   final IFtpService _ftpService;
   final IGoogleDriveDestinationService _googleDriveService;

@@ -948,9 +948,9 @@ void main() {
           reason: 'Output must be UTF-8 without BOM',
         );
 
-        final decoded =
-            jsonDecode(await File(contextPath).readAsString())
-                as Map<String, Object?>;
+        final decoded = jsonDecode(
+          await File(contextPath).readAsString(),
+        ) as Map<String, Object?>;
         expect(decoded['serviceExists'], isA<bool>());
         expect(decoded['capturedAt'], isA<String>());
         expect((decoded['capturedAt']! as String).isNotEmpty, isTrue);

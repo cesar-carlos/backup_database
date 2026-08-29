@@ -28,8 +28,8 @@ import 'package:result_dart/result_dart.dart' as rd;
 class FirebirdBackupService implements IFirebirdBackupService {
   FirebirdBackupService(
     this._processService, {
-    bool enableGbakZRuntimeProbe = true,
-  }) : _enableGbakZRuntimeProbe = enableGbakZRuntimeProbe;
+    this._enableGbakZRuntimeProbe = true,
+  });
 
   final ps.ProcessService _processService;
   final bool _enableGbakZRuntimeProbe;

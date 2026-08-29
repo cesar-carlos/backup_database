@@ -11,12 +11,10 @@ import 'package:result_dart/result_dart.dart' show unit;
 
 class WindowsServiceElevationInstaller {
   WindowsServiceElevationInstaller({
-    required ProcessService processService,
-    required WindowsServiceStatusSupplier getStatus,
+    required this._processService,
+    required this._getStatus,
     WindowsServiceTimingConfig? timing,
-  }) : _processService = processService,
-       _getStatus = getStatus,
-       _timing = timing ?? WindowsServiceTimingConfig.defaultConfig;
+  }) : _timing = timing ?? WindowsServiceTimingConfig.defaultConfig;
 
   final ProcessService _processService;
   final WindowsServiceStatusSupplier _getStatus;

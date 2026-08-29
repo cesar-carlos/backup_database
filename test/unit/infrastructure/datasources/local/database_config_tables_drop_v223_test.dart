@@ -91,7 +91,7 @@ void main() {
             'INSERT INTO sql_server_configs_table (id) VALUES (?)',
             ['keep-me'],
           )
-          ..dispose();
+          ..close();
 
         var markCalled = false;
         final result = await DatabaseConfigTablesDropV223.run(
@@ -138,7 +138,7 @@ void main() {
           final rows = verifyDb.select('SELECT id FROM $backupTableName');
           expect(rows.first['id'], equals('keep-me'));
         } finally {
-          verifyDb.dispose();
+          verifyDb.close();
         }
       },
     );

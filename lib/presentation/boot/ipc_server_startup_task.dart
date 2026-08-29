@@ -3,11 +3,10 @@ import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 
 typedef IpcRunScheduleHandler = Future<int> Function(String scheduleId);
 
-typedef IpcServerStarter =
-    Future<void> Function({
-      required Future<void> Function() onShowWindow,
-      required IpcRunScheduleHandler onRunSchedule,
-    });
+typedef IpcServerStarter = Future<void> Function({
+  required Future<void> Function() onShowWindow,
+  required IpcRunScheduleHandler onRunSchedule,
+});
 
 class IpcServerStartupTask {
   const IpcServerStartupTask({

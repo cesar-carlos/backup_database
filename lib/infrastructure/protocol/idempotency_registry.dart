@@ -42,12 +42,10 @@ import 'package:backup_database/infrastructure/protocol/message.dart';
 /// ```
 class IdempotencyRegistry {
   IdempotencyRegistry({
-    Duration ttl = IdempotencyPolicy.defaultTtl,
+    this._ttl = IdempotencyPolicy.defaultTtl,
     DateTime Function()? clock,
-    IdempotencyStore? store,
-  }) : _ttl = ttl,
-       _clock = clock ?? DateTime.now,
-       _store = store;
+    this._store,
+  }) : _clock = clock ?? DateTime.now;
 
   final Duration _ttl;
   final DateTime Function() _clock;

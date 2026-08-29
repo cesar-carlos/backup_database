@@ -27,13 +27,11 @@ bool isHeartbeatMessage(Message message) =>
 
 class HeartbeatManager {
   HeartbeatManager({
-    required void Function(Message) sendHeartbeat,
-    required void Function() onTimeout,
+    required this._sendHeartbeat,
+    required this._onTimeout,
     Duration? interval,
     Duration? timeout,
-  }) : _sendHeartbeat = sendHeartbeat,
-       _onTimeout = onTimeout,
-       _interval = interval ?? SocketConfig.heartbeatInterval,
+  }) : _interval = interval ?? SocketConfig.heartbeatInterval,
        _timeout = timeout ?? SocketConfig.heartbeatTimeout;
 
   final void Function(Message) _sendHeartbeat;

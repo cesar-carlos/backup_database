@@ -33,13 +33,10 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 class CapabilitiesMessageHandler {
   CapabilitiesMessageHandler({
     DateTime Function()? clock,
-    int chunkSize = 65536,
-    String compression = 'gzip',
-    bool supportsFirebird = false,
-  }) : _clock = clock ?? DateTime.now,
-       _chunkSize = chunkSize,
-       _compression = compression,
-       _supportsFirebird = supportsFirebird;
+    this._chunkSize = 65536,
+    this._compression = 'gzip',
+    this._supportsFirebird = false,
+  }) : _clock = clock ?? DateTime.now;
 
   final DateTime Function() _clock;
   final int _chunkSize;

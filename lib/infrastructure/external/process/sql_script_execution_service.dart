@@ -406,8 +406,7 @@ class SqlScriptExecutionService implements ISqlScriptExecutionService {
         if (db.isEmpty) {
           return const rd.Failure(
             ValidationFailure(
-              message:
-                  'Informe o caminho do banco no servidor ou um alias Firebird.',
+              message: 'Informe o caminho do banco no servidor ou um alias Firebird.',
             ),
           );
         }

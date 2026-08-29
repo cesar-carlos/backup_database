@@ -39,8 +39,8 @@ class SybaseLogBackupPreflightResult {
 class ValidateSybaseLogBackupPreflight {
   const ValidateSybaseLogBackupPreflight(
     this._backupHistoryRepository, {
-    int maxDaysForBaseFull = BackupConstants.maxDaysForLogBackupBaseFull,
-  }) : _maxDaysForBaseFull = maxDaysForBaseFull;
+    this._maxDaysForBaseFull = BackupConstants.maxDaysForLogBackupBaseFull,
+  });
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final int _maxDaysForBaseFull;

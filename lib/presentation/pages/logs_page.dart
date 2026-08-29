@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:backup_database/application/providers/log_provider.dart';
 import 'package:backup_database/application/services/log_service.dart';
@@ -82,16 +83,19 @@ class _LogsPageState extends State<LogsPage> {
   }
 
   Future<void> _handleExportLogs() async {
-    final result = await FilePicker.platform.saveFile(
+    final suggestedName =
+        'backup_logs_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.txt';
+    final uri = await FilePicker.saveFile(
       dialogTitle: 'Exportar Logs',
-      fileName:
-          'backup_logs_${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+      fileName: suggestedName,
+      bytes: Uint8List(0),
       type: FileType.custom,
       allowedExtensions: ['txt', 'json', 'csv'],
     );
 
-    if (result == null) return;
+    if (uri == null) return;
 
+    final result = uri.toFilePath();
     final format = _getFormatFromExtension(result);
     if (format == null) {
       if (mounted) {
@@ -146,43 +150,35 @@ class _LogsPageState extends State<LogsPage> {
   Widget build(BuildContext context) {
     final provider = context.watch<LogProvider>();
 
-    return ScaffoldPage(
-      header: PageHeader(
-        title: const Text('Logs'),
-        commandBar: CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.delete),
-              label: const Text('Limpar Logs'),
-              onPressed: _handleClearLogs,
-            ),
-            CommandBarButton(
-              icon: const Icon(FluentIcons.download),
-              label: const Text('Exportar'),
-              onPressed: _handleExportLogs,
-            ),
-          ],
+    return AppPageScaffold(
+      title: 'Logs',
+      actions: [
+        AppPageAction(
+          label: 'Limpar Logs',
+          icon: FluentIcons.delete,
+          onPressed: _handleClearLogs,
         ),
-      ),
-      content: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _LogsFiltersCard(
+        AppPageAction(
+          label: 'Exportar',
+          icon: FluentIcons.download,
+          onPressed: _handleExportLogs,
+        ),
+      ],
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LogsFiltersCard(
+            provider: provider,
+            searchController: _searchController,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(
+            child: _LogsContent(
               provider: provider,
-              searchController: _searchController,
+              scrollController: _scrollController,
             ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _LogsContent(
-                provider: provider,
-                scrollController: _scrollController,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -315,39 +311,20 @@ class _LogsContent extends StatelessWidget {
     }
 
     if (provider.error != null && provider.logs.isEmpty) {
-      final colors = context.colors;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              FluentIcons.error,
-              size: 48,
-              color: colors.danger,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              provider.error!,
-              style: FluentTheme.of(context).typography.body?.copyWith(
-                color: colors.danger,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ActionButton(
-              label: 'Tentar Novamente',
-              onPressed: provider.refresh,
-              icon: FluentIcons.refresh,
-            ),
-          ],
+      return SingleChildScrollView(
+        child: AppPageState.error(
+          title: 'Falha ao carregar logs',
+          message: provider.error,
+          actionLabel: 'Tentar Novamente',
+          onAction: provider.refresh,
         ),
       );
     }
 
     if (provider.logs.isEmpty) {
-      return const AppCard(
-        child: EmptyState(
-          icon: FluentIcons.document,
-          message: 'Nenhum log registrado',
+      return SingleChildScrollView(
+        child: AppPageState.empty(
+          title: 'Nenhum log registrado',
         ),
       );
     }

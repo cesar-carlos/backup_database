@@ -12,10 +12,9 @@ abstract class DatabaseConfigProviderBase<T extends DatabaseConnectionConfig>
     extends ChangeNotifier
     with AsyncStateMixin {
   DatabaseConfigProviderBase({
-    required IDatabaseConfigRepository<T> repository,
-    required IScheduleRepository scheduleRepository,
-  }) : _repository = repository,
-       _scheduleRepository = scheduleRepository {
+    required this._repository,
+    required this._scheduleRepository,
+  }) {
     unawaited(loadConfigs());
   }
 

@@ -70,7 +70,7 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
   try {
     db = sqlite3.sqlite3.open(dbPath);
     final exportData = _exportAllData(db);
-    db.dispose();
+    db.close();
     db = null;
 
     final backupPath =
@@ -88,7 +88,7 @@ Future<Map<String, dynamic>?> runFullDatabaseMigration224() async {
     return exportData;
   } on Object catch (e, stackTrace) {
     LoggerService.error('Erro na migração 2.2.4', e, stackTrace);
-    db?.dispose();
+    db?.close();
     return null;
   }
 }

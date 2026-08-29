@@ -9,10 +9,9 @@ import 'package:path/path.dart' as p;
 
 class TemporaryBackupCleanupService implements ITemporaryBackupCleanupService {
   const TemporaryBackupCleanupService({
-    required IBackupHistoryRepository backupHistoryRepository,
+    required this._backupHistoryRepository,
     DateTime Function()? clock,
-  }) : _backupHistoryRepository = backupHistoryRepository,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final DateTime Function() _clock;

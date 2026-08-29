@@ -22,10 +22,9 @@ import 'package:result_dart/result_dart.dart' as rd;
 /// retornada (mutação in-place do caller corrompia o cache).
 class CachedBackupHistoryRepository implements IBackupHistoryRepository {
   CachedBackupHistoryRepository({
-    required IBackupHistoryRepository repository,
+    required this._repository,
     Duration? cacheTtl,
-  }) : _repository = repository,
-       _cache = QueryCache<List<BackupHistory>>(
+  }) : _cache = QueryCache<List<BackupHistory>>(
          ttl: cacheTtl ?? const Duration(minutes: 2),
        );
 

@@ -6,14 +6,11 @@ enum CircuitState { closed, open, halfOpen }
 
 class CircuitBreaker {
   CircuitBreaker({
-    required String key,
-    int failureThreshold = CircuitBreakerConstants.failureThreshold,
-    Duration openDuration = CircuitBreakerConstants.openDuration,
-    int halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
-  }) : _key = key,
-       _failureThreshold = failureThreshold,
-       _openDuration = openDuration,
-       _halfOpenSuccessCount = halfOpenSuccessCount;
+    required this._key,
+    this._failureThreshold = CircuitBreakerConstants.failureThreshold,
+    this._openDuration = CircuitBreakerConstants.openDuration,
+    this._halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
+  });
 
   final String _key;
   final int _failureThreshold;
@@ -156,12 +153,10 @@ class CircuitBreaker {
 
 class CircuitBreakerRegistry {
   CircuitBreakerRegistry({
-    int failureThreshold = CircuitBreakerConstants.failureThreshold,
-    Duration openDuration = CircuitBreakerConstants.openDuration,
-    int halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
-  }) : _failureThreshold = failureThreshold,
-       _openDuration = openDuration,
-       _halfOpenSuccessCount = halfOpenSuccessCount;
+    this._failureThreshold = CircuitBreakerConstants.failureThreshold,
+    this._openDuration = CircuitBreakerConstants.openDuration,
+    this._halfOpenSuccessCount = CircuitBreakerConstants.halfOpenSuccessCount,
+  });
 
   final int _failureThreshold;
   final Duration _openDuration;

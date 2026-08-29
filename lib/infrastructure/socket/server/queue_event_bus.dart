@@ -18,11 +18,10 @@ import 'package:backup_database/infrastructure/socket/server/remote_execution_re
 /// reconnect que pode receber eventos repetidos.
 class QueueEventBus {
   QueueEventBus({
-    required Future<void> Function(String clientId, Message message) broadcast,
+    required this._broadcast,
     ExecutionEventSequencer? sequencer,
     DateTime Function()? clock,
-  }) : _broadcast = broadcast,
-       _sequencer = sequencer ?? ExecutionEventSequencer(),
+  }) : _sequencer = sequencer ?? ExecutionEventSequencer(),
        _clock = clock ?? DateTime.now;
 
   final Future<void> Function(String clientId, Message) _broadcast;

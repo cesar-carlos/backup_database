@@ -15,26 +15,17 @@ import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 
 class MetricsMessageHandler {
   MetricsMessageHandler({
-    required IBackupHistoryRepository backupHistoryRepository,
-    required IScheduleRepository scheduleRepository,
-    required IBackupRunningState backupRunningState,
-    IMetricsCollector? metricsCollector,
-    RemoteExecutionRegistry? executionRegistry,
-    ExecutionQueueService? queueService,
-    Future<int> Function()? stagingUsageBytesProvider,
-    Future<DateTime?> Function(String runId)? artifactExpiresAtForRunId,
-    SocketServerTelemetry? socketTelemetry,
+    required this._backupHistoryRepository,
+    required this._scheduleRepository,
+    required this._backupRunningState,
+    this._metricsCollector,
+    this._executionRegistry,
+    this._queueService,
+    this._stagingUsageBytesProvider,
+    this._artifactExpiresAtForRunId,
+    this._socketTelemetry,
     DateTime Function()? clock,
-  }) : _backupHistoryRepository = backupHistoryRepository,
-       _scheduleRepository = scheduleRepository,
-       _backupRunningState = backupRunningState,
-       _metricsCollector = metricsCollector,
-       _executionRegistry = executionRegistry,
-       _queueService = queueService,
-       _stagingUsageBytesProvider = stagingUsageBytesProvider,
-       _artifactExpiresAtForRunId = artifactExpiresAtForRunId,
-       _socketTelemetry = socketTelemetry,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;

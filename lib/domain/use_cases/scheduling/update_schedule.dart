@@ -17,8 +17,8 @@ class UpdateSchedule {
     this._calculator,
     this._licensePolicyService,
     this._destinationRepository, {
-    IMetricsCollector? metricsCollector,
-  }) : _metricsCollector = metricsCollector;
+    this._metricsCollector,
+  });
 
   final IScheduleRepository _repository;
   final ISchedulerService _schedulerService;

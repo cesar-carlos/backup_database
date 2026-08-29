@@ -12,14 +12,11 @@ import 'package:result_dart/result_dart.dart';
 /// across the codebase.
 class GetDatabaseConfig {
   const GetDatabaseConfig({
-    required ISqlServerConfigRepository sqlServerConfigRepository,
-    required ISybaseConfigRepository sybaseConfigRepository,
-    required IPostgresConfigRepository postgresConfigRepository,
-    required IFirebirdConfigRepository firebirdConfigRepository,
-  }) : _sqlServerConfigRepository = sqlServerConfigRepository,
-       _sybaseConfigRepository = sybaseConfigRepository,
-       _postgresConfigRepository = postgresConfigRepository,
-       _firebirdConfigRepository = firebirdConfigRepository;
+    required this._sqlServerConfigRepository,
+    required this._sybaseConfigRepository,
+    required this._postgresConfigRepository,
+    required this._firebirdConfigRepository,
+  });
 
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;

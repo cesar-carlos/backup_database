@@ -152,8 +152,7 @@ class DestinationsPage extends StatelessWidget {
     if (linkedSchedules == null) {
       await MessageModal.showError(
         context,
-        message:
-            'Não foi possível validar dependências do destino. Tente novamente.',
+        message: 'Não foi possível validar dependências do destino. Tente novamente.',
       );
       return;
     }

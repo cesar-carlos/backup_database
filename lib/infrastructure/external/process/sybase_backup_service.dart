@@ -37,10 +37,9 @@ String _failureMessage(Object failure) {
 class SybaseBackupService implements ISybaseBackupService {
   SybaseBackupService(
     this._processService, {
-    required SybaseConnectionStrategyCache strategyCache,
-    bool useCredentialsFile = true,
-  }) : _strategyCache = strategyCache,
-       _useCredentialsFile = useCredentialsFile {
+    required this._strategyCache,
+    this._useCredentialsFile = true,
+  }) {
     // A6: limpa eventuais diretórios `sybase_backup_*` deixados em
     // `Directory.systemTemp` por execuções anteriores que foram mortas
     // antes do `finally` do `_runSybaseToolWithCredentials`. Cada um
@@ -1364,8 +1363,7 @@ class SybaseBackupService implements ISybaseBackupService {
             errorLower.contains('login failed')) {
           errorMessage = 'Usuário ou senha inválidos.';
         } else if (errorLower.contains('already in use')) {
-          errorMessage =
-              'O banco de dados está em uso. Verifique se o Engine Name está correto.';
+          errorMessage = 'O banco de dados está em uso. Verifique se o Engine Name está correto.';
         } else {
           errorMessage =
               'Erro ao conectar: $lastError\n\n'

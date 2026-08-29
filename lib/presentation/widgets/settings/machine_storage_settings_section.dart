@@ -403,7 +403,7 @@ class _MachineStorageSettingsSectionState
       return;
     }
 
-    final picked = await FilePicker.platform.getDirectoryPath(
+    final picked = await FilePicker.getDirectoryPath(
       dialogTitle: appLocaleString(
         context,
         'Pasta com ficheiros SQLite (.db)',

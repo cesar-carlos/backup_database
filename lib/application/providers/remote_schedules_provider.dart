@@ -47,12 +47,11 @@ class RemotePreflightRunResult {
 class RemoteSchedulesProvider extends ChangeNotifier {
   RemoteSchedulesProvider(
     this._connectionManager, {
-    RemoteFileTransferProvider? transferProvider,
+    this._transferProvider,
     TempDirectoryService? tempDirectoryService,
     EnsureServerHealthyForBackup? ensureServerHealthy,
     IMachineSettingsRepository? machineSettings,
-  }) : _transferProvider = transferProvider,
-       _tempDirectoryService =
+  }) : _tempDirectoryService =
            tempDirectoryService ?? getIt<TempDirectoryService>(),
        _machineSettings =
            machineSettings ??

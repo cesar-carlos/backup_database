@@ -10,31 +10,23 @@ import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart
 
 class SingleInstanceChecker {
   SingleInstanceChecker({
-    required ISingleInstanceService singleInstanceService,
-    required ISingleInstanceIpcClient ipcClient,
-    required IWindowsMessageBox messageBox,
+    required this._singleInstanceService,
+    required this._ipcClient,
+    required this._messageBox,
     String? Function()? getCurrentUsername,
-    void Function(int code)? exitProcess,
-    LaunchOrigin launchOrigin = LaunchOrigin.manual,
-    String? scheduledScheduleId,
+    this._exitProcess,
+    this._launchOrigin = LaunchOrigin.manual,
+    this._scheduledScheduleId,
     int maxRetryAttempts = SingleInstanceConfig.maxRetryAttempts,
-    Duration retryDelay = SingleInstanceConfig.retryDelay,
+    this._retryDelay = SingleInstanceConfig.retryDelay,
     int ownerInfoMaxAttempts = _defaultOwnerInfoMaxAttempts,
-    Duration ownerInfoRetryDelay = _defaultOwnerInfoRetryDelay,
-  }) : _singleInstanceService = singleInstanceService,
-       _ipcClient = ipcClient,
-       _messageBox = messageBox,
-       _getCurrentUsername =
+    this._ownerInfoRetryDelay = _defaultOwnerInfoRetryDelay,
+  }) : _getCurrentUsername =
            getCurrentUsername ?? WindowsUserService.getCurrentUsername,
-       _exitProcess = exitProcess,
-       _launchOrigin = launchOrigin,
-       _scheduledScheduleId = scheduledScheduleId,
        _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
-       _retryDelay = retryDelay,
        _ownerInfoMaxAttempts = ownerInfoMaxAttempts > 0
            ? ownerInfoMaxAttempts
-           : 1,
-       _ownerInfoRetryDelay = ownerInfoRetryDelay;
+           : 1;
 
   /// F4: tenta múltiplas vezes obter info da instância existente. Cobre a
   /// race entre `checkAndLock` (que adquire o mutex cedo no boot) e o

@@ -31,10 +31,9 @@ class RealDiagnosticsProvider implements DiagnosticsProvider {
     required this.historyRepository,
     required this.logRepository,
     required this.stagingBasePath,
-    String hashAlgorithm = 'sha256',
+    this._hashAlgorithm = 'sha256',
     RemoteStagingArtifactTtl? artifactTtl,
-  }) : _hashAlgorithm = hashAlgorithm,
-       _stagingBase = p.normalize(p.absolute(stagingBasePath)),
+  }) : _stagingBase = p.normalize(p.absolute(stagingBasePath)),
        _artifactTtl = artifactTtl ?? RemoteStagingArtifactTtl();
 
   final IBackupHistoryRepository historyRepository;

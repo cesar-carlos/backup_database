@@ -14,16 +14,13 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseGenerationService {
   LicenseGenerationService({
-    required LicenseDecoder licenseDecoder,
+    required this._licenseDecoder,
     List<int>? privateKeyBytes,
-    IRevocationChecker? revocationChecker,
-    String activeKeyId = LicenseConstants.keyIdDefault,
+    this._revocationChecker,
+    this._activeKeyId = LicenseConstants.keyIdDefault,
   }) : _privateKey = privateKeyBytes == null
            ? null
-           : ed.PrivateKey(privateKeyBytes),
-       _licenseDecoder = licenseDecoder,
-       _revocationChecker = revocationChecker,
-       _activeKeyId = activeKeyId;
+           : ed.PrivateKey(privateKeyBytes);
 
   final ed.PrivateKey? _privateKey;
   final LicenseDecoder _licenseDecoder;

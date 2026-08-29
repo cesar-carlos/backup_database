@@ -487,8 +487,7 @@ class EmailConfigRepository implements IEmailConfigRepository {
     if (!hasToken.getOrElse((_) => false)) {
       return const rd.Failure(
         ValidationFailure(
-          message:
-              'Conexao OAuth SMTP nao encontrada. Conecte a conta antes de salvar.',
+          message: 'Conexao OAuth SMTP nao encontrada. Conecte a conta antes de salvar.',
         ),
       );
     }

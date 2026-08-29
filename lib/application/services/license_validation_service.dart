@@ -10,12 +10,10 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class LicenseValidationService implements ILicenseValidationService {
   LicenseValidationService({
-    required ILicenseRepository licenseRepository,
-    required IDeviceKeyService deviceKeyService,
-    IRevocationChecker? revocationChecker,
-  }) : _licenseRepository = licenseRepository,
-       _deviceKeyService = deviceKeyService,
-       _revocationChecker = revocationChecker;
+    required this._licenseRepository,
+    required this._deviceKeyService,
+    this._revocationChecker,
+  });
   final ILicenseRepository _licenseRepository;
   final IDeviceKeyService _deviceKeyService;
   final IRevocationChecker? _revocationChecker;

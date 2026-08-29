@@ -20,14 +20,11 @@ import 'package:backup_database/infrastructure/socket/server/socket_error_sender
 /// 4. [ExecutionState.notFound].
 class ExecutionStatusMessageHandler {
   ExecutionStatusMessageHandler({
-    required RemoteExecutionRegistry executionRegistry,
-    ExecutionQueueService? queueService,
-    IBackupHistoryRepository? backupHistoryRepository,
+    required this._executionRegistry,
+    this._queueService,
+    this._backupHistoryRepository,
     DateTime Function()? clock,
-  }) : _executionRegistry = executionRegistry,
-       _queueService = queueService,
-       _backupHistoryRepository = backupHistoryRepository,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final RemoteExecutionRegistry _executionRegistry;
   final ExecutionQueueService? _queueService;

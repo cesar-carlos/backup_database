@@ -1,9 +1,8 @@
 class QueryCache<T> {
   QueryCache({
-    required Duration ttl,
+    required this._ttl,
     Clock? clock,
-  }) : _ttl = ttl,
-       _clock = clock ?? const Clock._();
+  }) : _clock = clock ?? const Clock._();
 
   final Duration _ttl;
   final Clock _clock;

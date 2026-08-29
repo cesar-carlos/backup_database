@@ -51,31 +51,23 @@ class ExecutionMessageHandler {
   static const Duration _registryCleanupDeferLong = Duration(milliseconds: 200);
 
   ExecutionMessageHandler({
-    required IScheduleRepository scheduleRepository,
-    required ILicensePolicyService licensePolicyService,
-    required ISchedulerService schedulerService,
-    required ExecuteScheduledBackup executeBackup,
-    required IBackupProgressNotifier progressNotifier,
-    required RemoteExecutionRegistry executionRegistry,
+    required this._scheduleRepository,
+    required this._licensePolicyService,
+    required this._schedulerService,
+    required this._executeBackup,
+    required this._progressNotifier,
+    required this._executionRegistry,
     IdempotencyRegistry? idempotencyRegistry,
     ExecutionQueueService? queueService,
     this.eventBus,
     ExecutionEventSequencer? eventSequencer,
     DateTime Function()? clock,
-    Future<int> Function()? stagingUsageBytesProvider,
-    bool supportsFirebird = true,
-  }) : _scheduleRepository = scheduleRepository,
-       _licensePolicyService = licensePolicyService,
-       _schedulerService = schedulerService,
-       _executeBackup = executeBackup,
-       _progressNotifier = progressNotifier,
-       _executionRegistry = executionRegistry,
-       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
+    this._stagingUsageBytesProvider,
+    this._supportsFirebird = true,
+  }) : _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
        _queueService = queueService ?? ExecutionQueueService(),
        _eventSequencer = eventSequencer ?? ExecutionEventSequencer(),
-       _clock = clock ?? DateTime.now,
-       _stagingUsageBytesProvider = stagingUsageBytesProvider,
-       _supportsFirebird = supportsFirebird;
+       _clock = clock ?? DateTime.now;
 
   final IScheduleRepository _scheduleRepository;
   final ILicensePolicyService _licensePolicyService;

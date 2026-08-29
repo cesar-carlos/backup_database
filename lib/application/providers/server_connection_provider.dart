@@ -23,8 +23,8 @@ class ServerConnectionProvider extends ChangeNotifier with AsyncStateMixin {
     this._repository,
     this._connectionManager,
     this._connectionLogRepository, {
-    ExecutionResumeAfterReconnect? onExecutionResumeAfterReconnect,
-  }) : _onExecutionResumeAfterReconnect = onExecutionResumeAfterReconnect {
+    this._onExecutionResumeAfterReconnect,
+  }) {
     unawaited(loadConnections());
     _listenToConnectionStatus();
   }

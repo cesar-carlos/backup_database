@@ -18,8 +18,8 @@ import 'package:result_dart/result_dart.dart';
 class BackupCompressionOrchestratorImpl
     implements IBackupCompressionOrchestrator {
   const BackupCompressionOrchestratorImpl({
-    required ICompressionService compressionService,
-  }) : _compressionService = compressionService;
+    required this._compressionService,
+  });
 
   final ICompressionService _compressionService;
 

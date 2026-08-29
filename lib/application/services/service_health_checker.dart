@@ -62,28 +62,18 @@ class HealthIssue {
 
 class ServiceHealthChecker {
   ServiceHealthChecker({
-    required IBackupHistoryRepository backupHistoryRepository,
-    required ProcessService processService,
-    required IPostgresConfigRepository postgresConfigRepository,
-    LogService? logService,
-    AlertService? alertService,
+    required this._backupHistoryRepository,
+    required this._processService,
+    required this._postgresConfigRepository,
+    this._logService,
+    this._alertService,
     this.checkInterval = const Duration(minutes: 30),
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
 
-    /// S1 da auditoria: paths que devem ser checados pelo `_checkDiskSpace`.
-    /// Antes usávamos `Directory.current` cegamente, que em service mode
-    /// (Session 0) costumava resolver para `C:\Windows\System32\` —
-    /// avaliando o disco errado. Agora aceitamos uma lista explícita; se
-    /// vazia, mantemos o comportamento legado (retrocompatibilidade).
-    List<String> diskCheckPaths = const [],
-  }) : _backupHistoryRepository = backupHistoryRepository,
-       _processService = processService,
-       _postgresConfigRepository = postgresConfigRepository,
-       _logService = logService,
-       _alertService = alertService,
-       _diskCheckPaths = diskCheckPaths;
+    this._diskCheckPaths = const [],
+  });
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final ProcessService _processService;

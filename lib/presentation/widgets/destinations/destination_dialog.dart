@@ -1391,7 +1391,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Future<void> _selectLocalFolder() async {
-    final result = await FilePicker.platform.getDirectoryPath(
+    final result = await FilePicker.getDirectoryPath(
       dialogTitle: _dialogLabel(
         'Selecionar pasta de destino',
         'Select destination folder',

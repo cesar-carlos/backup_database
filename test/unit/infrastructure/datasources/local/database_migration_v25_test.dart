@@ -113,5 +113,5 @@ void _createLegacyV24DatabaseWithDuplicateLicenses(String path) {
   ''');
 
   sqliteDb.execute('PRAGMA user_version = 24');
-  sqliteDb.dispose();
+  sqliteDb.close();
 }

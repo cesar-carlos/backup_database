@@ -21,12 +21,10 @@ const int _checksumSize = 4;
 class TcpSocketClient implements SocketClientService {
   TcpSocketClient({
     BinaryProtocol? protocol,
-    SocketLoggerService? socketLogger,
-    bool Function()? canDisconnectOnTimeout,
+    this._socketLogger,
+    this._canDisconnectOnTimeout,
   }) : _protocol =
-           protocol ?? BinaryProtocol(compression: PayloadCompression()),
-       _socketLogger = socketLogger,
-       _canDisconnectOnTimeout = canDisconnectOnTimeout;
+           protocol ?? BinaryProtocol(compression: PayloadCompression());
 
   final BinaryProtocol _protocol;
   final SocketLoggerService? _socketLogger;

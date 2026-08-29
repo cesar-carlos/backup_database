@@ -16,11 +16,10 @@ typedef SendToClient = Future<void> Function(String clientId, Message message);
 class FileTransferMessageHandler {
   FileTransferMessageHandler({
     required String allowedBasePath,
-    required IFileTransferLockService lockService,
+    required this._lockService,
     FileChunker? chunker,
     RemoteStagingArtifactTtl? remoteStagingArtifactTtl,
   }) : _allowedBasePath = p.normalize(p.absolute(allowedBasePath)),
-       _lockService = lockService,
        _chunker = chunker ?? FileChunker(),
        _remoteArtifactTtl =
            remoteStagingArtifactTtl ?? RemoteStagingArtifactTtl();
@@ -57,8 +56,7 @@ class FileTransferMessageHandler {
         clientId,
         createFileTransferErrorMessage(
           requestId: requestId,
-          errorMessage:
-              'Arquivo está sendo baixado por outro cliente. Tente novamente em alguns minutos.',
+          errorMessage: 'Arquivo está sendo baixado por outro cliente. Tente novamente em alguns minutos.',
           errorCode: ErrorCode.fileBusy,
         ),
       );

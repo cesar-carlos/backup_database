@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:backup_database/core/utils/appending_file_sink.dart';
 
 class ServiceBootstrapLog {
-  ServiceBootstrapLog({String? logPath}) : _logPath = logPath {
+  ServiceBootstrapLog({this._logPath}) {
     // S3 da auditoria: rotação obrigatória — em loop de restart NSSM
     // (60s entre tentativas, ~1440 reinícios/dia), cada bootstrap
     // emite 11+ linhas. Sem rotação, o arquivo crescia GBs em horas.

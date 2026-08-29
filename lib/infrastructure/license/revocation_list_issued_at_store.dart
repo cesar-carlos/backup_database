@@ -22,8 +22,8 @@ abstract class RevocationListIssuedAtStore {
 /// uma vez antes de re-avançar o marcador).
 class FileRevocationListIssuedAtStore implements RevocationListIssuedAtStore {
   FileRevocationListIssuedAtStore({
-    String fileName = 'revocation_issued_at.txt',
-  }) : _fileName = fileName;
+    this._fileName = 'revocation_issued_at.txt',
+  });
 
   static const String defaultFileName = 'revocation_issued_at.txt';
   final String _fileName;

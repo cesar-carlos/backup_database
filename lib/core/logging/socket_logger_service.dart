@@ -9,9 +9,9 @@ import 'package:path/path.dart' as p;
 
 class SocketLoggerService {
   SocketLoggerService({
-    required String logsDirectory,
+    required this._logsDirectory,
     this.maxFileSize = 10 * 1024 * 1024,
-  }) : _logsDirectory = logsDirectory;
+  });
 
   final String _logsDirectory;
   final int maxFileSize;

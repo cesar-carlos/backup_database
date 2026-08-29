@@ -39,9 +39,15 @@ class SingleInstanceService implements ISingleInstanceService {
     IpcService? ipcService,
     Future<bool> Function()? ipcServerProbe,
   }) : _createMutexFn = createMutex ?? _createMutex,
-       _setLastErrorFn = setLastError ?? SetLastError,
+       _setLastErrorFn =
+           setLastError ?? ((code) => SetLastError(WIN32_ERROR(code))),
        _getLastErrorFn = getLastError ?? GetLastError,
-       _closeHandleFn = closeHandle ?? CloseHandle,
+       _closeHandleFn =
+           closeHandle ??
+           ((handle) {
+             CloseHandle(HANDLE(Pointer.fromAddress(handle)));
+             return 1;
+           }),
        _isWindowsPlatformFn = isWindowsPlatform ?? (() => Platform.isWindows),
        _lockFallbackModeProvider =
            lockFallbackModeProvider ?? _defaultLockFallbackModeProvider,

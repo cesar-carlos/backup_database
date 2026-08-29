@@ -7,8 +7,8 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class SendFileToDestinationService implements ISendFileToDestinationService {
   const SendFileToDestinationService({
-    required IDestinationOrchestrator destinationOrchestrator,
-  }) : _destinationOrchestrator = destinationOrchestrator;
+    required this._destinationOrchestrator,
+  });
 
   final IDestinationOrchestrator _destinationOrchestrator;
 

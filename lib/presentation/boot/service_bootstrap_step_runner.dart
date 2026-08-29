@@ -4,8 +4,8 @@ import 'package:backup_database/presentation/boot/service_bootstrap_log.dart';
 class ServiceBootstrapStepRunner {
   ServiceBootstrapStepRunner({
     required this.totalSteps,
-    required ServiceBootstrapLog log,
-  }) : _log = log;
+    required this._log,
+  });
 
   final int totalSteps;
   final ServiceBootstrapLog _log;

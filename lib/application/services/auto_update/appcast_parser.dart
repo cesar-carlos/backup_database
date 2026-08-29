@@ -117,7 +117,7 @@ abstract final class AppcastParser {
   /// (mais comum em feeds modernos do Sparkle) ou com prefixo plain
   /// `sparkle:` (feeds gerados manualmente). Aceita as duas formas.
   static String? _attr(XmlElement element, String name) {
-    return element.getAttribute(name, namespace: _sparkleNamespace) ??
+    return element.getAttribute(name, namespaceUri: _sparkleNamespace) ??
         element.getAttribute('sparkle:$name');
   }
 

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
@@ -35,7 +33,7 @@ class AppDialogShell extends StatelessWidget {
         if (onDismiss != null) {
           onDismiss!();
         } else {
-          unawaited(Navigator.of(context).maybePop());
+          Navigator.of(context).maybePop();
         }
       },
     };

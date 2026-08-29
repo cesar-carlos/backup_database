@@ -139,7 +139,7 @@ abstract final class DatabaseConfigTablesDropV223 {
       metrics.stop(_DropPhase.dropExecution);
 
       metrics.start(_DropPhase.cleanup);
-      database.dispose();
+      database.close();
       database = null;
       LoggerService.warning(
         '===== DROP DE TABELAS CONCLUÍDO, BACKUPS DISPONÍVEIS =====',
@@ -157,7 +157,7 @@ abstract final class DatabaseConfigTablesDropV223 {
       _handleDropError(e);
       return false;
     } finally {
-      database?.dispose();
+      database?.close();
     }
   }
 

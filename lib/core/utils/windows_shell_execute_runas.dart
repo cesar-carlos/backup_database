@@ -38,60 +38,47 @@ Future<ShellExecuteRunAsResult> shellExecuteRunAsAndWait({
     return const ShellExecuteRunAsResult(shellExecuteOk: false);
   }
 
-  final verb = 'runas'.toNativeUtf16();
-  final file = executablePath.toNativeUtf16();
-  final params = parameters.toNativeUtf16();
-  final sei = calloc<SHELLEXECUTEINFO>();
-
-  try {
+  return using((arena) {
+    final sei = arena<SHELLEXECUTEINFO>();
     sei.ref
       ..cbSize = sizeOf<SHELLEXECUTEINFO>()
       ..fMask = _seeMaskNoCloseProcess
-      ..hwnd = 0
-      ..lpVerb = verb
-      ..lpFile = file
-      ..lpParameters = params
-      ..lpDirectory = nullptr
+      ..hwnd = HWND(nullptr)
+      ..lpVerb = PWSTR(arena.pcwstr('runas'))
+      ..lpFile = PWSTR(arena.pcwstr(executablePath))
+      ..lpParameters = PWSTR(arena.pcwstr(parameters))
+      ..lpDirectory = PWSTR(nullptr)
       ..nShow = SW_SHOWNORMAL
-      ..hInstApp = 0
+      ..hInstApp = HINSTANCE(nullptr)
       ..lpIDList = nullptr
-      ..lpClass = nullptr
-      ..hkeyClass = 0
+      ..lpClass = PWSTR(nullptr)
+      ..hkeyClass = HKEY(nullptr)
       ..dwHotKey = 0
-      ..hIcon = 0
-      ..hProcess = 0;
+      ..hIcon = HANDLE(nullptr)
+      ..hProcess = HANDLE(nullptr);
 
-    final ok = ShellExecuteEx(sei);
-    if (ok == 0) {
+    final executed = ShellExecuteEx(sei);
+    if (!executed.value) {
       return ShellExecuteRunAsResult(
         shellExecuteOk: false,
-        win32LastError: GetLastError(),
+        win32LastError: executed.error,
       );
     }
 
     final hProcess = sei.ref.hProcess;
-    if (hProcess == 0) {
+    if (!hProcess.isValid) {
       return const ShellExecuteRunAsResult(shellExecuteOk: true);
     }
 
     WaitForSingleObject(hProcess, _infinite);
-    final exitPtr = calloc<Uint32>();
-    try {
-      GetExitCodeProcess(hProcess, exitPtr);
-      return ShellExecuteRunAsResult(
-        shellExecuteOk: true,
-        processExitCode: exitPtr.value,
-      );
-    } finally {
-      calloc.free(exitPtr);
-      CloseHandle(hProcess);
-    }
-  } finally {
-    calloc.free(sei);
-    calloc.free(verb);
-    calloc.free(file);
-    calloc.free(params);
-  }
+    final exitPtr = arena<Uint32>();
+    GetExitCodeProcess(hProcess, exitPtr);
+    CloseHandle(hProcess);
+    return ShellExecuteRunAsResult(
+      shellExecuteOk: true,
+      processExitCode: exitPtr.value,
+    );
+  });
 }
 
 String quotedLegacyScannerOutputArgument(String outputJsonPath) =>

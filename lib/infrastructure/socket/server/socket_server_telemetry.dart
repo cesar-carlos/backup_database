@@ -64,13 +64,11 @@ class _PendingSocketRequest {
 /// e audit estruturado M5.2 para comandos mutaveis no socket servidor.
 class SocketServerTelemetry {
   SocketServerTelemetry({
-    IMetricsCollector? metricsCollector,
-    MutableCommandAuditDao? auditDao,
+    this._metricsCollector,
+    this._auditDao,
     DateTime Function()? clock,
     Uuid? uuid,
-  }) : _metricsCollector = metricsCollector,
-       _auditDao = auditDao,
-       _clock = clock ?? DateTime.now,
+  }) : _clock = clock ?? DateTime.now,
        _uuid = uuid ?? const Uuid();
 
   final IMetricsCollector? _metricsCollector;

@@ -13,10 +13,9 @@ class DashboardProvider extends ChangeNotifier with AsyncStateMixin {
   DashboardProvider(
     this._backupHistoryRepository,
     this._scheduleRepository, {
-    ConnectionManager? connectionManager,
-    IMetricsAnalysisService? metricsAnalysisService,
-  }) : _connectionManager = connectionManager,
-       _metricsAnalysisService = metricsAnalysisService;
+    this._connectionManager,
+    this._metricsAnalysisService,
+  });
 
   final IBackupHistoryRepository _backupHistoryRepository;
   final IScheduleRepository _scheduleRepository;

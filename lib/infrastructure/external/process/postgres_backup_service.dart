@@ -1109,8 +1109,7 @@ class PostgresBackupService implements IPostgresBackupService {
         if (!hasReplicationPrivilege) {
           return rd.Failure(
             BackupFailure(
-              message:
-                  'Backup WAL requer usuario com permissao REPLICATION (ou superuser).',
+              message: 'Backup WAL requer usuario com permissao REPLICATION (ou superuser).',
               originalError: Exception('usuario sem privilegio de replicacao'),
             ),
           );
@@ -1393,8 +1392,7 @@ class PostgresBackupService implements IPostgresBackupService {
             outputLower.contains('not permitted'))) {
       return rd.Failure(
         BackupFailure(
-          message:
-              'Backup WAL requer permissao REPLICATION no usuario PostgreSQL e liberacao no pg_hba.conf.',
+          message: 'Backup WAL requer permissao REPLICATION no usuario PostgreSQL e liberacao no pg_hba.conf.',
           originalError: Exception(stderr.isNotEmpty ? stderr : stdout),
         ),
       );
@@ -1502,8 +1500,7 @@ class PostgresBackupService implements IPostgresBackupService {
             errorMessage = 'Falha na autenticação: usuário ou senha incorretos';
           } else if (errorLower.contains('could not connect') ||
               errorLower.contains('não foi possível conectar')) {
-            errorMessage =
-                'Não foi possível conectar ao servidor. Verifique host e porta.';
+            errorMessage = 'Não foi possível conectar ao servidor. Verifique host e porta.';
           } else if (errorLower.contains('does not exist') ||
               errorLower.contains('não existe')) {
             errorMessage = 'Banco de dados não existe';

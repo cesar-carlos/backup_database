@@ -152,8 +152,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                     if (provider.isLoading && provider.schedules.isEmpty) {
                       return AppPageState.loading(
                         title: 'Carregando agendamentos remotos',
-                        message:
-                            'Sincronizando os agendamentos do servidor conectado.',
+                        message: 'Sincronizando os agendamentos do servidor conectado.',
                       );
                     }
                     if (provider.error != null && provider.schedules.isEmpty) {
@@ -167,8 +166,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                     if (provider.schedules.isEmpty) {
                       return AppPageState.empty(
                         title: 'Nenhum agendamento no servidor',
-                        message:
-                            'Veja e controle os agendamentos publicados pelo servidor conectado.',
+                        message: 'Veja e controle os agendamentos publicados pelo servidor conectado.',
                         actionLabel: 'Atualizar',
                         onAction: () => unawaited(provider.loadSchedules()),
                       );
@@ -208,8 +206,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   Widget _buildNotConnected(BuildContext context) {
     return AppPageState.empty(
       title: 'Conecte-se a um servidor',
-      message:
-          'Vá em Conectar para adicionar e conectar a um servidor, depois volte aqui para ver e controlar os agendamentos.',
+      message: 'Vá em Conectar para adicionar e conectar a um servidor, depois volte aqui para ver e controlar os agendamentos.',
       actionLabel: 'Ir para Conectar',
       onAction: () => context.go(RouteNames.serverLogin),
     );

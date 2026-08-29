@@ -36,23 +36,23 @@ class TcpSocketServer implements SocketServerService {
     BinaryProtocol? protocol,
     ServerCredentialDao? serverCredentialDao,
     ILicenseValidationService? licenseValidationService,
-    ClientManager? clientManager,
-    ConnectionLogDao? connectionLogDao,
-    ScheduleMessageHandler? scheduleHandler,
-    FileTransferMessageHandler? fileTransferHandler,
-    MetricsMessageHandler? metricsHandler,
+    this._clientManager,
+    this._connectionLogDao,
+    this._scheduleHandler,
+    this._fileTransferHandler,
+    this._metricsHandler,
     CapabilitiesMessageHandler? capabilitiesHandler,
     HealthMessageHandler? healthHandler,
     SessionMessageHandler? sessionHandler,
     PreflightMessageHandler? preflightHandler,
-    ExecutionStatusMessageHandler? executionStatusHandler,
+    this._executionStatusHandler,
     ExecutionQueueMessageHandler? executionQueueHandler,
     DatabaseConfigMessageHandler? databaseConfigHandler,
-    ExecutionMessageHandler? executionHandler,
-    ScheduleCrudMessageHandler? scheduleCrudHandler,
+    this._executionHandler,
+    this._scheduleCrudHandler,
     DiagnosticsMessageHandler? diagnosticsHandler,
     SocketLoggerService? socketLogger,
-    SocketServerTelemetry? socketTelemetry,
+    this._socketTelemetry,
   }) : _protocol =
            protocol ?? BinaryProtocol(compression: PayloadCompression()),
        _authentication = serverCredentialDao != null
@@ -61,25 +61,16 @@ class TcpSocketServer implements SocketServerService {
                licenseValidationService: licenseValidationService,
              )
            : null,
-       _clientManager = clientManager,
-       _connectionLogDao = connectionLogDao,
-       _scheduleHandler = scheduleHandler,
-       _fileTransferHandler = fileTransferHandler,
-       _metricsHandler = metricsHandler,
        _capabilitiesHandler =
            capabilitiesHandler ?? CapabilitiesMessageHandler(),
        _healthHandler = healthHandler ?? HealthMessageHandler(),
        _preflightHandler = preflightHandler ?? PreflightMessageHandler(),
-       _executionStatusHandler = executionStatusHandler,
        _executionQueueHandler =
            executionQueueHandler ?? ExecutionQueueMessageHandler(),
        _databaseConfigHandler =
            databaseConfigHandler ?? DatabaseConfigMessageHandler(),
-       _executionHandler = executionHandler,
-       _scheduleCrudHandler = scheduleCrudHandler,
        _diagnosticsHandler = diagnosticsHandler ?? DiagnosticsMessageHandler(),
-       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>(),
-       _socketTelemetry = socketTelemetry {
+       _socketLogger = socketLogger ?? di.getIt<SocketLoggerService>() {
     // PR-3: quando ExecutionMessageHandler estiver cabeado, injeta
     // resolver que despacha mensagens para o ClientHandler vivo
     // pelo clientId. Sem isso, drains da fila perdem a capacidade de

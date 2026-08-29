@@ -52,17 +52,14 @@ class SignedRevocationListService implements IRevocationChecker {
 
   SignedRevocationListService._({
     List<int>? publicKeyBytes,
-    String? injectedRevocationList,
-    Duration cacheTtl = LicenseConstants.revocationListTtl,
-    RevocationListIssuedAtStore? issuedAtStore,
+    this._injectedRevocationList,
+    this._cacheTtl = LicenseConstants.revocationListTtl,
+    this._issuedAtStore,
   }) : _verifier =
            publicKeyBytes != null &&
                publicKeyBytes.length == _ed25519PublicKeySize
            ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
-           : null,
-       _injectedRevocationList = injectedRevocationList,
-       _cacheTtl = cacheTtl,
-       _issuedAtStore = issuedAtStore;
+           : null;
 
   static String? _readEnvOrNull(String key) {
     try {

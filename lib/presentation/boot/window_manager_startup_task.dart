@@ -1,10 +1,9 @@
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 
-typedef WindowsBackdropApplier =
-    Future<void> Function({
-      required bool micaEnabled,
-      required bool isDark,
-    });
+typedef WindowsBackdropApplier = Future<void> Function({
+  required bool micaEnabled,
+  required bool isDark,
+});
 
 typedef WindowsBackdropPreferencesLoader =
     Future<({bool micaEnabled, bool isDark})> Function();

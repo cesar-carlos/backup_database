@@ -134,5 +134,5 @@ void _createLegacyV22Database(String path) {
   ''');
 
   sqliteDb.execute('PRAGMA user_version = 22');
-  sqliteDb.dispose();
+  sqliteDb.close();
 }

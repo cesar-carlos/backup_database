@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'backup_history.dart';
@@ -9,6 +9,7 @@ part of 'backup_history.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -59,15 +60,15 @@ class _$BackupHistoryCopyWithImpl<$Res>
 /// Create a copy of BackupHistory
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? databaseName = null,Object? databaseType = null,Object? backupPath = null,Object? fileSize = null,Object? status = null,Object? startedAt = null,Object? runId = freezed,Object? scheduleId = freezed,Object? backupType = null,Object? errorMessage = freezed,Object? finishedAt = freezed,Object? durationSeconds = freezed,Object? metrics = freezed,Object? lastProgressAt = freezed,}) {
-  return _then(_self.copyWith(
-id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
-as String,databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
+  return _then(BackupHistory(
+databaseName: null == databaseName ? _self.databaseName : databaseName // ignore: cast_nullable_to_non_nullable
 as String,databaseType: null == databaseType ? _self.databaseType : databaseType // ignore: cast_nullable_to_non_nullable
 as String,backupPath: null == backupPath ? _self.backupPath : backupPath // ignore: cast_nullable_to_non_nullable
 as String,fileSize: null == fileSize ? _self.fileSize : fileSize // ignore: cast_nullable_to_non_nullable
 as int,status: null == status ? _self.status : status // ignore: cast_nullable_to_non_nullable
 as BackupStatus,startedAt: null == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
-as DateTime,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
+as DateTime,id: freezed == id ? _self.id! : id // ignore: cast_nullable_to_non_nullable
+as String?,runId: freezed == runId ? _self.runId : runId // ignore: cast_nullable_to_non_nullable
 as String?,scheduleId: freezed == scheduleId ? _self.scheduleId : scheduleId // ignore: cast_nullable_to_non_nullable
 as String?,backupType: null == backupType ? _self.backupType : backupType // ignore: cast_nullable_to_non_nullable
 as String,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable

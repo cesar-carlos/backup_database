@@ -25,21 +25,14 @@ const int _checksumSize = 4;
 
 class ClientHandler {
   ClientHandler({
-    required Socket socket,
-    required BinaryProtocol protocol,
-    required void Function(String clientId) onDisconnect,
-    ServerAuthentication? authentication,
-    ConnectionLogDao? connectionLogDao,
-    SocketLoggerService? socketLogger,
-    SocketServerTelemetry? socketTelemetry,
-  }) : _socket = socket,
-       _protocol = protocol,
-       _onDisconnect = onDisconnect,
-       _authentication = authentication,
-       _connectionLogDao = connectionLogDao,
-       _socketLogger = socketLogger,
-       _socketTelemetry = socketTelemetry,
-       _clientId = const Uuid().v4() {
+    required this._socket,
+    required this._protocol,
+    required this._onDisconnect,
+    this._authentication,
+    this._connectionLogDao,
+    this._socketLogger,
+    this._socketTelemetry,
+  }) : _clientId = const Uuid().v4() {
     _remoteAddress = _socket.remoteAddress.address;
     _remotePort = _socket.remotePort;
   }

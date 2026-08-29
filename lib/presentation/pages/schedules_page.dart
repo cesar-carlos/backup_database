@@ -59,10 +59,8 @@ class _SchedulesPageState extends State<SchedulesPage> {
                 localizeCompatibilityReason(
                   context,
                   reason: features.taskSchedulerDisabledReason,
-                  fallbackPt:
-                      'Task Scheduler não está disponível nesta versão do Windows.',
-                  fallbackEn:
-                      'Task Scheduler is not available on this Windows version.',
+                  fallbackPt: 'Task Scheduler não está disponível nesta versão do Windows.',
+                  fallbackEn: 'Task Scheduler is not available on this Windows version.',
                 ),
               ),
               severity: InfoBarSeverity.warning,
@@ -90,8 +88,7 @@ class _SchedulesPageState extends State<SchedulesPage> {
             return SingleChildScrollView(
               child: AppPageState.empty(
                 title: 'Nenhum agendamento configurado',
-                message:
-                    'Automatize backups, verificações e scripts com um fluxo único.',
+                message: 'Automatize backups, verificações e scripts com um fluxo único.',
                 actionLabel: schedulerOk ? 'Criar Agendamento' : null,
                 onAction: schedulerOk
                     ? () => _showScheduleDialog(context, null)

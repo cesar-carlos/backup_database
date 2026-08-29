@@ -31,15 +31,13 @@ export 'queued_execution_item.dart';
 /// apos reinicio do processo.
 class ExecutionQueueService implements IExecutionQueueBootstrap {
   ExecutionQueueService({
-    int maxQueueSize = 50,
+    this._maxQueueSize = 50,
     Uuid? uuid,
     DateTime Function()? clock,
-    ExecutionQueuePersistence? persistence,
+    this._persistence,
     Duration? queuedItemTtl,
-  }) : _maxQueueSize = maxQueueSize,
-       _uuid = uuid ?? const Uuid(),
+  }) : _uuid = uuid ?? const Uuid(),
        _clock = clock ?? DateTime.now,
-       _persistence = persistence,
        _queuedItemTtl = queuedItemTtl ?? BackupConstants.queuedItemTtl;
 
   final int _maxQueueSize;

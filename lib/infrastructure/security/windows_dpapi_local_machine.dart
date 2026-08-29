@@ -24,24 +24,22 @@ Uint8List protectWithDpapiLocalMachine(Uint8List plain) {
   final dataOut = calloc<CRYPT_INTEGER_BLOB>();
 
   try {
-    final ok = CryptProtectData(
+    final result = CryptProtectData(
       dataIn,
-      nullptr,
-      nullptr,
-      nullptr,
-      nullptr,
+      null,
+      null,
+      null,
       _cryptProtectLocalMachine,
       dataOut,
     );
-    if (ok == 0) {
-      final err = GetLastError();
-      throw WindowsException(err);
+    if (!result.value) {
+      throw WindowsException(result.error.toHRESULT());
     }
 
     final outLen = dataOut.ref.cbData;
     final outPtr = dataOut.ref.pbData;
     final cipher = Uint8List.fromList(outPtr.asTypedList(outLen));
-    LocalFree(outPtr);
+    LocalFree(HLOCAL(outPtr));
     return cipher;
   } finally {
     calloc.free(pInput);
@@ -67,24 +65,22 @@ Uint8List unprotectWithDpapiLocalMachine(Uint8List cipher) {
   final dataOut = calloc<CRYPT_INTEGER_BLOB>();
 
   try {
-    final ok = CryptUnprotectData(
+    final result = CryptUnprotectData(
       dataIn,
-      nullptr,
-      nullptr,
-      nullptr,
-      nullptr,
+      null,
+      null,
+      null,
       _cryptProtectLocalMachine,
       dataOut,
     );
-    if (ok == 0) {
-      final err = GetLastError();
-      throw WindowsException(err);
+    if (!result.value) {
+      throw WindowsException(result.error.toHRESULT());
     }
 
     final outLen = dataOut.ref.cbData;
     final outPtr = dataOut.ref.pbData;
     final plain = Uint8List.fromList(outPtr.asTypedList(outLen));
-    LocalFree(outPtr);
+    LocalFree(HLOCAL(outPtr));
     return plain;
   } finally {
     calloc.free(pInput);

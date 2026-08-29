@@ -11,10 +11,9 @@ import 'package:result_dart/result_dart.dart' show unit;
 
 class WindowsServiceNssmConfigurator {
   WindowsServiceNssmConfigurator({
-    required ProcessService processService,
+    required this._processService,
     WindowsServiceTimingConfig? timing,
-  }) : _processService = processService,
-       _timing = timing ?? WindowsServiceTimingConfig.defaultConfig;
+  }) : _timing = timing ?? WindowsServiceTimingConfig.defaultConfig;
 
   final ProcessService _processService;
   final WindowsServiceTimingConfig _timing;

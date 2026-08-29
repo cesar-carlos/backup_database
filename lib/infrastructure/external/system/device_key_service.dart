@@ -118,8 +118,7 @@ class DeviceKeyService implements IDeviceKeyService {
         LoggerService.warning('Nenhum identificador do sistema foi obtido');
         return const rd.Failure(
           core.NotFoundFailure(
-            message:
-                'Não foi possível obter informações do sistema para gerar a chave do dispositivo',
+            message: 'Não foi possível obter informações do sistema para gerar a chave do dispositivo',
           ),
         );
       }
@@ -159,63 +158,60 @@ class DeviceKeyService implements IDeviceKeyService {
 
   rd.Result<String> _getMachineGuidFromRegistry() {
     try {
-      const hKey = HKEY_LOCAL_MACHINE;
-      final subKey = TEXT(r'SOFTWARE\Microsoft\Cryptography');
-      final valueName = TEXT('MachineGuid');
-
-      final phkResult = calloc<HKEY>();
-      final result = RegOpenKeyEx(hKey, subKey, 0, KEY_READ, phkResult);
-
-      if (result != ERROR_SUCCESS) {
-        calloc.free(phkResult);
-        return rd.Failure(
-          core.ServerFailure(
-            message: 'Erro ao abrir chave do registro: $result',
-          ),
-        );
-      }
-
-      try {
-        final dataType = calloc<DWORD>();
-        final dataSize = calloc<DWORD>()..value = 1024;
-        final data = calloc<CHAR>(dataSize.value);
-
-        final queryResult = RegQueryValueEx(
-          phkResult.value,
-          valueName,
-          nullptr,
-          dataType,
-          data.cast<Uint8>(),
-          dataSize,
+      return using((arena) {
+        final subKey = arena.pcwstr(r'SOFTWARE\Microsoft\Cryptography');
+        final valueName = arena.pcwstr('MachineGuid');
+        final openKeyPtr = arena<Pointer>();
+        final result = RegOpenKeyEx(
+          HKEY_LOCAL_MACHINE,
+          subKey,
+          0,
+          KEY_READ,
+          openKeyPtr,
         );
 
-        if (queryResult != ERROR_SUCCESS) {
-          calloc.free(dataType);
-          calloc.free(dataSize);
-          calloc.free(data);
-          return const rd.Failure(
-            core.NotFoundFailure(
-              message: 'Machine GUID não encontrado no registro',
+        if (result != ERROR_SUCCESS) {
+          return rd.Failure(
+            core.ServerFailure(
+              message: 'Erro ao abrir chave do registro: $result',
             ),
           );
         }
 
-        final guid = data.cast<Utf8>().toDartString();
-        calloc.free(dataType);
-        calloc.free(dataSize);
-        calloc.free(data);
-
-        if (guid.isEmpty) {
-          return const rd.Failure(
-            core.NotFoundFailure(message: 'Machine GUID está vazio'),
+        final hkey = HKEY(openKeyPtr.value);
+        try {
+          const bufferBytes = 1024;
+          final dataType = arena<DWORD>();
+          final dataSize = arena<DWORD>()..value = bufferBytes;
+          final data = arena<BYTE>(bufferBytes);
+          final queryResult = RegQueryValueEx(
+            hkey,
+            valueName,
+            dataType,
+            data,
+            dataSize,
           );
-        }
 
-        return rd.Success(guid);
-      } finally {
-        RegCloseKey(phkResult.value);
-        calloc.free(phkResult);
-      }
+          if (queryResult != ERROR_SUCCESS) {
+            return const rd.Failure(
+              core.NotFoundFailure(
+                message: 'Machine GUID não encontrado no registro',
+              ),
+            );
+          }
+
+          final guid = data.cast<Utf16>().toDartString();
+          if (guid.isEmpty) {
+            return const rd.Failure(
+              core.NotFoundFailure(message: 'Machine GUID está vazio'),
+            );
+          }
+
+          return rd.Success(guid);
+        } finally {
+          RegCloseKey(hkey);
+        }
+      });
     } on Object catch (e, stackTrace) {
       LoggerService.error(
         'Erro ao ler Machine GUID do registro',
@@ -350,56 +346,19 @@ class DeviceKeyService implements IDeviceKeyService {
 
   VirtualizationPlatform _checkVirtualizationRegistry() {
     try {
-      final vmwareKey = TEXT(r'SOFTWARE\VMware, Inc.\VMware Tools');
-      var phkResult = calloc<HKEY>();
-      final result = RegOpenKeyEx(
-        HKEY_LOCAL_MACHINE,
-        vmwareKey,
-        0,
-        KEY_READ,
-        phkResult,
-      );
-      if (result == ERROR_SUCCESS) {
-        RegCloseKey(phkResult.value);
-        calloc.free(phkResult);
+      if (_registryKeyExists(r'SOFTWARE\VMware, Inc.\VMware Tools')) {
         return VirtualizationPlatform.vmware;
       }
-      calloc.free(phkResult);
-
-      final vboxKey = TEXT(r'SOFTWARE\Oracle\VirtualBox Guest Additions');
-      phkResult = calloc<HKEY>();
-      final vboxResult = RegOpenKeyEx(
-        HKEY_LOCAL_MACHINE,
-        vboxKey,
-        0,
-        KEY_READ,
-        phkResult,
-      );
-      if (vboxResult == ERROR_SUCCESS) {
-        RegCloseKey(phkResult.value);
-        calloc.free(phkResult);
+      if (_registryKeyExists(
+        r'SOFTWARE\Oracle\VirtualBox Guest Additions',
+      )) {
         return VirtualizationPlatform.virtualbox;
       }
-      calloc.free(phkResult);
-
-      final hypervKey = TEXT(
+      if (_registryKeyExists(
         r'SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters',
-      );
-      phkResult = calloc<HKEY>();
-      final hypervResult = RegOpenKeyEx(
-        HKEY_LOCAL_MACHINE,
-        hypervKey,
-        0,
-        KEY_READ,
-        phkResult,
-      );
-      if (hypervResult == ERROR_SUCCESS) {
-        RegCloseKey(phkResult.value);
-        calloc.free(phkResult);
+      )) {
         return VirtualizationPlatform.hyperv;
       }
-      calloc.free(phkResult);
-
       return VirtualizationPlatform.none;
     } on Object catch (e) {
       LoggerService.warning(
@@ -407,6 +366,25 @@ class DeviceKeyService implements IDeviceKeyService {
       );
       return VirtualizationPlatform.none;
     }
+  }
+
+  bool _registryKeyExists(String subKeyPath) {
+    return using((arena) {
+      final subKey = arena.pcwstr(subKeyPath);
+      final openKeyPtr = arena<Pointer>();
+      final result = RegOpenKeyEx(
+        HKEY_LOCAL_MACHINE,
+        subKey,
+        0,
+        KEY_READ,
+        openKeyPtr,
+      );
+      if (result != ERROR_SUCCESS) {
+        return false;
+      }
+      RegCloseKey(HKEY(openKeyPtr.value));
+      return true;
+    });
   }
 
   Future<VirtualizationPlatform> _checkVirtualizationWmi() async {
@@ -447,30 +425,28 @@ class DeviceKeyService implements IDeviceKeyService {
 
   String _getVolumeSerialNumber(String rootPath) {
     try {
-      final volumeNameBuffer = calloc<Uint16>(260).cast<Utf16>();
-      final fileSystemNameBuffer = calloc<Uint16>(260).cast<Utf16>();
-      final volumeSerialNumber = calloc<DWORD>();
-      final maxComponentLength = calloc<DWORD>();
-      final fileSystemFlags = calloc<DWORD>();
-
-      try {
-        final rootPathPtr = rootPath.toNativeUtf16();
+      return using((arena) {
+        const bufferLength = 260;
+        final volumeNameBuffer = PWSTR(arena<WCHAR>(bufferLength).cast());
+        final fileSystemNameBuffer = PWSTR(arena<WCHAR>(bufferLength).cast());
+        final volumeSerialNumber = arena<DWORD>();
+        final maxComponentLength = arena<DWORD>();
+        final fileSystemFlags = arena<DWORD>();
         final result = GetVolumeInformation(
-          rootPathPtr,
+          arena.pcwstr(rootPath),
           volumeNameBuffer,
-          260,
+          bufferLength,
           volumeSerialNumber,
           maxComponentLength,
           fileSystemFlags,
           fileSystemNameBuffer,
-          260,
+          bufferLength,
         );
 
-        calloc.free(rootPathPtr);
-
-        if (result == 0) {
-          final error = GetLastError();
-          LoggerService.warning('Erro ao obter Volume Serial Number: $error');
+        if (!result.value) {
+          LoggerService.warning(
+            'Erro ao obter Volume Serial Number: ${result.error}',
+          );
           return '';
         }
 
@@ -478,13 +454,7 @@ class DeviceKeyService implements IDeviceKeyService {
             .toRadixString(16)
             .toUpperCase()
             .padLeft(8, '0');
-      } finally {
-        calloc.free(volumeNameBuffer.cast<Uint16>());
-        calloc.free(fileSystemNameBuffer.cast<Uint16>());
-        calloc.free(volumeSerialNumber);
-        calloc.free(maxComponentLength);
-        calloc.free(fileSystemFlags);
-      }
+      });
     } on Object catch (e) {
       LoggerService.warning('Erro ao obter Volume Serial Number: $e');
       return '';

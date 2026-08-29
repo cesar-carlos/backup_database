@@ -10,8 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Callback que inicializa o auth service concreto (Google/Dropbox).
-typedef OAuthInitializeCallback =
-    Future<void> Function({required String clientId, String? clientSecret});
+typedef OAuthInitializeCallback = Future<void> Function({
+  required String clientId,
+  String? clientSecret,
+});
 
 /// Callback que dispara o fluxo de login interativo do auth service.
 typedef OAuthSignInCallback<TAuthResult extends Object> =
@@ -44,14 +46,11 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   OAuthProviderBase({
     required this.oauthConfigPrefsKey,
     required this.serviceLabel,
-    required OAuthInitializeCallback initializeService,
-    required OAuthSignInCallback<TAuthResult> signInService,
-    required OAuthSignInCallback<TAuthResult> signInSilentlyService,
-    required OAuthSignOutCallback signOutService,
-  }) : _initializeService = initializeService,
-       _signInService = signInService,
-       _signInSilentlyService = signInSilentlyService,
-       _signOutService = signOutService;
+    required this._initializeService,
+    required this._signInService,
+    required this._signInSilentlyService,
+    required this._signOutService,
+  });
 
   /// Chave usada em `SharedPreferences` para persistir a config OAuth.
   final String oauthConfigPrefsKey;

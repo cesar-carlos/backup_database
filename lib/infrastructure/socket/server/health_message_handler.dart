@@ -33,12 +33,11 @@ class HealthMessageHandler {
     Map<String, HealthCheck>? optionalChecks,
     DateTime Function()? clock,
     DateTime? startTime,
-    Future<int> Function()? stagingUsageBytesProvider,
+    this._stagingUsageBytesProvider,
   }) : _requiredChecks = requiredChecks ?? const <String, HealthCheck>{},
        _optionalChecks = optionalChecks ?? const <String, HealthCheck>{},
        _clock = clock ?? DateTime.now,
-       _startTime = startTime ?? DateTime.now(),
-       _stagingUsageBytesProvider = stagingUsageBytesProvider;
+       _startTime = startTime ?? DateTime.now();
 
   final Map<String, HealthCheck> _requiredChecks;
   final Map<String, HealthCheck> _optionalChecks;

@@ -14,20 +14,14 @@ import 'package:flutter/foundation.dart';
 
 class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
   SchedulerProvider({
-    required IScheduleRepository repository,
-    required ISchedulerService schedulerService,
-    required CreateSchedule createSchedule,
-    required UpdateSchedule updateSchedule,
-    required DeleteSchedule deleteSchedule,
-    required ExecuteScheduledBackup executeBackup,
-    BackupProgressProvider? progressProvider,
-  }) : _repository = repository,
-       _schedulerService = schedulerService,
-       _createSchedule = createSchedule,
-       _updateSchedule = updateSchedule,
-       _deleteSchedule = deleteSchedule,
-       _executeBackup = executeBackup,
-       _progressProvider = progressProvider;
+    required this._repository,
+    required this._schedulerService,
+    required this._createSchedule,
+    required this._updateSchedule,
+    required this._deleteSchedule,
+    required this._executeBackup,
+    this._progressProvider,
+  });
   final IScheduleRepository _repository;
   final ISchedulerService _schedulerService;
   final CreateSchedule _createSchedule;

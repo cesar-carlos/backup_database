@@ -7,10 +7,10 @@ import 'package:path/path.dart' as p;
 /// Service para salvar logs em arquivos rotacionados
 class FileLoggerService {
   FileLoggerService({
-    required String logsDirectory,
+    required this._logsDirectory,
     this.maxFileSize = 10 * 1024 * 1024,
     this.maxFiles = 10,
-  }) : _logsDirectory = logsDirectory;
+  });
 
   final String _logsDirectory;
   final int maxFileSize;

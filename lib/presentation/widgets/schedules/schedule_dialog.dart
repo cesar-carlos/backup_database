@@ -1277,7 +1277,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   }
 
   Future<void> _selectBackupFolder() async {
-    final result = await FilePicker.platform.getDirectoryPath(
+    final result = await FilePicker.getDirectoryPath(
       dialogTitle: 'Selecionar pasta de backup',
     );
     if (result != null) {

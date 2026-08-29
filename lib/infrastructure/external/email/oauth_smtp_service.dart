@@ -16,28 +16,25 @@ import 'package:oauth2_client/microsoft_oauth2_client.dart';
 import 'package:oauth2_client/oauth2_client.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-typedef OAuthTokenExchangeFn =
-    Future<AccessTokenResponse> Function(
-      OAuth2Client client, {
-      required String clientId,
-      required List<String> scopes,
-      String? clientSecret,
-    });
+typedef OAuthTokenExchangeFn = Future<AccessTokenResponse> Function(
+  OAuth2Client client, {
+  required String clientId,
+  required List<String> scopes,
+  String? clientSecret,
+});
 
-typedef OAuthTokenRefreshFn =
-    Future<AccessTokenResponse> Function(
-      OAuth2Client client,
-      String refreshToken, {
-      required String clientId,
-      required List<String> scopes,
-      String? clientSecret,
-    });
+typedef OAuthTokenRefreshFn = Future<AccessTokenResponse> Function(
+  OAuth2Client client,
+  String refreshToken, {
+  required String clientId,
+  required List<String> scopes,
+  String? clientSecret,
+});
 
-typedef OAuthAccountEmailResolver =
-    Future<rd.Result<String>> Function({
-      required SmtpOAuthProvider provider,
-      required String accessToken,
-    });
+typedef OAuthAccountEmailResolver = Future<rd.Result<String>> Function({
+  required SmtpOAuthProvider provider,
+  required String accessToken,
+});
 
 class _FlightLock<T> {
   _FlightLock(this.completer);
@@ -48,24 +45,16 @@ class _FlightLock<T> {
 class OAuthSmtpService implements IOAuthSmtpService {
   OAuthSmtpService(
     this._secureCredentialService, {
-    String? googleClientIdOverride,
-    String? googleClientSecretOverride,
-    String? microsoftClientIdOverride,
-    String? microsoftClientSecretOverride,
-    String? microsoftTenantOverride,
-    OAuth2Client Function(SmtpOAuthProvider provider)? oauthClientFactory,
-    OAuthTokenExchangeFn? getTokenWithAuthCodeFlowFn,
-    OAuthTokenRefreshFn? refreshTokenFn,
-    OAuthAccountEmailResolver? accountEmailResolver,
-  }) : _googleClientIdOverride = googleClientIdOverride,
-       _googleClientSecretOverride = googleClientSecretOverride,
-       _microsoftClientIdOverride = microsoftClientIdOverride,
-       _microsoftClientSecretOverride = microsoftClientSecretOverride,
-       _microsoftTenantOverride = microsoftTenantOverride,
-       _oauthClientFactory = oauthClientFactory,
-       _getTokenWithAuthCodeFlowFn = getTokenWithAuthCodeFlowFn,
-       _refreshTokenFn = refreshTokenFn,
-       _accountEmailResolver = accountEmailResolver;
+    this._googleClientIdOverride,
+    this._googleClientSecretOverride,
+    this._microsoftClientIdOverride,
+    this._microsoftClientSecretOverride,
+    this._microsoftTenantOverride,
+    this._oauthClientFactory,
+    this._getTokenWithAuthCodeFlowFn,
+    this._refreshTokenFn,
+    this._accountEmailResolver,
+  });
 
   static const String _tokenAccessToken = 'access_token';
   static const String _tokenRefreshToken = 'refresh_token';
@@ -246,8 +235,7 @@ class OAuthSmtpService implements IOAuthSmtpService {
       );
       result = const rd.Failure(
         ServerFailure(
-          message:
-              'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
+          message: 'Falha ao atualizar token OAuth SMTP. Reconecte a conta e tente novamente.',
         ),
       );
     } finally {
@@ -462,8 +450,7 @@ class OAuthSmtpService implements IOAuthSmtpService {
         if (googleClientId.isEmpty) {
           return const rd.Failure(
             ValidationFailure(
-              message:
-                  'SMTP_GOOGLE_CLIENT_ID nao configurado. Defina a credencial OAuth para Google SMTP.',
+              message: 'SMTP_GOOGLE_CLIENT_ID nao configurado. Defina a credencial OAuth para Google SMTP.',
             ),
           );
         }
@@ -485,8 +472,7 @@ class OAuthSmtpService implements IOAuthSmtpService {
         if (microsoftClientId.isEmpty) {
           return const rd.Failure(
             ValidationFailure(
-              message:
-                  'SMTP_MICROSOFT_CLIENT_ID nao configurado. Defina a credencial OAuth para Microsoft SMTP.',
+              message: 'SMTP_MICROSOFT_CLIENT_ID nao configurado. Defina a credencial OAuth para Microsoft SMTP.',
             ),
           );
         }

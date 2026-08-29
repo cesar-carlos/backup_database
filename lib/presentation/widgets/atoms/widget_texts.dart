@@ -23,8 +23,8 @@ class WidgetTexts {
     required this.scheduleLabel,
     required this.typeLabel,
     required this.statusLabel,
-    required bool isPortuguese,
-  }) : _isPortuguese = isPortuguese;
+    required this._isPortuguese,
+  });
 
   final bool _isPortuguese;
 

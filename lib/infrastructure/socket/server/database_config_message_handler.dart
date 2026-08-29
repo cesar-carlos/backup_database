@@ -30,12 +30,11 @@ class DatabaseConfigMessageHandler {
     DatabaseConfigStore? store,
     IdempotencyRegistry? idempotencyRegistry,
     DateTime Function()? clock,
-    bool supportsFirebird = true,
+    this._supportsFirebird = true,
   }) : _prober = prober ?? const NotConfiguredProber(),
        _store = store ?? const NotConfiguredDatabaseConfigStore(),
        _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-       _clock = clock ?? DateTime.now,
-       _supportsFirebird = supportsFirebird;
+       _clock = clock ?? DateTime.now;
 
   final DatabaseConnectionProber _prober;
   final DatabaseConfigStore _store;

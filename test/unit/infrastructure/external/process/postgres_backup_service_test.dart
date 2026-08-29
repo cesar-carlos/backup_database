@@ -513,8 +513,7 @@ void main() {
             ProcessResult(
               exitCode: 1,
               stdout: '',
-              stderr:
-                  "'pg_receivewal' is not recognized as an internal or external command",
+              stderr: "'pg_receivewal' is not recognized as an internal or external command",
               duration: Duration(milliseconds: 10),
             ),
           ),

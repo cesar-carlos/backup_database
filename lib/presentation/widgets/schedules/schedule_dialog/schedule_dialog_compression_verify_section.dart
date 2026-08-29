@@ -175,50 +175,51 @@ class ScheduleDialogIntegritySection extends StatelessWidget {
         ],
         if (databaseType == DatabaseType.sqlServer)
           Consumer<LicenseProvider>(
-            builder: (BuildContext context, LicenseProvider licenseProvider, _) {
-              final license = licenseProvider.currentLicense;
-              final hasChecksum =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.checksum) ?? false);
+            builder:
+                (BuildContext context, LicenseProvider licenseProvider, _) {
+                  final license = licenseProvider.currentLicense;
+                  final hasChecksum =
+                      licenseProvider.hasValidLicense &&
+                      (license?.hasFeature(LicenseFeatures.checksum) ?? false);
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _checkboxWithInfo(
-                          label: hasChecksum
-                              ? 'Enable CheckSum'
-                              : 'Enable CheckSum (Requer licença)',
-                          value: enableChecksum,
-                          onChanged: hasChecksum
-                              ? onEnableChecksumChanged
-                              : null,
-                          infoText: hasChecksum
-                              ? 'Habilita o cálculo de checksums durante o backup. '
-                                    'Detecta corrupção de dados durante o processo de backup.'
-                              : 'Este recurso requer uma licença válida. '
-                                    'Acesse Configurações > Licenciamento para mais informações.',
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _checkboxWithInfo(
+                              label: hasChecksum
+                                  ? 'Enable CheckSum'
+                                  : 'Enable CheckSum (Requer licença)',
+                              value: enableChecksum,
+                              onChanged: hasChecksum
+                                  ? onEnableChecksumChanged
+                                  : null,
+                              infoText: hasChecksum
+                                  ? 'Habilita o cálculo de checksums durante o backup. '
+                                        'Detecta corrupção de dados durante o processo de backup.'
+                                  : 'Este recurso requer uma licença válida. '
+                                        'Acesse Configurações > Licenciamento para mais informações.',
+                            ),
+                          ),
+                          if (!hasChecksum) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              FluentIcons.lock,
+                              size: 16,
+                              color: FluentTheme.of(context)
+                                  .resources
+                                  .controlStrokeColorDefault
+                                  .withValues(alpha: 0.4),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (!hasChecksum) ...[
-                        const SizedBox(width: 8),
-                        Icon(
-                          FluentIcons.lock,
-                          size: 16,
-                          color: FluentTheme.of(context)
-                              .resources
-                              .controlStrokeColorDefault
-                              .withValues(alpha: 0.4),
-                        ),
-                      ],
+                      const SizedBox(height: 16),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              );
-            },
+                  );
+                },
           ),
         Consumer<LicenseProvider>(
           builder: (BuildContext context, LicenseProvider licenseProvider, _) {

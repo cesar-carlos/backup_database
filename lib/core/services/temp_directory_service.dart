@@ -6,8 +6,7 @@ import 'package:backup_database/domain/repositories/i_machine_settings_repositor
 import 'package:path/path.dart' as p;
 
 class TempDirectoryService {
-  TempDirectoryService({required IMachineSettingsRepository machineSettings})
-    : _machineSettings = machineSettings;
+  TempDirectoryService({required this._machineSettings});
 
   static const String _downloadsSubdir = r'BackupDatabase\Downloads';
 

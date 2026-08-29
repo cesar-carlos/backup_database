@@ -21,8 +21,8 @@ class SybaseCachedStrategy {
 
 class SybaseConnectionStrategyCache {
   SybaseConnectionStrategyCache({
-    Duration ttl = const Duration(minutes: 10),
-  }) : _ttl = ttl;
+    this._ttl = const Duration(minutes: 10),
+  });
 
   final Duration _ttl;
   final Map<String, SybaseCachedStrategy> _cache = {};

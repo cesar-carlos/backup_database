@@ -13,16 +13,12 @@ import 'package:flutter/foundation.dart';
 
 class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
   LicenseProvider({
-    required ILicenseValidationService validationService,
-    required LicenseGenerationService generationService,
-    required ILicenseRepository licenseRepository,
-    required IDeviceKeyService deviceKeyService,
-    ILicenseCacheInvalidator? cacheInvalidator,
-  }) : _validationService = validationService,
-       _generationService = generationService,
-       _licenseRepository = licenseRepository,
-       _deviceKeyService = deviceKeyService,
-       _cacheInvalidator = cacheInvalidator {
+    required this._validationService,
+    required this._generationService,
+    required this._licenseRepository,
+    required this._deviceKeyService,
+    this._cacheInvalidator,
+  }) {
     unawaited(loadDeviceKey());
     unawaited(loadLicense());
   }

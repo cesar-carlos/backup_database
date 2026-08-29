@@ -15619,10 +15619,7 @@ final class $$BackupDestinationsTableTableReferences
   _scheduleDestinationsTableRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.scheduleDestinationsTable,
-        aliasName: $_aliasNameGenerator(
-          db.backupDestinationsTable.id,
-          db.scheduleDestinationsTable.destinationId,
-        ),
+        aliasName: 'backup_destinations_table__id__schedule_destinations_table__destination_id',
       );
 
   $$ScheduleDestinationsTableTableProcessedTableManager
@@ -16029,10 +16026,8 @@ final class $$SchedulesTableTableReferences
   _scheduleDestinationsTableRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.scheduleDestinationsTable,
-        aliasName: $_aliasNameGenerator(
-          db.schedulesTable.id,
-          db.scheduleDestinationsTable.scheduleId,
-        ),
+        aliasName:
+            'schedules_table__id__schedule_destinations_table__schedule_id',
       );
 
   $$ScheduleDestinationsTableTableProcessedTableManager
@@ -16669,10 +16664,7 @@ final class $$ScheduleDestinationsTableTableReferences
 
   static $SchedulesTableTable _scheduleIdTable(_$AppDatabase db) =>
       db.schedulesTable.createAlias(
-        $_aliasNameGenerator(
-          db.scheduleDestinationsTable.scheduleId,
-          db.schedulesTable.id,
-        ),
+        'schedule_destinations_table__schedule_id__schedules_table__id',
       );
 
   $$SchedulesTableTableProcessedTableManager get scheduleId {
@@ -16691,10 +16683,7 @@ final class $$ScheduleDestinationsTableTableReferences
 
   static $BackupDestinationsTableTable _destinationIdTable(_$AppDatabase db) =>
       db.backupDestinationsTable.createAlias(
-        $_aliasNameGenerator(
-          db.scheduleDestinationsTable.destinationId,
-          db.backupDestinationsTable.id,
-        ),
+        'schedule_destinations_table__destination_id__backup_destinations_table__id',
       );
 
   $$BackupDestinationsTableTableProcessedTableManager get destinationId {
@@ -17006,34 +16995,30 @@ class $$ScheduleDestinationsTableTableTableManager
                     >
                   >(state) {
                     if (scheduleId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.scheduleId,
-                                referencedTable:
-                                    $$ScheduleDestinationsTableTableReferences
-                                        ._scheduleIdTable(db),
-                                referencedColumn:
-                                    $$ScheduleDestinationsTableTableReferences
-                                        ._scheduleIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.scheduleId,
+                        referencedTable:
+                            $$ScheduleDestinationsTableTableReferences
+                                ._scheduleIdTable(db),
+                        referencedColumn:
+                            $$ScheduleDestinationsTableTableReferences
+                                ._scheduleIdTable(db)
+                                .id,
+                      ) as T;
                     }
                     if (destinationId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.destinationId,
-                                referencedTable:
-                                    $$ScheduleDestinationsTableTableReferences
-                                        ._destinationIdTable(db),
-                                referencedColumn:
-                                    $$ScheduleDestinationsTableTableReferences
-                                        ._destinationIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.destinationId,
+                        referencedTable:
+                            $$ScheduleDestinationsTableTableReferences
+                                ._destinationIdTable(db),
+                        referencedColumn:
+                            $$ScheduleDestinationsTableTableReferences
+                                ._destinationIdTable(db)
+                                .id,
+                      ) as T;
                     }
 
                     return state;
@@ -17812,10 +17797,7 @@ final class $$EmailConfigsTableTableReferences
   _emailNotificationTargetsTableRefsTable(_$AppDatabase db) =>
       MultiTypedResultKey.fromTable(
         db.emailNotificationTargetsTable,
-        aliasName: $_aliasNameGenerator(
-          db.emailConfigsTable.id,
-          db.emailNotificationTargetsTable.emailConfigId,
-        ),
+        aliasName: 'email_configs_table__id__email_notification_targets_table__email_config_id',
       );
 
   $$EmailNotificationTargetsTableTableProcessedTableManager
@@ -18500,10 +18482,7 @@ final class $$EmailNotificationTargetsTableTableReferences
 
   static $EmailConfigsTableTable _emailConfigIdTable(_$AppDatabase db) =>
       db.emailConfigsTable.createAlias(
-        $_aliasNameGenerator(
-          db.emailNotificationTargetsTable.emailConfigId,
-          db.emailConfigsTable.id,
-        ),
+        'email_notification_targets_table__email_config_id__email_configs_table__id',
       );
 
   $$EmailConfigsTableTableProcessedTableManager get emailConfigId {
@@ -18850,19 +18829,17 @@ class $$EmailNotificationTargetsTableTableTableManager
                     >
                   >(state) {
                     if (emailConfigId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.emailConfigId,
-                                referencedTable:
-                                    $$EmailNotificationTargetsTableTableReferences
-                                        ._emailConfigIdTable(db),
-                                referencedColumn:
-                                    $$EmailNotificationTargetsTableTableReferences
-                                        ._emailConfigIdTable(db)
-                                        .id,
-                              )
-                              as T;
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.emailConfigId,
+                        referencedTable:
+                            $$EmailNotificationTargetsTableTableReferences
+                                ._emailConfigIdTable(db),
+                        referencedColumn:
+                            $$EmailNotificationTargetsTableTableReferences
+                                ._emailConfigIdTable(db)
+                                .id,
+                      ) as T;
                     }
 
                     return state;

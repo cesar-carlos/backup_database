@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 
 class SkeletonLoadingPreferenceProvider extends ChangeNotifier {
   SkeletonLoadingPreferenceProvider({
-    required IUserPreferencesRepository userPreferencesRepository,
-  }) : _userPreferencesRepository = userPreferencesRepository;
+    required this._userPreferencesRepository,
+  });
 
   final IUserPreferencesRepository _userPreferencesRepository;
 

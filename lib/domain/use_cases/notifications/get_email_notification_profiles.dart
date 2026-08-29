@@ -6,10 +6,9 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class GetEmailNotificationProfiles {
   GetEmailNotificationProfiles({
-    required IEmailConfigRepository emailConfigRepository,
-    required IEmailNotificationTargetRepository targetRepository,
-  }) : _emailConfigRepository = emailConfigRepository,
-       _targetRepository = targetRepository;
+    required this._emailConfigRepository,
+    required this._targetRepository,
+  });
 
   final IEmailConfigRepository _emailConfigRepository;
   final IEmailNotificationTargetRepository _targetRepository;

@@ -68,12 +68,11 @@ class RemoteBackupCancelledException implements Exception {
   }
 }
 
-typedef BackupProgressCallback =
-    void Function(
-      String step,
-      String message,
-      double progress,
-    );
+typedef BackupProgressCallback = void Function(
+  String step,
+  String message,
+  double progress,
+);
 
 class ConnectionManager {
   /// §audit-2026-05-28 wave 2 (P0): aceita um
@@ -87,11 +86,10 @@ class ConnectionManager {
   /// O parâmetro continua opcional para preservar o uso em testes que
   /// não querem montar o stack de repositório.
   ConnectionManager({
-    IServerConnectionRepository? serverConnectionRepository,
+    this._serverConnectionRepository,
     FileTransferResumeMetadataStore? resumeMetadataStore,
     Duration? fileTransferIdleTimeout,
-  }) : _serverConnectionRepository = serverConnectionRepository,
-       _resumeMetadataStore =
+  }) : _resumeMetadataStore =
            resumeMetadataStore ?? const FileTransferResumeMetadataStore(),
        _fileTransferIdleTimeout =
            fileTransferIdleTimeout ?? SocketConfig.fileTransferIdleTimeout,

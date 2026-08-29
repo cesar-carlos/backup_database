@@ -51,7 +51,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   }
 
   Future<void> _changeTempPath() async {
-    final result = await FilePicker.platform.getDirectoryPath(
+    final result = await FilePicker.getDirectoryPath(
       dialogTitle: appLocaleString(
         context,
         'Selecionar pasta temporária de downloads',

@@ -393,8 +393,11 @@ class NextcloudDestinationService implements INextcloudDestinationService {
       if (adapter is IOHttpClientAdapter) {
         adapter.createHttpClient = () {
           final client = HttpClient();
-          client.badCertificateCallback =
-              (X509Certificate cert, String host, int port) => true;
+          client.badCertificateCallback = (
+            X509Certificate cert,
+            String host,
+            int port,
+          ) => true;
           return client;
         };
       }

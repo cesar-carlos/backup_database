@@ -33,22 +33,8 @@ class WindowsRuntimeEnvironment {
     required int majorVersion,
     required int minorVersion,
   }) {
-    final osVersionInfo = calloc<OSVERSIONINFOEX>();
     try {
-      osVersionInfo.ref.dwOSVersionInfoSize = sizeOf<OSVERSIONINFOEX>();
-      final callResult = GetVersionEx(
-        osVersionInfo.cast<OSVERSIONINFO>(),
-      );
-      if (callResult != 0) {
-        final productType = osVersionInfo.ref.wProductType;
-        final isServer = productType != VER_NT_WORKSTATION;
-        return _DetectionResult(value: isServer, usedFallback: false);
-      }
-      final lastError = GetLastError();
-      LoggerService.warning(
-        '[WindowsRuntimeEnvironment] GetVersionEx failed, '
-        'error=$lastError. Falling back to OS string classification.',
-      );
+      return _DetectionResult(value: OsVersion.isServer, usedFallback: false);
     } on Object catch (e, s) {
       LoggerService.warning(
         '[WindowsRuntimeEnvironment] Native server detection failed. '
@@ -56,8 +42,6 @@ class WindowsRuntimeEnvironment {
         e,
         s,
       );
-    } finally {
-      calloc.free(osVersionInfo);
     }
 
     // Conservative fallback:
@@ -76,17 +60,17 @@ class WindowsRuntimeEnvironment {
         currentPid,
         sessionIdBuffer,
       );
-      if (processToSessionResult == 0) {
-        final lastError = GetLastError();
+      if (!processToSessionResult.value) {
         LoggerService.warning(
           '[WindowsRuntimeEnvironment] ProcessIdToSessionId failed, '
-          'error=$lastError. Falling back to SESSIONNAME heuristic.',
+          'error=${processToSessionResult.error}. Falling back to '
+          'SESSIONNAME heuristic.',
         );
         return _detectInteractiveByEnvironment(sessionName: sessionName);
       }
 
       final sessionId = sessionIdBuffer.value;
-      final hasExplorerShell = GetShellWindow() != NULL;
+      final hasExplorerShell = GetShellWindow() != nullptr;
       final hasInteractiveSessionName =
           sessionName != null &&
           sessionName.trim().isNotEmpty &&

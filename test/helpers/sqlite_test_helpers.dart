@@ -5,6 +5,6 @@ void writeMinimalValidSqliteDbFile(String path) {
   try {
     db.execute('CREATE TABLE _t(x INTEGER NOT NULL);');
   } finally {
-    db.dispose();
+    db.close();
   }
 }

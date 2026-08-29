@@ -24,8 +24,9 @@ final class TestConnectionFailed extends TestConnectionOutcome {
 
 typedef TestConnectionValidate = String? Function();
 typedef TestConnectionBuildConfig<TConfig> = TConfig Function();
-typedef TestConnectionRunTest<TConfig> =
-    Future<TestConnectionOutcome> Function(TConfig config);
+typedef TestConnectionRunTest<TConfig> = Future<TestConnectionOutcome> Function(
+  TConfig config,
+);
 
 String testConnectionUserMessage(
   Object? failure, {

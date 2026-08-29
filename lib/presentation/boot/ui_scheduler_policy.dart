@@ -11,11 +11,9 @@ class UiSchedulerPolicy {
   UiSchedulerPolicy(
     this._windowsServiceService, {
     bool? isWindows,
-    UiSchedulerPolicyWarning? onWarning,
-    UiSchedulerFallbackMode fallbackMode = UiSchedulerFallbackMode.failOpen,
-  }) : _isWindows = isWindows ?? Platform.isWindows,
-       _onWarning = onWarning,
-       _fallbackMode = fallbackMode;
+    this._onWarning,
+    this._fallbackMode = UiSchedulerFallbackMode.failOpen,
+  }) : _isWindows = isWindows ?? Platform.isWindows;
 
   final IWindowsServiceService _windowsServiceService;
   final bool _isWindows;

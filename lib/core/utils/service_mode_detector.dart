@@ -49,7 +49,7 @@ class ServiceModeDetector {
       final sessionId = calloc<DWORD>();
       try {
         final result = ProcessIdToSessionId(processId, sessionId);
-        if (result != 0) {
+        if (result.value) {
           final sid = sessionId.value;
           LoggerService.info('[ServiceModeDetector] Session ID: $sid');
           if (sid == _serviceSessionId) {
@@ -63,10 +63,9 @@ class ServiceModeDetector {
             '[ServiceModeDetector] layer-1 skip: Session $sid ≠ 0',
           );
         } else {
-          final lastError = GetLastError();
           LoggerService.warning(
             '[ServiceModeDetector] layer-1 failed: ProcessIdToSessionId '
-            'returned $result, GetLastError=$lastError',
+            'returned false, GetLastError=${result.error}',
           );
         }
       } finally {

@@ -5,15 +5,16 @@ import 'package:result_dart/result_dart.dart' as rd;
 typedef WindowsServiceStatusSupplier =
     Future<rd.Result<WindowsServiceStatus>> Function();
 
-typedef WindowsServiceDiagnosticsSink =
-    void Function(String message, {String? output});
+typedef WindowsServiceDiagnosticsSink = void Function(
+  String message, {
+  String? output,
+});
 
 class WindowsServiceScmPoller {
   WindowsServiceScmPoller({
-    required WindowsServiceStatusSupplier getStatus,
-    required WindowsServiceDiagnosticsSink appendDiagnostics,
-  }) : _getStatus = getStatus,
-       _appendDiagnostics = appendDiagnostics;
+    required this._getStatus,
+    required this._appendDiagnostics,
+  });
 
   final WindowsServiceStatusSupplier _getStatus;
   final WindowsServiceDiagnosticsSink _appendDiagnostics;

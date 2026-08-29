@@ -44,10 +44,10 @@ import 'package:backup_database/core/utils/logger_service.dart';
 ///   estar truncada. Aceitável para diagnostics.
 class AppendingFileSink {
   AppendingFileSink({
-    required String path,
+    required this._path,
     this.maxFileSize = 10 * 1024 * 1024,
     this.maxFiles = 5,
-  }) : _path = path;
+  });
 
   final String _path;
 

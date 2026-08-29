@@ -8,8 +8,10 @@ const double _kAppDataGridActionSlotWidth = 44;
 const double _kAppDataGridActionsPadding = 16;
 const double _kAppDataGridActionsMinWidth = 120;
 
-typedef AppDataGridCellBuilder<T> =
-    Widget Function(BuildContext context, T row);
+typedef AppDataGridCellBuilder<T> = Widget Function(
+  BuildContext context,
+  T row,
+);
 
 /// **Organism** — scrollable data grid with configurable columns and row actions.
 class AppDataGridColumn<T> {

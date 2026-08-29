@@ -25,26 +25,18 @@ import 'package:backup_database/infrastructure/utils/staging_usage_policy.dart';
 /// IBackupProgressNotifier so the client has the same information as the server UI.
 class ScheduleMessageHandler {
   ScheduleMessageHandler({
-    required IScheduleRepository scheduleRepository,
-    required ILicensePolicyService licensePolicyService,
-    required ISchedulerService schedulerService,
-    required UpdateSchedule updateSchedule,
-    required ExecuteScheduledBackup executeBackup,
-    required IBackupProgressNotifier progressNotifier,
+    required this._scheduleRepository,
+    required this._licensePolicyService,
+    required this._schedulerService,
+    required this._updateSchedule,
+    required this._executeBackup,
+    required this._progressNotifier,
     RemoteExecutionRegistry? executionRegistry,
     ExecutionEventSequencer? eventSequencer,
-    bool supportsFirebird = true,
-    Future<int> Function()? stagingUsageBytesProvider,
-  }) : _scheduleRepository = scheduleRepository,
-       _licensePolicyService = licensePolicyService,
-       _schedulerService = schedulerService,
-       _updateSchedule = updateSchedule,
-       _executeBackup = executeBackup,
-       _progressNotifier = progressNotifier,
-       _executionRegistry = executionRegistry ?? RemoteExecutionRegistry(),
-       _eventSequencer = eventSequencer ?? ExecutionEventSequencer(),
-       _supportsFirebird = supportsFirebird,
-       _stagingUsageBytesProvider = stagingUsageBytesProvider {
+    this._supportsFirebird = true,
+    this._stagingUsageBytesProvider,
+  }) : _executionRegistry = executionRegistry ?? RemoteExecutionRegistry(),
+       _eventSequencer = eventSequencer ?? ExecutionEventSequencer() {
     _progressNotifier.addListener(_onProgressChanged);
   }
 

@@ -36,10 +36,9 @@ class SybaseBackupHealth {
 class GetSybaseBackupHealth {
   const GetSybaseBackupHealth(
     this._historyRepository, {
-    int maxDaysForBaseFull = BackupConstants.maxDaysForLogBackupBaseFull,
-    int historyLimit = 200,
-  }) : _maxDaysForBaseFull = maxDaysForBaseFull,
-       _historyLimit = historyLimit;
+    this._maxDaysForBaseFull = BackupConstants.maxDaysForLogBackupBaseFull,
+    this._historyLimit = 200,
+  });
 
   final IBackupHistoryRepository _historyRepository;
   final int _maxDaysForBaseFull;

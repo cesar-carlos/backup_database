@@ -322,11 +322,10 @@ class DetachedProcessHandle {
   final int pid;
 }
 
-typedef DetachedProcessStarter =
-    Future<DetachedProcessHandle?> Function(
-      String executable,
-      List<String> arguments,
-    );
+typedef DetachedProcessStarter = Future<DetachedProcessHandle?> Function(
+  String executable,
+  List<String> arguments,
+);
 typedef BeforeInstallHook = Future<void> Function();
 
 /// §audit-2026-05-28 wave 4: o callback agora recebe também o
@@ -340,13 +339,13 @@ typedef BeforeInstallHook = Future<void> Function();
 /// [AppUpdateBlockOutcome] (mensagem + razão tipada) em vez de só
 /// `String?` — UI usa o `reason` para escolher o tom da banner e
 /// renderizar o botão "Atualizar agora" embutido quando aplicável.
-typedef InstallReadinessCheck =
-    Future<AppUpdateBlockOutcome?> Function(
-      AppcastRelease release,
-      AppUpdateSource source,
-    );
-typedef UpdateInstallContextProvider =
-    Future<AppUpdateInstallContext> Function(AppcastRelease release);
+typedef InstallReadinessCheck = Future<AppUpdateBlockOutcome?> Function(
+  AppcastRelease release,
+  AppUpdateSource source,
+);
+typedef UpdateInstallContextProvider = Future<AppUpdateInstallContext> Function(
+  AppcastRelease release,
+);
 typedef FreeDiskSpaceProbe = Future<int?> Function(Directory directory);
 typedef ProcessAliveCheck = bool Function(int pid);
 
@@ -2092,6 +2091,7 @@ class AutoUpdateService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
       case DioExceptionType.connectionError:
         return true;
       case DioExceptionType.badResponse:

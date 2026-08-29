@@ -23,24 +23,16 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class BackupCleanupServiceImpl implements IBackupCleanupService {
   const BackupCleanupServiceImpl({
-    required ILocalDestinationService localDestinationService,
-    required IFtpService ftpDestinationService,
-    required IGoogleDriveDestinationService googleDriveDestinationService,
-    required IDropboxDestinationService dropboxDestinationService,
-    required INextcloudDestinationService nextcloudDestinationService,
-    required ILicensePolicyService licensePolicyService,
-    required INotificationService notificationService,
-    required IBackupLogRepository backupLogRepository,
-    required IBackupHistoryRepository backupHistoryRepository,
-  }) : _localDestinationService = localDestinationService,
-       _ftpDestinationService = ftpDestinationService,
-       _googleDriveDestinationService = googleDriveDestinationService,
-       _dropboxDestinationService = dropboxDestinationService,
-       _nextcloudDestinationService = nextcloudDestinationService,
-       _licensePolicyService = licensePolicyService,
-       _notificationService = notificationService,
-       _backupLogRepository = backupLogRepository,
-       _backupHistoryRepository = backupHistoryRepository;
+    required this._localDestinationService,
+    required this._ftpDestinationService,
+    required this._googleDriveDestinationService,
+    required this._dropboxDestinationService,
+    required this._nextcloudDestinationService,
+    required this._licensePolicyService,
+    required this._notificationService,
+    required this._backupLogRepository,
+    required this._backupHistoryRepository,
+  });
 
   final ILocalDestinationService _localDestinationService;
   final IFtpService _ftpDestinationService;

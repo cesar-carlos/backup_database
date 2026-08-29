@@ -24,17 +24,12 @@ enum NotificationHistoryPeriod {
 class NotificationProvider extends ChangeNotifier
     with AsyncStateMixin, DisposeGuardMixin {
   NotificationProvider({
-    required IEmailConfigRepository emailConfigRepository,
-    required IEmailNotificationTargetRepository
-    emailNotificationTargetRepository,
-    required IEmailTestAuditRepository emailTestAuditRepository,
-    required IOAuthSmtpService oauthSmtpService,
-    required TestEmailConfiguration testEmailConfiguration,
-  }) : _emailConfigRepository = emailConfigRepository,
-       _emailNotificationTargetRepository = emailNotificationTargetRepository,
-       _emailTestAuditRepository = emailTestAuditRepository,
-       _oauthSmtpService = oauthSmtpService,
-       _testEmailConfiguration = testEmailConfiguration;
+    required this._emailConfigRepository,
+    required this._emailNotificationTargetRepository,
+    required this._emailTestAuditRepository,
+    required this._oauthSmtpService,
+    required this._testEmailConfiguration,
+  });
 
   final IEmailConfigRepository _emailConfigRepository;
   final IEmailNotificationTargetRepository _emailNotificationTargetRepository;

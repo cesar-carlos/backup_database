@@ -21,21 +21,14 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class NotificationService implements INotificationService {
   NotificationService({
-    required IEmailConfigRepository emailConfigRepository,
-    required IEmailNotificationTargetRepository
-    emailNotificationTargetRepository,
-    required IEmailTestAuditRepository emailTestAuditRepository,
-    required IBackupLogRepository backupLogRepository,
-    required IEmailService emailService,
-    required ILicenseValidationService licenseValidationService,
-    IMetricsCollector? metricsCollector,
-  }) : _emailConfigRepository = emailConfigRepository,
-       _emailNotificationTargetRepository = emailNotificationTargetRepository,
-       _emailTestAuditRepository = emailTestAuditRepository,
-       _backupLogRepository = backupLogRepository,
-       _emailService = emailService,
-       _licenseValidationService = licenseValidationService,
-       _metricsCollector = metricsCollector;
+    required this._emailConfigRepository,
+    required this._emailNotificationTargetRepository,
+    required this._emailTestAuditRepository,
+    required this._backupLogRepository,
+    required this._emailService,
+    required this._licenseValidationService,
+    this._metricsCollector,
+  });
 
   final IEmailConfigRepository _emailConfigRepository;
   final IEmailNotificationTargetRepository _emailNotificationTargetRepository;

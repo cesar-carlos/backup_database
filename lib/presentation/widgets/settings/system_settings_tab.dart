@@ -277,8 +277,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ? localizeCompatibilityReason(
             context,
             reason: features.startupAtLogonTaskDisabledReason,
-            fallbackPt:
-                'A tarefa de inicio no logon nao esta disponivel nesta versao do Windows.',
+            fallbackPt: 'A tarefa de inicio no logon nao esta disponivel nesta versao do Windows.',
             fallbackEn:
                 'Logon startup task is not available on this Windows version.',
           )
@@ -346,8 +345,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
         ? localizeCompatibilityReason(
             context,
             reason: features.trayDisabledReason,
-            fallbackPt:
-                'A bandeja do sistema nao esta disponivel nesta versao do Windows.',
+            fallbackPt: 'A bandeja do sistema nao esta disponivel nesta versao do Windows.',
             fallbackEn: 'System tray is not available on this Windows version.',
           )
         : null;

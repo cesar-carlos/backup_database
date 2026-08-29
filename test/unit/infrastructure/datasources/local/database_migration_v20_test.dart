@@ -258,5 +258,5 @@ void _createLegacyV18Database(
   }
 
   sqliteDb.execute('PRAGMA user_version = 18');
-  sqliteDb.dispose();
+  sqliteDb.close();
 }

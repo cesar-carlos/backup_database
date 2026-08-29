@@ -60,7 +60,7 @@ class MetricsPercentilesCard extends StatelessWidget {
                     children: [
                       TableRow(
                         decoration: BoxDecoration(
-                          color: theme.brightness.isDark
+                          color: theme.brightness == Brightness.dark
                               ? theme.resources.cardBackgroundFillColorDefault
                               : theme.resources.subtleFillColorSecondary,
                         ),

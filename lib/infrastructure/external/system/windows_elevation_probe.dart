@@ -28,10 +28,9 @@ import 'package:meta/meta.dart';
 ///     importa (chamado uma vez por boot do AutoUpdate).
 class WindowsElevationProbe implements IElevationProbe {
   WindowsElevationProbe({
-    required ps.ProcessService processService,
-    @visibleForTesting Duration probeTimeout = _defaultTimeout,
-  }) : _processService = processService,
-       _probeTimeout = probeTimeout;
+    required this._processService,
+    @visibleForTesting this._probeTimeout = _defaultTimeout,
+  });
 
   /// Construtor legado para callers que ainda não foram migrados
   /// para receber `ProcessService` via DI.

@@ -33,29 +33,28 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class BackupOrchestratorService {
   BackupOrchestratorService({
-    required ISqlServerConfigRepository sqlServerConfigRepository,
-    required ISybaseConfigRepository sybaseConfigRepository,
-    required IPostgresConfigRepository postgresConfigRepository,
-    required IFirebirdConfigRepository firebirdConfigRepository,
-    required IBackupHistoryRepository backupHistoryRepository,
-    required IBackupLogRepository backupLogRepository,
+    required this._sqlServerConfigRepository,
+    required this._sybaseConfigRepository,
+    required this._postgresConfigRepository,
+    required this._firebirdConfigRepository,
+    required this._backupHistoryRepository,
+    required this._backupLogRepository,
     required ISqlServerBackupService sqlServerBackupService,
     required ISybaseBackupService sybaseBackupService,
     required IPostgresBackupService postgresBackupService,
     required IFirebirdBackupService firebirdBackupService,
-    required IBackupCompressionOrchestrator compressionOrchestrator,
-    required IBackupScriptOrchestrator scriptOrchestrator,
-    required ISqlScriptExecutionService sqlScriptExecutionService,
-    required INotificationService notificationService,
-    required IBackupProgressNotifier progressNotifier,
-    required GetDatabaseConfig getDatabaseConfig,
-    required ValidateBackupDirectory validateBackupDirectory,
+    required this._compressionOrchestrator,
+    required this._scriptOrchestrator,
+    required this._sqlScriptExecutionService,
+    required this._notificationService,
+    required this._progressNotifier,
+    required this._getDatabaseConfig,
+    required this._validateBackupDirectory,
     required ValidateSybaseLogBackupPreflight validateSybaseLogBackupPreflight,
-    required IStorageChecker storageChecker,
-    IBackupCancellationService? cancellationService,
+    required this._storageChecker,
+    this._cancellationService,
     Map<DatabaseType, IDatabaseBackupStrategy>? strategies,
-  }) : _cancellationService = cancellationService,
-       _strategies =
+  }) : _strategies =
            strategies ??
            _buildDefaultStrategies(
              sqlServerBackupService: sqlServerBackupService,
@@ -64,21 +63,7 @@ class BackupOrchestratorService {
              firebirdBackupService: firebirdBackupService,
              validateSybaseLogBackupPreflight: validateSybaseLogBackupPreflight,
            ),
-       _sqlServerConfigRepository = sqlServerConfigRepository,
-       _sybaseConfigRepository = sybaseConfigRepository,
-       _postgresConfigRepository = postgresConfigRepository,
-       _firebirdConfigRepository = firebirdConfigRepository,
-       _backupHistoryRepository = backupHistoryRepository,
-       _backupLogRepository = backupLogRepository,
-       _compressionOrchestrator = compressionOrchestrator,
-       _scriptOrchestrator = scriptOrchestrator,
-       _sqlScriptExecutionService = sqlScriptExecutionService,
-       _notificationService = notificationService,
-       _progressNotifier = progressNotifier,
-       _getDatabaseConfig = getDatabaseConfig,
-       _validateBackupDirectory = validateBackupDirectory,
-       _validateSybaseLogBackupPreflight = validateSybaseLogBackupPreflight,
-       _storageChecker = storageChecker;
+       _validateSybaseLogBackupPreflight = validateSybaseLogBackupPreflight;
   final ISqlServerConfigRepository _sqlServerConfigRepository;
   final ISybaseConfigRepository _sybaseConfigRepository;
   final IPostgresConfigRepository _postgresConfigRepository;

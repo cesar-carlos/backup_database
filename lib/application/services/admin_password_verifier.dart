@@ -27,14 +27,11 @@ import 'package:crypto/crypto.dart';
 /// Para gerar um hash novo, use `scripts/hash_admin_password.dart`.
 class AdminPasswordVerifier {
   AdminPasswordVerifier({
-    int maxAttempts = 3,
-    Duration lockoutDuration = const Duration(seconds: 30),
-    DateTime Function() now = _defaultNow,
+    this._maxAttempts = 3,
+    this._lockoutDuration = const Duration(seconds: 30),
+    this._now = _defaultNow,
     math.Random? randomForSalt,
-  }) : _maxAttempts = maxAttempts,
-       _lockoutDuration = lockoutDuration,
-       _now = now,
-       _saltRandom = randomForSalt ?? math.Random.secure();
+  }) : _saltRandom = randomForSalt ?? math.Random.secure();
 
   static DateTime _defaultNow() => DateTime.now();
 

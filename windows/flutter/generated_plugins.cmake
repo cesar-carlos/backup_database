@@ -7,7 +7,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_acrylic
   flutter_secure_storage_windows
   screen_retriever_windows
-  sqlite3_flutter_libs
   system_theme
   tray_manager
   url_launcher_windows
@@ -16,6 +15,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

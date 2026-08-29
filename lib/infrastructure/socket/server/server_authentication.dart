@@ -22,8 +22,8 @@ class AuthValidationResult {
 class ServerAuthentication {
   ServerAuthentication(
     this._dao, {
-    ILicenseValidationService? licenseValidationService,
-  }) : _licenseValidationService = licenseValidationService;
+    this._licenseValidationService,
+  });
 
   final ServerCredentialDao _dao;
   final ILicenseValidationService? _licenseValidationService;
@@ -72,8 +72,7 @@ class ServerAuthentication {
           );
           return const AuthValidationResult(
             isValid: false,
-            errorMessage:
-                'Conexao remota bloqueada: falha ao validar licenca do servidor',
+            errorMessage: 'Conexao remota bloqueada: falha ao validar licenca do servidor',
             errorCode: ErrorCode.licenseDenied,
           );
         }
@@ -85,8 +84,7 @@ class ServerAuthentication {
           );
           return const AuthValidationResult(
             isValid: false,
-            errorMessage:
-                'Conexao remota bloqueada: licenca nao permite conexao ao servidor',
+            errorMessage: 'Conexao remota bloqueada: licenca nao permite conexao ao servidor',
             errorCode: ErrorCode.licenseDenied,
           );
         }

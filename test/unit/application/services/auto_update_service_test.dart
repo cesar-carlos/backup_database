@@ -351,9 +351,9 @@ void main() {
           p.join(updatesDir.path, 'update_context.json'),
         );
         expect(await updateContext.exists(), isTrue);
-        final updateContextJson =
-            jsonDecode(await updateContext.readAsString())
-                as Map<String, dynamic>;
+        final updateContextJson = jsonDecode(
+          await updateContext.readAsString(),
+        ) as Map<String, dynamic>;
         expect(
           updateContextJson['schemaVersion'],
           AutoUpdateService.updateContextSchemaVersion,

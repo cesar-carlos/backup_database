@@ -15,22 +15,20 @@ import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
-typedef SmtpSendFn =
-    Future<SendReport> Function(
-      Message message,
-      SmtpServer smtpServer, {
-      Duration? timeout,
-    });
+typedef SmtpSendFn = Future<SendReport> Function(
+  Message message,
+  SmtpServer smtpServer, {
+  Duration? timeout,
+});
 
 typedef RetryDelayFn = Future<void> Function(Duration duration);
 
 class EmailService implements IEmailService {
   EmailService({
-    required IOAuthSmtpService oauthSmtpService,
+    required this._oauthSmtpService,
     SmtpSendFn? smtpSendFn,
     RetryDelayFn? retryDelayFn,
-  }) : _oauthSmtpService = oauthSmtpService,
-       _smtpSendFn = smtpSendFn ?? send,
+  }) : _smtpSendFn = smtpSendFn ?? send,
        _retryDelayFn = retryDelayFn ?? Future.delayed;
 
   static final Random _random = Random();

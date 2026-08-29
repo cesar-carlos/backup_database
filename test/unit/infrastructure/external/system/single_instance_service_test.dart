@@ -360,8 +360,8 @@ class MutexSecurityAttributesTestFactory {
 class _StubMutexSecurityAttributes implements MutexSecurityAttributes {
   _StubMutexSecurityAttributes({
     required this.pointer,
-    required void Function() onDispose,
-  }) : _onDispose = onDispose;
+    required this._onDispose,
+  });
 
   @override
   final Pointer<NativeType> pointer;

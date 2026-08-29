@@ -13,10 +13,9 @@ class _CacheEntry {
 class CachedLicenseValidationService
     implements ILicenseValidationService, ILicenseCacheInvalidator {
   CachedLicenseValidationService({
-    required ILicenseValidationService delegate,
-    Duration ttl = LicenseCacheConstants.ttl,
-  }) : _delegate = delegate,
-       _ttl = ttl;
+    required this._delegate,
+    this._ttl = LicenseCacheConstants.ttl,
+  });
 
   final ILicenseValidationService _delegate;
   final Duration _ttl;

@@ -24,10 +24,9 @@ class BootstrapConfigResolver {
   BootstrapConfigResolver({
     this.environment,
     this.isDebugMode = kDebugMode,
-    String? resolvedExecutablePath,
-    void Function(String message)? onWarning,
-  }) : _resolvedExecutablePath = resolvedExecutablePath,
-       _onWarning = onWarning;
+    this._resolvedExecutablePath,
+    this._onWarning,
+  });
 
   final Map<String, String>? environment;
   final bool isDebugMode;

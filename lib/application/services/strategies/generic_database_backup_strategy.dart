@@ -22,16 +22,12 @@ typedef BuildBackupExecutionContext<T extends DatabaseConnectionConfig> =
 class GenericDatabaseBackupStrategy<T extends DatabaseConnectionConfig>
     implements IDatabaseBackupStrategy {
   GenericDatabaseBackupStrategy({
-    required DatabaseType databaseType,
-    required IDatabaseBackupPort<T> port,
-    required List<BackupValidationRule<T>> rules,
-    required List<BackupResultEnricher<T>> enrichers,
-    required BuildBackupExecutionContext<T> buildContext,
-  }) : _databaseType = databaseType,
-       _port = port,
-       _rules = rules,
-       _enrichers = enrichers,
-       _buildContext = buildContext;
+    required this._databaseType,
+    required this._port,
+    required this._rules,
+    required this._enrichers,
+    required this._buildContext,
+  });
 
   final DatabaseType _databaseType;
   final IDatabaseBackupPort<T> _port;

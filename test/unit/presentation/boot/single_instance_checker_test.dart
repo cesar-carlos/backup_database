@@ -347,9 +347,8 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     this.canRunSchedule = false,
     this.delegationResult,
     List<bool>? notifyResults,
-    List<String?>? ownerInfoResults,
-  }) : _notifyResults = notifyResults ?? <bool>[true],
-       _ownerInfoResults = ownerInfoResults;
+    this._ownerInfoResults,
+  }) : _notifyResults = notifyResults ?? <bool>[true];
 
   final String? existingUser;
   final String? existingRole;

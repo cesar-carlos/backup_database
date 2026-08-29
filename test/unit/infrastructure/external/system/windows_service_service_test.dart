@@ -287,8 +287,7 @@ void main() {
           mockProcessService,
           const ProcessResult(
             exitCode: 0,
-            stdout:
-                'SERVICE_NAME: BackupDatabaseService\n  STATE: 2  START_PENDING',
+            stdout: 'SERVICE_NAME: BackupDatabaseService\n  STATE: 2  START_PENDING',
             stderr: '',
             duration: Duration(milliseconds: 50),
           ),
@@ -343,8 +342,7 @@ void main() {
           mockProcessService,
           const ProcessResult(
             exitCode: 0,
-            stdout:
-                'SERVICE_NAME: BackupDatabaseService\n  STATE: 2  START_PENDING',
+            stdout: 'SERVICE_NAME: BackupDatabaseService\n  STATE: 2  START_PENDING',
             stderr: '',
             duration: Duration(milliseconds: 50),
           ),
@@ -383,8 +381,7 @@ void main() {
           mockProcessService,
           const ProcessResult(
             exitCode: 1056,
-            stdout:
-                '[SC] StartService FAILED 1056:\nUma cópia deste serviço já está em execução.',
+            stdout: '[SC] StartService FAILED 1056:\nUma cópia deste serviço já está em execução.',
             stderr: '',
             duration: Duration(milliseconds: 10),
           ),
@@ -417,8 +414,7 @@ void main() {
           mockProcessService,
           const ProcessResult(
             exitCode: 1056,
-            stdout:
-                '[SC] StartService FAILED 1056:\nUma cópia deste serviço já está em execução.',
+            stdout: '[SC] StartService FAILED 1056:\nUma cópia deste serviço já está em execução.',
             stderr: '',
             duration: Duration(milliseconds: 10),
           ),

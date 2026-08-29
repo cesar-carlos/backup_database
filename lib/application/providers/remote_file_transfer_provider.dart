@@ -18,12 +18,11 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
-typedef TransferProgressCallback =
-    void Function(
-      String step,
-      String message,
-      double progress,
-    );
+typedef TransferProgressCallback = void Function(
+  String step,
+  String message,
+  double progress,
+);
 
 class RemoteFileTransferProvider extends ChangeNotifier {
   RemoteFileTransferProvider(
@@ -32,8 +31,8 @@ class RemoteFileTransferProvider extends ChangeNotifier {
     this._sendFileToDestinationService,
     this._tempDirectoryService,
     this._machineSettings, {
-    FileTransferDao? fileTransferDao,
-  }) : _fileTransferDao = fileTransferDao;
+    this._fileTransferDao,
+  });
 
   final ConnectionManager _connectionManager;
   final IBackupDestinationRepository _destinationRepository;

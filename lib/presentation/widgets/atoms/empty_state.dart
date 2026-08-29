@@ -25,6 +25,7 @@ class EmptyState extends StatelessWidget {
         child: Padding(
           padding: AppSpacing.paddingLg,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ExcludeSemantics(

@@ -41,10 +41,9 @@ typedef SessionInfoLookup = Future<SessionInfo?> Function(String clientId);
 /// `ClientManager`/handlers map. Em testes, basta mockar.
 class SessionMessageHandler {
   SessionMessageHandler({
-    required SessionInfoLookup sessionLookup,
+    required this._sessionLookup,
     DateTime Function()? clock,
-  }) : _sessionLookup = sessionLookup,
-       _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now;
 
   final SessionInfoLookup _sessionLookup;
   final DateTime Function() _clock;

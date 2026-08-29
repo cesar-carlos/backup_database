@@ -23,12 +23,10 @@ import 'package:backup_database/infrastructure/socket/server/socket_error_sender
 /// sao cacheadas.
 class ScheduleCrudMessageHandler {
   ScheduleCrudMessageHandler({
-    required IScheduleRepository scheduleRepository,
+    required this._scheduleRepository,
     IdempotencyRegistry? idempotencyRegistry,
-    bool supportsFirebird = true,
-  }) : _scheduleRepository = scheduleRepository,
-       _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry(),
-       _supportsFirebird = supportsFirebird;
+    this._supportsFirebird = true,
+  }) : _idempotencyRegistry = idempotencyRegistry ?? IdempotencyRegistry();
 
   final IScheduleRepository _scheduleRepository;
   final IdempotencyRegistry _idempotencyRegistry;

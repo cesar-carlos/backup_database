@@ -5,12 +5,11 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 
 typedef BootstrapLog = void Function(String message);
-typedef BootstrapLogWithError =
-    void Function(
-      String message, [
-      Object? error,
-      StackTrace? stackTrace,
-    ]);
+typedef BootstrapLogWithError = void Function(
+  String message, [
+  Object? error,
+  StackTrace? stackTrace,
+]);
 
 /// Identificadores de erros conhecidos do Flutter que não devem poluir
 /// o log de erros (são reportados pelo próprio Flutter como `physicalKey

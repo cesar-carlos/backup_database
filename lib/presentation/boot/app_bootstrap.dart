@@ -42,30 +42,26 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter/widgets.dart' show Widget, WidgetsFlutterBinding;
 
-typedef LaunchBootstrapContextResolverFn =
-    LaunchBootstrapContext Function({
-      required List<String> rawArgs,
-      required Map<String, String> rawEnvironment,
-    });
-typedef LoadEnvironmentFn =
-    Future<EnvironmentLoadOutcome> Function({String? logPrefix});
-typedef ResolveBootstrapConfigFn =
-    BootstrapConfig Function({
-      required List<String> rawArgs,
-    });
-typedef InitializeAppFn =
-    Future<void> Function({
-      required AppMode appMode,
-    });
-typedef GetLaunchConfigFn =
-    Future<LaunchConfig> Function({
-      required LaunchBootstrapContext bootstrapContext,
-    });
-typedef InitializeUiServicesFn =
-    Future<void> Function({
-      required LaunchConfig launchConfig,
-      required BootstrapConfig bootstrapConfig,
-    });
+typedef LaunchBootstrapContextResolverFn = LaunchBootstrapContext Function({
+  required List<String> rawArgs,
+  required Map<String, String> rawEnvironment,
+});
+typedef LoadEnvironmentFn = Future<EnvironmentLoadOutcome> Function({
+  String? logPrefix,
+});
+typedef ResolveBootstrapConfigFn = BootstrapConfig Function({
+  required List<String> rawArgs,
+});
+typedef InitializeAppFn = Future<void> Function({
+  required AppMode appMode,
+});
+typedef GetLaunchConfigFn = Future<LaunchConfig> Function({
+  required LaunchBootstrapContext bootstrapContext,
+});
+typedef InitializeUiServicesFn = Future<void> Function({
+  required LaunchConfig launchConfig,
+  required BootstrapConfig bootstrapConfig,
+});
 
 class BootstrapEnvironment {
   const BootstrapEnvironment({

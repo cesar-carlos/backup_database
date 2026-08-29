@@ -61,7 +61,7 @@ Future<SqliteQuickCheckResult> sqliteDatabaseQuickCheckFile(File file) async {
       }
       return SqliteQuickCheckResult.ok;
     } finally {
-      db.dispose();
+      db.close();
     }
   } on Object {
     return SqliteQuickCheckResult.inaccessible;

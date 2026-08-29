@@ -19,8 +19,8 @@ import 'package:backup_database/infrastructure/external/process/process_service.
 class ServiceAccountProbe {
   ServiceAccountProbe({
     required this.serviceName,
-    required ps.ProcessService processService,
-  }) : _processService = processService;
+    required this._processService,
+  });
 
   /// Construtor legado para callers que ainda não foram migrados para
   /// receber `ProcessService` via DI. Internamente, instancia um próprio.

@@ -339,7 +339,7 @@ class GoogleAuthService {
 
       final tokenResponse = await _helper!.getToken();
 
-      if (tokenResponse == null || tokenResponse.accessToken == null) {
+      if (tokenResponse.accessToken == null) {
         await _clearStoredCredentials();
         return const rd.Failure(
           GoogleDriveFailure(message: 'Sessão expirada. Faça login novamente.'),

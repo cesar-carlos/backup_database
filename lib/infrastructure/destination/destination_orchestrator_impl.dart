@@ -29,20 +29,14 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class DestinationOrchestratorImpl implements IDestinationOrchestrator {
   const DestinationOrchestratorImpl({
-    required ILocalDestinationService localDestinationService,
-    required SendToFtp sendToFtp,
-    required SendToGoogleDrive sendToGoogleDrive,
-    required SendToDropbox sendToDropbox,
-    required SendToNextcloud sendToNextcloud,
-    required ILicensePolicyService licensePolicyService,
-    required CircuitBreakerRegistry circuitBreakerRegistry,
-  }) : _localDestinationService = localDestinationService,
-       _sendToFtp = sendToFtp,
-       _sendToGoogleDrive = sendToGoogleDrive,
-       _sendToDropbox = sendToDropbox,
-       _sendToNextcloud = sendToNextcloud,
-       _licensePolicyService = licensePolicyService,
-       _circuitBreakerRegistry = circuitBreakerRegistry;
+    required this._localDestinationService,
+    required this._sendToFtp,
+    required this._sendToGoogleDrive,
+    required this._sendToDropbox,
+    required this._sendToNextcloud,
+    required this._licensePolicyService,
+    required this._circuitBreakerRegistry,
+  });
 
   final ILocalDestinationService _localDestinationService;
   final SendToFtp _sendToFtp;

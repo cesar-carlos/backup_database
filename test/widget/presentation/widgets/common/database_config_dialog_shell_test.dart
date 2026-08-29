@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:backup_database/presentation/widgets/organisms/database_config_dialog_shell.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show MaterialPageRoute;
@@ -18,15 +16,13 @@ void main() {
           content: Button(
             child: const Text('Push'),
             onPressed: () {
-              unawaited(
-                navKey.currentState!.push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const DatabaseConfigDialogShell(
-                      constraints: BoxConstraints(maxWidth: 400),
-                      title: Text('T'),
-                      body: Text('Body'),
-                      dialogActions: [],
-                    ),
+              navKey.currentState!.push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const DatabaseConfigDialogShell(
+                    constraints: BoxConstraints(maxWidth: 400),
+                    title: Text('T'),
+                    body: Text('Body'),
+                    dialogActions: [],
                   ),
                 ),
               );
@@ -56,21 +52,19 @@ void main() {
           content: Button(
             child: const Text('Push'),
             onPressed: () {
-              unawaited(
-                navKey.currentState!.push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (BuildContext dialogContext) =>
-                        DatabaseConfigDialogShell(
-                          constraints: const BoxConstraints(maxWidth: 400),
-                          title: const Text('T'),
-                          body: const Text('Body'),
-                          dialogActions: const [],
-                          onDismiss: () {
-                            dismissCalls++;
-                            Navigator.of(dialogContext).pop<void>();
-                          },
-                        ),
-                  ),
+              navKey.currentState!.push<void>(
+                MaterialPageRoute<void>(
+                  builder: (BuildContext dialogContext) =>
+                      DatabaseConfigDialogShell(
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        title: const Text('T'),
+                        body: const Text('Body'),
+                        dialogActions: const [],
+                        onDismiss: () {
+                          dismissCalls++;
+                          Navigator.of(dialogContext).pop<void>();
+                        },
+                      ),
                 ),
               );
             },

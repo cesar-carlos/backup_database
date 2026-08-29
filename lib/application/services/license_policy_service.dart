@@ -13,10 +13,9 @@ import 'package:result_dart/result_dart.dart' show unit;
 
 class LicensePolicyService implements ILicensePolicyService {
   LicensePolicyService({
-    required ILicenseValidationService licenseValidationService,
-    IMetricsCollector? metricsCollector,
-  }) : _licenseValidationService = licenseValidationService,
-       _metricsCollector = metricsCollector;
+    required this._licenseValidationService,
+    this._metricsCollector,
+  });
 
   final ILicenseValidationService _licenseValidationService;
   final IMetricsCollector? _metricsCollector;

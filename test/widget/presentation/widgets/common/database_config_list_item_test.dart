@@ -40,14 +40,12 @@ void main() {
     );
     await tester.pump();
 
-    final icon =
-        tester.widget(
-              find.descendant(
-                of: find.byType(CircleAvatar),
-                matching: find.byType(Icon),
-              ),
-            )
-            as Icon;
+    final icon = tester.widget(
+      find.descendant(
+        of: find.byType(CircleAvatar),
+        matching: find.byType(Icon),
+      ),
+    ) as Icon;
     expect(
       icon.color,
       DatabaseTypeMetadata.of(DatabaseType.sqlServer).accentColor,
@@ -88,14 +86,12 @@ void main() {
       );
       await tester.pump();
 
-      final icon =
-          tester.widget(
-                find.descendant(
-                  of: find.byType(CircleAvatar),
-                  matching: find.byType(Icon),
-                ),
-              )
-              as Icon;
+      final icon = tester.widget(
+        find.descendant(
+          of: find.byType(CircleAvatar),
+          matching: find.byType(Icon),
+        ),
+      ) as Icon;
       expect(
         icon.color,
         DatabaseTypeMetadata.of(DatabaseType.sybase).accentColor,
@@ -136,14 +132,12 @@ void main() {
       );
       await tester.pump();
 
-      final icon =
-          tester.widget(
-                find.descendant(
-                  of: find.byType(CircleAvatar),
-                  matching: find.byType(Icon),
-                ),
-              )
-              as Icon;
+      final icon = tester.widget(
+        find.descendant(
+          of: find.byType(CircleAvatar),
+          matching: find.byType(Icon),
+        ),
+      ) as Icon;
       expect(
         icon.color,
         DatabaseTypeMetadata.of(DatabaseType.postgresql).accentColor,
