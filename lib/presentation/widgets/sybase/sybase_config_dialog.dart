@@ -290,7 +290,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return DatabaseConfigDialogShell(
+    return AppDialogShell(
       constraints: const BoxConstraints(
         minWidth: 600,
         maxWidth: 600,
@@ -321,7 +321,7 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           ),
         ],
       ),
-      body: Form(
+      content: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -525,9 +525,9 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
           ],
         ),
       ),
-      dialogActions: [
+      actions: [
         const CancelButton(),
-        ActionButton(
+        AppButton(
           label: appLocaleString(context, 'Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,

@@ -17,7 +17,7 @@ import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 /// **Organism** — Fluent dialog to create or edit a Firebird connection inside
-/// [DatabaseConfigDialogShell]; includes connection test and tool-path hints.
+/// [AppDialogShell]; includes connection test and tool-path hints.
 class FirebirdConfigDialog extends StatefulWidget {
   const FirebirdConfigDialog({super.key, this.config});
 
@@ -105,7 +105,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return DatabaseConfigDialogShell(
+    return AppDialogShell(
       constraints: const BoxConstraints(
         minWidth: 600,
         maxWidth: 600,
@@ -133,7 +133,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
           ),
         ],
       ),
-      body: Form(
+      content: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -395,9 +395,9 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
           ],
         ),
       ),
-      dialogActions: [
+      actions: [
         const CancelButton(),
-        ActionButton(
+        AppButton(
           label: appLocaleString(context, 'Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,
