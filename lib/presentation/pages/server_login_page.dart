@@ -18,121 +18,106 @@ class ServerLoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: PageHeader(
-        title: const Text('Conectar ao Servidor'),
-        commandBar: CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: () {
-                unawaited(
-                  context.read<ServerConnectionProvider>().loadConnections(),
-                );
-              },
-            ),
-            CommandBarButton(
-              icon: const Icon(FluentIcons.add),
-              label: const Text('Adicionar Servidor'),
-              onPressed: () => _showConnectionDialog(context, null),
-            ),
-          ],
+    return AppPageScaffold(
+      title: 'Conectar ao Servidor',
+      actions: [
+        AppPageAction(
+          label: appLocaleString(context, 'Atualizar', 'Refresh'),
+          icon: FluentIcons.refresh,
+          iconOnly: true,
+          onPressed: () {
+            unawaited(
+              context.read<ServerConnectionProvider>().loadConnections(),
+            );
+          },
         ),
-      ),
-      content: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Consumer<ServerConnectionProvider>(
-                builder: (context, provider, _) {
-                  if (provider.isLoading) {
-                    return const Center(child: ProgressRing());
-                  }
-                  final loadError = provider.error;
-                  if (loadError != null) {
-                    return AppCard(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              FluentIcons.error,
-                              size: 64,
+        AppPageAction(
+          label: 'Adicionar Servidor',
+          icon: FluentIcons.add,
+          isPrimary: true,
+          onPressed: () => _showConnectionDialog(context, null),
+        ),
+      ],
+      body: Consumer<ServerConnectionProvider>(
+        builder: (context, provider, _) {
+          if (provider.isLoading) {
+            return const Center(child: ProgressRing());
+          }
+          final loadError = provider.error;
+          if (loadError != null) {
+            return AppCard(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      FluentIcons.error,
+                      size: 64,
+                      color: context.colors.danger,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    SelectableText.rich(
+                      TextSpan(
+                        text: loadError,
+                        style:
+                            FluentTheme.of(
+                              context,
+                            ).typography.bodyLarge?.copyWith(
                               color: context.colors.danger,
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            SelectableText.rich(
-                              TextSpan(
-                                text: loadError,
-                                style:
-                                    FluentTheme.of(
-                                      context,
-                                    ).typography.bodyLarge?.copyWith(
-                                      color: context.colors.danger,
-                                    ),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Button(
-                              onPressed: () => provider.loadConnections(),
-                              child: Text(
-                                appLocaleString(
-                                  context,
-                                  'Tentar novamente',
-                                  'Try again',
-                                ),
-                              ),
-                            ),
-                          ],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Button(
+                      onPressed: () => provider.loadConnections(),
+                      child: Text(
+                        appLocaleString(
+                          context,
+                          'Tentar novamente',
+                          'Try again',
                         ),
                       ),
-                    );
-                  }
-                  if (provider.connections.isEmpty) {
-                    return AppCard(
-                      child: EmptyState(
-                        icon: FluentIcons.server,
-                        message: 'Nenhum servidor salvo',
-                        actionLabel: 'Adicionar Servidor',
-                        onAction: () => _showConnectionDialog(context, null),
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: provider.connections.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final connection = provider.connections[index];
-                      final isActive =
-                          provider.activeHost == connection.host &&
-                          provider.activePort == connection.port;
-                      return ServerListItem(
-                        connection: connection,
-                        isActiveConnection: isActive,
-                        connectionStatus: provider.connectionStatus,
-                        onConnect: () => _onConnectPressed(context, connection),
-                        onEdit: () =>
-                            _showConnectionDialog(context, connection),
-                        onDelete: () => _confirmDelete(context, connection.id),
-                        onTestConnection: () =>
-                            _testConnection(context, connection),
-                        onShowLogs: () =>
-                            _showConnectionLogs(context, connection),
-                        isConnecting: provider.isConnecting,
-                        isTestingConnection: provider.isTestingConnection,
-                      );
-                    },
-                  );
-                },
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            );
+          }
+          if (provider.connections.isEmpty) {
+            return AppCard(
+              child: EmptyState(
+                icon: FluentIcons.server,
+                message: 'Nenhum servidor salvo',
+                actionLabel: 'Adicionar Servidor',
+                onAction: () => _showConnectionDialog(context, null),
+              ),
+            );
+          }
+          return ListView.separated(
+            itemCount: provider.connections.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              final connection = provider.connections[index];
+              final isActive =
+                  provider.activeHost == connection.host &&
+                  provider.activePort == connection.port;
+              return ServerListItem(
+                connection: connection,
+                isActiveConnection: isActive,
+                connectionStatus: provider.connectionStatus,
+                onConnect: () => _onConnectPressed(context, connection),
+                onEdit: () => _showConnectionDialog(context, connection),
+                onDelete: () => _confirmDelete(context, connection.id),
+                onTestConnection: () => _testConnection(context, connection),
+                onShowLogs: () => _showConnectionLogs(context, connection),
+                isConnecting: provider.isConnecting,
+                isTestingConnection: provider.isTestingConnection,
+              );
+            },
+          );
+        },
       ),
     );
   }

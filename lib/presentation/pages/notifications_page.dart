@@ -406,49 +406,36 @@ class _NotificationsPageState extends State<NotificationsPage> {
     required String title,
     required String message,
   }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ContentDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          const CancelButton(),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(appLocaleString(context, 'Confirmar', 'Confirm')),
-          ),
-        ],
-      ),
+    final result = await MessageModal.showConfirm(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: appLocaleString(context, 'Confirmar', 'Confirm'),
     );
 
-    return result ?? false;
+    return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: PageHeader(
-        title: Text(
-          appLocaleString(
-            context,
-            'Notificações por e-mail',
-            'E-mail notifications',
-          ),
-        ),
-        commandBar: Consumer<LicenseProvider>(
-          builder: (context, licenseProvider, _) {
-            return _NotificationsCommandBar(
-              hasEmailNotification: _hasEmailNotificationFeature(
-                licenseProvider,
-              ),
-              onRefresh: _refresh,
-              onCreateConfig: _openConfigModal,
-            );
-          },
-        ),
+    return AppPageScaffold(
+      title: appLocaleString(
+        context,
+        'Notificações por e-mail',
+        'E-mail notifications',
       ),
-      content: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 6, 24, 24),
+      commandBar: Consumer<LicenseProvider>(
+        builder: (context, licenseProvider, _) {
+          return _NotificationsCommandBar(
+            hasEmailNotification: _hasEmailNotificationFeature(
+              licenseProvider,
+            ),
+            onRefresh: _refresh,
+            onCreateConfig: _openConfigModal,
+          );
+        },
+      ),
+      body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
