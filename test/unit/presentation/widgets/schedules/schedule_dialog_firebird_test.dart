@@ -32,6 +32,7 @@ import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../../helpers/fake_firebird_remote_client_connection_manager.dart';
+import '../../../../helpers/pump_desktop.dart';
 import '../../../helpers/mock_repositories.dart';
 
 class _MockServerConnectionRepository extends Mock
@@ -249,8 +250,7 @@ void main() {
   }
 
   Future<void> openBackupTypeDropdown(WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1920, 1080));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpDesktopSurface(tester);
     await tester.pumpAndSettle();
     final combo = find.byType(ComboBox<BackupType>);
     expect(combo, findsOneWidget);

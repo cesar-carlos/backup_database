@@ -1,4 +1,6 @@
 import 'package:backup_database/application/providers/dashboard_provider.dart';
+import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/application/services/log_service.dart';
@@ -25,6 +27,8 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+import '../../../helpers/stub_destination_provider.dart';
+import '../../../helpers/stub_license_provider.dart';
 import '../../../support/feature_availability_test_support.dart';
 
 FluentThemeData testPageFluentTheme(Brightness brightness) {
@@ -211,6 +215,12 @@ void main() {
                   ChangeNotifierProvider<SchedulerProvider>.value(
                     value: schedulerProvider,
                   ),
+                  ChangeNotifierProvider<DestinationProvider>.value(
+                    value: stubDestinationProvider(),
+                  ),
+                  ChangeNotifierProvider<LicenseProvider>.value(
+                    value: stubLicenseProvider(),
+                  ),
                 ],
                 child: const SchedulesPage(),
               ),
@@ -272,6 +282,9 @@ void main() {
                   ),
                   ChangeNotifierProvider<DashboardProvider>.value(
                     value: dashboardProvider,
+                  ),
+                  ChangeNotifierProvider<LicenseProvider>.value(
+                    value: stubLicenseProvider(),
                   ),
                 ],
                 child: const DashboardPage(),
@@ -376,6 +389,12 @@ void main() {
                   ChangeNotifierProvider<SchedulerProvider>.value(
                     value: schedulerProvider,
                   ),
+                  ChangeNotifierProvider<DestinationProvider>.value(
+                    value: stubDestinationProvider(),
+                  ),
+                  ChangeNotifierProvider<LicenseProvider>.value(
+                    value: stubLicenseProvider(),
+                  ),
                 ],
                 child: const SchedulesPage(),
               ),
@@ -434,6 +453,9 @@ void main() {
                   ),
                   ChangeNotifierProvider<DashboardProvider>.value(
                     value: dashboardProvider,
+                  ),
+                  ChangeNotifierProvider<LicenseProvider>.value(
+                    value: stubLicenseProvider(),
                   ),
                 ],
                 child: const DashboardPage(),

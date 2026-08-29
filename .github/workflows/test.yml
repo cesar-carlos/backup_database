@@ -69,6 +69,14 @@ jobs:
       - name: Run unit tests with coverage
         run: flutter test test/unit/ --coverage --reporter compact
 
+      - name: Run widget tests
+        run: flutter test test/widget --reporter compact
+
+      - name: Analyze widgetbook
+        if: ${{ hashFiles('widgetbook/pubspec.yaml') != '' }}
+        working-directory: widgetbook
+        run: flutter analyze --no-fatal-infos
+
       - name: Report filtered line coverage
         run: python scripts/coverage.py --filter-only
 
