@@ -972,39 +972,36 @@ class _SmtpAuthenticationSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        InfoLabel(
+        AppDropdown<SmtpAuthMode>(
           label: appLocaleString(
             context,
             'Modo de autenticação',
             'Authentication mode',
           ),
-          child: ComboBox<SmtpAuthMode>(
-            value: authMode,
-            isExpanded: true,
-            items: [
-              ComboBoxItem(
-                value: SmtpAuthMode.password,
-                child: Text(
-                  appLocaleString(context, 'Senha SMTP', 'SMTP password'),
-                ),
+          value: authMode,
+          items: [
+            ComboBoxItem(
+              value: SmtpAuthMode.password,
+              child: Text(
+                appLocaleString(context, 'Senha SMTP', 'SMTP password'),
               ),
-              if (oauthModesAvailable) ...[
-                const ComboBoxItem(
-                  value: SmtpAuthMode.oauthGoogle,
-                  child: Text('Google OAuth2'),
-                ),
-                const ComboBoxItem(
-                  value: SmtpAuthMode.oauthMicrosoft,
-                  child: Text('Microsoft OAuth2'),
-                ),
-              ],
+            ),
+            if (oauthModesAvailable) ...[
+              const ComboBoxItem(
+                value: SmtpAuthMode.oauthGoogle,
+                child: Text('Google OAuth2'),
+              ),
+              const ComboBoxItem(
+                value: SmtpAuthMode.oauthMicrosoft,
+                child: Text('Microsoft OAuth2'),
+              ),
             ],
-            onChanged: (value) {
-              if (value != null) {
-                onAuthModeChanged(value);
-              }
-            },
-          ),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              onAuthModeChanged(value);
+            }
+          },
         ),
         if (isOAuth) ...[
           const SizedBox(height: 16),
