@@ -1,7 +1,10 @@
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+
+const double _retryIconSize = 16;
 
 /// **Atom** — centered error surface with optional retry action.
 class AppErrorWidget extends StatelessWidget {
@@ -42,16 +45,10 @@ class AppErrorWidget extends StatelessWidget {
             ),
             if (onRetry != null) ...[
               const SizedBox(height: AppSpacing.lg),
-              FilledButton(
+              AppButton.primary(
+                label: texts.retry,
                 onPressed: onRetry,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(FluentIcons.refresh, size: 16),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(texts.retry),
-                  ],
-                ),
+                leading: const Icon(FluentIcons.refresh, size: _retryIconSize),
               ),
             ],
           ],

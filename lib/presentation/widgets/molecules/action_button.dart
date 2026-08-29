@@ -1,5 +1,7 @@
-import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+
+const double _actionIconSize = 16;
 
 /// **Molecule** — primary action control with optional icon and loading state.
 class ActionButton extends StatelessWidget {
@@ -19,36 +21,13 @@ class ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget child = isLoading
-        ? const SizedBox(
-            width: 16,
-            height: 16,
-            child: ProgressRing(strokeWidth: 2),
-          )
-        : FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (icon != null) ...[
-                  ExcludeSemantics(
-                    child: Icon(icon, size: iconSize ?? 16),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                ],
-                Text(label),
-              ],
-            ),
-          );
-
-    return Semantics(
-      button: true,
-      label: isLoading ? 'Loading' : label,
-      enabled: !isLoading && onPressed != null,
-      child: Button(
-        onPressed: isLoading ? null : onPressed,
-        child: child,
-      ),
+    return AppButton(
+      label: label,
+      onPressed: onPressed,
+      isLoading: isLoading,
+      leading: icon == null
+          ? null
+          : Icon(icon, size: iconSize ?? _actionIconSize),
     );
   }
 }

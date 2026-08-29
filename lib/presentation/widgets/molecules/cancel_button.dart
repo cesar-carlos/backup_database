@@ -1,3 +1,4 @@
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -10,13 +11,9 @@ class CancelButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final texts = WidgetTexts.fromContext(context);
 
-    return Semantics(
-      button: true,
+    return AppButton(
       label: texts.cancel,
-      child: Button(
-        onPressed: onPressed ?? () => Navigator.of(context).pop(),
-        child: Text(texts.cancel),
-      ),
+      onPressed: onPressed ?? () => Navigator.of(context).pop(),
     );
   }
 }

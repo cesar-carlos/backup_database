@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Atom** — centered empty placeholder with optional action.
@@ -43,14 +44,9 @@ class EmptyState extends StatelessWidget {
               ),
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: AppSpacing.lg, width: AppSpacing.lg),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minHeight: AppTargetSize.minimum,
-                  ),
-                  child: Button(
-                    onPressed: onAction,
-                    child: Text(actionLabel!),
-                  ),
+                AppButton(
+                  label: actionLabel!,
+                  onPressed: onAction,
                 ),
               ],
             ],

@@ -450,12 +450,24 @@ void main() {
 
       expect(find.text('Service status'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Restart'), findsOneWidget);
+      expect(find.text('Refresh status'), findsOneWidget);
+      expect(find.text('Stop'), findsOneWidget);
+      expect(find.text('Remove service'), findsOneWidget);
       expect(find.text('View detailed diagnostics'), findsOneWidget);
       final expanders = tester
           .widgetList<Expander>(find.byType(Expander))
           .toList();
       expect(expanders, isNotEmpty);
       expect(expanders.last.initiallyExpanded, isFalse);
+    },
+  );
+
+  testWidgets(
+    'ServiceSettingsTab does not use context after being unmounted',
+    (WidgetTester tester) async {
+      await _pumpSettingsHarness(tester, const ServiceSettingsTab());
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
     },
   );
 }

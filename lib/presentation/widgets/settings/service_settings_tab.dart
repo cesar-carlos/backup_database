@@ -39,6 +39,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     _clipboardService = getIt<ClipboardService>();
     unawaited(_loadLocalScheduleTimerPreference());
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       unawaited(context.read<WindowsServiceProvider>().checkStatus());
     });
   }
@@ -66,6 +67,9 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
   }
 
   Future<void> _setLocalScheduleTimerEnabled(bool enabled) async {
+    if (!mounted) {
+      return;
+    }
     setState(() => _localScheduleTimerEnabled = enabled);
     await getIt<IUserPreferencesRepository>().setLocalScheduleTimerEnabled(
       enabled,
@@ -181,13 +185,13 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     return Consumer<WindowsServiceProvider>(
       builder: (context, provider, _) {
         return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: AppSpacing.paddingLg,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_isUacElevatedOperation(provider)) ...[
                 _ServiceUacWaitingBanner(operation: provider.operation),
-                const SizedBox(height: AppSpacing.lg),
+                AppSpacing.gapLg,
               ],
               if (!serviceUiOk) ...[
                 InfoBar(
@@ -209,20 +213,20 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                   severity: InfoBarSeverity.warning,
                   isLong: true,
                 ),
-                const SizedBox(height: 24),
+                AppSpacing.gapLg,
               ],
               _buildStatusSection(context, provider),
               if (provider.error != null) ...[
-                const SizedBox(height: 24),
+                AppSpacing.gapLg,
                 _buildErrorSection(context, provider),
               ],
-              const SizedBox(height: 24),
+              AppSpacing.gapLg,
               _buildActionsSection(context, provider, serviceUiOk),
-              const SizedBox(height: 24),
+              AppSpacing.gapLg,
               _buildLocalScheduleTimerSection(context),
-              const SizedBox(height: 24),
+              AppSpacing.gapLg,
               _buildInfoSection(context),
-              const SizedBox(height: 24),
+              AppSpacing.gapLg,
               _buildCompatibilitySection(context, features),
             ],
           ),
@@ -367,12 +371,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     bool serviceActionsEnabled,
   ) {
     final actionsDisabled = !serviceActionsEnabled || provider.isLoading;
-    final primaryAction = _buildPrimaryAction(
-      context,
-      provider,
-      actionsDisabled,
-      serviceActionsEnabled,
-    );
 
     return AppSectionCard(
       title: appLocaleString(context, 'Ações', 'Actions'),
@@ -385,123 +383,46 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         children: [
-          primaryAction,
-          Button(
-            onPressed: provider.isLoading ? null : () => provider.checkStatus(),
-            child: Text(
-              appLocaleString(context, 'Atualizar status', 'Refresh status'),
-            ),
+          _ServicePrimaryAction(
+            provider: provider,
+            actionsDisabled: actionsDisabled,
+            serviceActionsEnabled: serviceActionsEnabled,
+            onRefresh: () => unawaited(provider.checkStatus()),
+            onInstall: () => unawaited(_installService(context, provider)),
+            onStart: () => unawaited(_startService(context, provider)),
+            onRestart: () => unawaited(_restartService(context, provider)),
           ),
-          if (provider.isInstalled && !provider.isRunning)
-            Button(
-              onPressed: actionsDisabled
-                  ? null
-                  : () => unawaited(_uninstallService(context, provider)),
-              child: Text(
-                appLocaleString(context, 'Remover serviço', 'Remove service'),
+          if (serviceActionsEnabled)
+            AppButton(
+              label: appLocaleString(
+                context,
+                'Atualizar status',
+                'Refresh status',
               ),
+              onPressed: provider.isLoading
+                  ? null
+                  : () => unawaited(provider.checkStatus()),
             ),
           if (provider.isRunning)
-            Button(
+            AppButton(
+              label: appLocaleString(context, 'Parar', 'Stop'),
               onPressed: actionsDisabled
                   ? null
                   : () => unawaited(_stopService(context, provider)),
-              child: Text(appLocaleString(context, 'Parar', 'Stop')),
             ),
-          if (provider.isInstalled && provider.isRunning)
-            Button(
+          if (provider.isInstalled)
+            AppButton(
+              label: appLocaleString(
+                context,
+                'Remover serviço',
+                'Remove service',
+              ),
               onPressed: actionsDisabled
                   ? null
                   : () => unawaited(_uninstallService(context, provider)),
-              child: Text(
-                appLocaleString(context, 'Remover serviço', 'Remove service'),
-              ),
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPrimaryAction(
-    BuildContext context,
-    WindowsServiceProvider provider,
-    bool actionsDisabled,
-    bool serviceActionsEnabled,
-  ) {
-    if (!serviceActionsEnabled) {
-      return FilledButton(
-        onPressed: provider.isLoading ? null : () => provider.checkStatus(),
-        child: Text(
-          appLocaleString(context, 'Atualizar status', 'Refresh status'),
-        ),
-      );
-    }
-
-    if (!provider.isInstalled) {
-      return _buildPrimaryFilledButton(
-        context: context,
-        provider: provider,
-        actionsDisabled: actionsDisabled,
-        idleLabel: appLocaleString(
-          context,
-          'Instalar serviço',
-          'Install service',
-        ),
-        onPressed: () => unawaited(_installService(context, provider)),
-      );
-    }
-
-    if (!provider.isRunning) {
-      return _buildPrimaryFilledButton(
-        context: context,
-        provider: provider,
-        actionsDisabled: actionsDisabled,
-        idleLabel: appLocaleString(context, 'Iniciar', 'Start'),
-        onPressed: () => unawaited(_startService(context, provider)),
-      );
-    }
-
-    return _buildPrimaryFilledButton(
-      context: context,
-      provider: provider,
-      actionsDisabled: actionsDisabled,
-      idleLabel: appLocaleString(context, 'Reiniciar', 'Restart'),
-      onPressed: () => unawaited(_restartService(context, provider)),
-    );
-  }
-
-  Widget _buildPrimaryFilledButton({
-    required BuildContext context,
-    required WindowsServiceProvider provider,
-    required bool actionsDisabled,
-    required String idleLabel,
-    required VoidCallback onPressed,
-  }) {
-    final isUacWait =
-        provider.isLoading && _isUacElevatedOperationType(provider.operation);
-
-    return FilledButton(
-      onPressed: actionsDisabled ? null : onPressed,
-      child: isUacWait
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: ProgressRing(strokeWidth: 2),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    _getLoadingActionLabel(provider.operation),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            )
-          : Text(idleLabel),
     );
   }
 
@@ -696,45 +617,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return false;
     }
     return _isUacElevatedOperationType(provider.operation);
-  }
-
-  bool _isUacElevatedOperationType(WindowsServiceOperation operation) {
-    return operation == WindowsServiceOperation.install ||
-        operation == WindowsServiceOperation.uninstall ||
-        operation == WindowsServiceOperation.start ||
-        operation == WindowsServiceOperation.stop ||
-        operation == WindowsServiceOperation.restart;
-  }
-
-  String _getLoadingActionLabel(WindowsServiceOperation operation) {
-    return switch (operation) {
-      WindowsServiceOperation.install => appLocaleString(
-        context,
-        'Aguardando confirmação do Windows (UAC)...',
-        'Waiting for Windows confirmation (UAC)...',
-      ),
-      WindowsServiceOperation.uninstall => appLocaleString(
-        context,
-        'Aguardando confirmação do Windows (UAC)...',
-        'Waiting for Windows confirmation (UAC)...',
-      ),
-      WindowsServiceOperation.start => appLocaleString(
-        context,
-        'Iniciando... aguardando UAC',
-        'Starting... waiting for UAC',
-      ),
-      WindowsServiceOperation.stop => appLocaleString(
-        context,
-        'Parando... aguardando UAC',
-        'Stopping... waiting for UAC',
-      ),
-      WindowsServiceOperation.restart => appLocaleString(
-        context,
-        'Reiniciando... aguardando UAC',
-        'Restarting... waiting for UAC',
-      ),
-      _ => appLocaleString(context, 'Processando...', 'Processing...'),
-    };
   }
 
   Future<void> _installService(
@@ -958,6 +840,102 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     }
     await MessageModal.showError(context, message: errorMessage);
   }
+}
+
+class _ServicePrimaryAction extends StatelessWidget {
+  const _ServicePrimaryAction({
+    required this.provider,
+    required this.actionsDisabled,
+    required this.serviceActionsEnabled,
+    required this.onRefresh,
+    required this.onInstall,
+    required this.onStart,
+    required this.onRestart,
+  });
+
+  final WindowsServiceProvider provider;
+  final bool actionsDisabled;
+  final bool serviceActionsEnabled;
+  final VoidCallback onRefresh;
+  final VoidCallback onInstall;
+  final VoidCallback onStart;
+  final VoidCallback onRestart;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!serviceActionsEnabled) {
+      return AppButton.primary(
+        label: appLocaleString(
+          context,
+          'Atualizar status',
+          'Refresh status',
+        ),
+        onPressed: provider.isLoading ? null : onRefresh,
+      );
+    }
+
+    final String idleLabel;
+    final VoidCallback onPressed;
+    if (!provider.isInstalled) {
+      idleLabel = appLocaleString(
+        context,
+        'Instalar serviço',
+        'Install service',
+      );
+      onPressed = onInstall;
+    } else if (!provider.isRunning) {
+      idleLabel = appLocaleString(context, 'Iniciar', 'Start');
+      onPressed = onStart;
+    } else {
+      idleLabel = appLocaleString(context, 'Reiniciar', 'Restart');
+      onPressed = onRestart;
+    }
+
+    final isUacWait =
+        provider.isLoading && _isUacElevatedOperationType(provider.operation);
+
+    return AppButton.primary(
+      label: idleLabel,
+      onPressed: actionsDisabled ? null : onPressed,
+      isLoading: isUacWait,
+      loadingLabel: _loadingActionLabel(context),
+    );
+  }
+
+  String _loadingActionLabel(BuildContext context) {
+    return switch (provider.operation) {
+      WindowsServiceOperation.install ||
+      WindowsServiceOperation.uninstall => appLocaleString(
+        context,
+        'Aguardando confirmação do Windows (UAC)...',
+        'Waiting for Windows confirmation (UAC)...',
+      ),
+      WindowsServiceOperation.start => appLocaleString(
+        context,
+        'Iniciando... aguardando UAC',
+        'Starting... waiting for UAC',
+      ),
+      WindowsServiceOperation.stop => appLocaleString(
+        context,
+        'Parando... aguardando UAC',
+        'Stopping... waiting for UAC',
+      ),
+      WindowsServiceOperation.restart => appLocaleString(
+        context,
+        'Reiniciando... aguardando UAC',
+        'Restarting... waiting for UAC',
+      ),
+      _ => appLocaleString(context, 'Processando...', 'Processing...'),
+    };
+  }
+}
+
+bool _isUacElevatedOperationType(WindowsServiceOperation operation) {
+  return operation == WindowsServiceOperation.install ||
+      operation == WindowsServiceOperation.uninstall ||
+      operation == WindowsServiceOperation.start ||
+      operation == WindowsServiceOperation.stop ||
+      operation == WindowsServiceOperation.restart;
 }
 
 class _ServiceUacWaitingBanner extends StatelessWidget {

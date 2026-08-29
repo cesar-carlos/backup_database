@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:backup_database/presentation/widgets/molecules/action_button.dart';
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
@@ -198,7 +199,8 @@ class MessageModal extends StatelessWidget {
     final showErrorType = type == MessageType.error;
 
     final copyButton = (onCopy != null || showErrorType)
-        ? Button(
+        ? AppButton(
+            label: 'Copiar',
             onPressed: () {
               unawaited(Clipboard.setData(ClipboardData(text: message)));
               onCopy?.call();
@@ -212,13 +214,6 @@ class MessageModal extends StatelessWidget {
                 );
               }
             },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: AppSpacing.md,
-                horizontal: AppSpacing.sm,
-              ),
-              child: Text('Copiar'),
-            ),
           )
         : null;
 
@@ -255,15 +250,9 @@ class MessageModal extends StatelessWidget {
         ),
         actions: [
           ...copyButton != null ? [copyButton] : const <Widget>[],
-          Button(
+          AppButton.primary(
+            label: buttonLabel ?? texts.ok,
             onPressed: () => Navigator.of(context).pop(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppSpacing.md,
-                horizontal: AppSpacing.sm,
-              ),
-              child: Text(buttonLabel ?? texts.ok),
-            ),
           ),
         ],
       ),

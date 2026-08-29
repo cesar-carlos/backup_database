@@ -2,6 +2,9 @@ import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+const double _factTileMinWidth = 180;
+const double _factTileMaxWidth = 280;
+
 class SettingsToggleRow extends StatelessWidget {
   const SettingsToggleRow({
     required this.title,
@@ -20,7 +23,9 @@ class SettingsToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final captionStyle = FluentTheme.of(context).typography.caption;
+    final typography = FluentTheme.of(context).typography;
+    final captionStyle = typography.caption;
+    final titleStyle = typography.body?.copyWith(fontWeight: FontWeight.w600);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -32,10 +37,7 @@ class SettingsToggleRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  Text(title, style: titleStyle),
                   if (description != null) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Text(description!, style: captionStyle),
@@ -56,6 +58,7 @@ class SettingsToggleRow extends StatelessWidget {
             ToggleSwitch(
               checked: value,
               onChanged: onChanged,
+              semanticLabel: title,
             ),
           ],
         ),
@@ -84,13 +87,17 @@ class SettingsTechnicalItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final captionStyle = FluentTheme.of(context).typography.caption;
+    final typography = FluentTheme.of(context).typography;
+    final captionStyle = typography.caption;
+    final titleStyle = typography.body?.copyWith(fontWeight: FontWeight.w600);
     final valueStyle = captionStyle?.copyWith(
       fontFamily: 'Consolas',
       height: 1.35,
     );
     final borderColor = context.colors.outline.withValues(alpha: 0.24);
     final backgroundColor = context.colors.outline.withValues(alpha: 0.08);
+    final copyLabel = appLocaleString(context, 'Copiar', 'Copy');
+    final openLabel = openTooltip ?? appLocaleString(context, 'Abrir', 'Open');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,10 +109,7 @@ class SettingsTechnicalItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  Text(title, style: titleStyle),
                   if (description != null) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Text(description!, style: captionStyle),
@@ -114,21 +118,16 @@ class SettingsTechnicalItem extends StatelessWidget {
               ),
             ),
             if (onCopy != null)
-              Tooltip(
-                message: appLocaleString(context, 'Copiar', 'Copy'),
-                child: IconButton(
-                  icon: const Icon(FluentIcons.copy),
-                  onPressed: onCopy,
-                ),
+              _SettingsIconAction(
+                label: copyLabel,
+                icon: FluentIcons.copy,
+                onPressed: onCopy,
               ),
             if (onOpen != null)
-              Tooltip(
-                message:
-                    openTooltip ?? appLocaleString(context, 'Abrir', 'Open'),
-                child: IconButton(
-                  icon: const Icon(FluentIcons.open_file),
-                  onPressed: onOpen,
-                ),
+              _SettingsIconAction(
+                label: openLabel,
+                icon: FluentIcons.open_file,
+                onPressed: onOpen,
               ),
           ],
         ),
@@ -144,6 +143,33 @@ class SettingsTechnicalItem extends StatelessWidget {
           child: SelectableText(value, style: valueStyle),
         ),
       ],
+    );
+  }
+}
+
+class _SettingsIconAction extends StatelessWidget {
+  const _SettingsIconAction({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: IconButton(
+          icon: Icon(icon),
+          onPressed: onPressed,
+        ),
+      ),
     );
   }
 }
@@ -171,8 +197,11 @@ class SettingsFactTile extends StatelessWidget {
     return Container(
       width: expandToFit ? double.infinity : null,
       constraints: expandToFit
-          ? const BoxConstraints(minWidth: 180)
-          : const BoxConstraints(minWidth: 180, maxWidth: 280),
+          ? const BoxConstraints(minWidth: _factTileMinWidth)
+          : const BoxConstraints(
+              minWidth: _factTileMinWidth,
+              maxWidth: _factTileMaxWidth,
+            ),
       padding: AppSpacing.paddingMd,
       decoration: BoxDecoration(
         color: backgroundColor,

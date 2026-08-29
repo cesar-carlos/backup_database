@@ -2,6 +2,8 @@ import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+const double _headerContentGap = 6;
+
 class AppPageAction {
   const AppPageAction({
     required this.label,
@@ -26,7 +28,12 @@ class AppPageScaffold extends StatelessWidget {
     required this.body,
     super.key,
     this.actions = const <AppPageAction>[],
-    this.bodyPadding = const EdgeInsets.fromLTRB(24, 6, 24, 24),
+    this.bodyPadding = const EdgeInsets.fromLTRB(
+      AppSpacing.lg,
+      _headerContentGap,
+      AppSpacing.lg,
+      AppSpacing.lg,
+    ),
     this.headerBottom,
   });
 
@@ -80,28 +87,28 @@ class _AppPageActionBar extends StatelessWidget {
           children: [
             for (var i = 0; i < actions.length; i++) ...[
               if (i > 0) const SizedBox(width: AppSpacing.sm),
-              _buildActionButton(actions[i]),
+              _AppPageActionButton(action: actions[i]),
             ],
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildActionButton(AppPageAction action) {
+class _AppPageActionButton extends StatelessWidget {
+  const _AppPageActionButton({required this.action});
+
+  final AppPageAction action;
+
+  @override
+  Widget build(BuildContext context) {
     if (action.isPrimary) {
-      if (action.icon != null) {
-        return AppButton.primary(
-          key: action.key,
-          label: action.label,
-          onPressed: action.onPressed,
-          leading: Icon(action.icon),
-        );
-      }
       return AppButton.primary(
         key: action.key,
         label: action.label,
         onPressed: action.onPressed,
+        leading: action.icon == null ? null : Icon(action.icon),
       );
     }
 

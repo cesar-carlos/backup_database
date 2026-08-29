@@ -1,7 +1,7 @@
-import 'package:backup_database/core/theme/theme.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-/// **Atom** — card surface using design-system padding, radius, and depth.
+/// **Atom** — flat card surface using design-system padding and radius.
 class AppCard extends StatelessWidget {
   const AppCard({
     required this.child,
@@ -18,39 +18,23 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shadowColor = context.colors.onSurface.withValues(alpha: 0.08);
     final Widget card = Card(
       padding: padding ?? AppSpacing.paddingMd,
-      margin: EdgeInsets.zero,
+      margin: margin,
       borderRadius: AppRadius.circularLg,
       child: child,
     );
 
-    final elevated = Container(
-      margin: margin,
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.circularLg,
-        boxShadow: [
-          BoxShadow(
-            color: shadowColor,
-            blurRadius: AppElevation.low * 2,
-            offset: const Offset(0, AppElevation.low),
-          ),
-        ],
-      ),
-      child: card,
+    if (onTap == null) {
+      return card;
+    }
+
+    return HoverButton(
+      onPressed: onTap,
+      cursor: SystemMouseCursors.click,
+      builder: (BuildContext context, Set<WidgetState> _) {
+        return card;
+      },
     );
-
-    final tappable = onTap != null
-        ? Semantics(
-            button: true,
-            child: GestureDetector(
-              onTap: onTap,
-              child: elevated,
-            ),
-          )
-        : elevated;
-
-    return tappable;
   }
 }

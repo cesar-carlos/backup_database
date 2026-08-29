@@ -1,11 +1,17 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+enum _AppButtonVariant { standard, primary }
+
+const double _progressSize = 20;
+const double _progressStrokeWidth = 2;
+
 /// **Atom** — Fluent button composed from slots (`leading` / `trailing`) and
 /// named factories for common shapes.
 class AppButton extends StatelessWidget {
   const AppButton._({
     required this.label,
+    required this.variant,
     super.key,
     this.onPressed,
     this.leading,
@@ -25,6 +31,7 @@ class AppButton extends StatelessWidget {
     if (isLoading) {
       return AppButton._(
         key: key,
+        variant: _AppButtonVariant.standard,
         label: '',
         isLoadingLayout: true,
       );
@@ -32,6 +39,7 @@ class AppButton extends StatelessWidget {
     final resolvedLeading = leading ?? (icon != null ? Icon(icon) : null);
     return AppButton._(
       key: key,
+      variant: _AppButtonVariant.standard,
       label: label,
       onPressed: onPressed,
       leading: resolvedLeading,
@@ -45,13 +53,17 @@ class AppButton extends StatelessWidget {
     VoidCallback? onPressed,
     Widget? leading,
     Widget? trailing,
+    bool isLoading = false,
+    String? loadingLabel,
   }) {
     return AppButton._(
       key: key,
-      label: label,
-      onPressed: onPressed,
-      leading: leading,
-      trailing: trailing,
+      variant: _AppButtonVariant.primary,
+      label: isLoading ? (loadingLabel ?? label) : label,
+      onPressed: isLoading ? null : onPressed,
+      leading: isLoading ? null : leading,
+      trailing: isLoading ? null : trailing,
+      isLoadingLayout: isLoading,
     );
   }
 
@@ -64,6 +76,7 @@ class AppButton extends StatelessWidget {
   }) {
     return AppButton._(
       key: key,
+      variant: _AppButtonVariant.standard,
       label: label,
       onPressed: onPressed,
       leading: Icon(icon),
@@ -74,11 +87,13 @@ class AppButton extends StatelessWidget {
   factory AppButton.loading({Key? key}) {
     return AppButton._(
       key: key,
+      variant: _AppButtonVariant.standard,
       label: '',
       isLoadingLayout: true,
     );
   }
 
+  final _AppButtonVariant variant;
   final String label;
   final VoidCallback? onPressed;
   final Widget? leading;
@@ -87,55 +102,84 @@ class AppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Widget child;
     if (isLoadingLayout) {
-      return Semantics(
-        label: 'Loading',
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppTargetSize.comfortable,
+      child = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: _progressSize,
+            height: _progressSize,
+            child: ProgressRing(strokeWidth: _progressStrokeWidth),
           ),
-          child: const Button(
-            onPressed: null,
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: ProgressRing(strokeWidth: 2),
+          if (label.isNotEmpty) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-          ),
-        ),
+          ],
+        ],
       );
+    } else {
+      final leadingForRow = switch (leading) {
+        null => null,
+        final Widget w when label.isNotEmpty => ExcludeSemantics(child: w),
+        final Widget w => w,
+      };
+
+      child = (leading != null || trailing != null)
+          ? FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ?leadingForRow,
+                  if (leading != null)
+                    const SizedBox(
+                      width: AppSpacing.sm,
+                      height: AppSpacing.sm,
+                    ),
+                  if (label.isNotEmpty) Text(label),
+                  if (trailing != null) ...[
+                    const SizedBox(
+                      width: AppSpacing.sm,
+                      height: AppSpacing.sm,
+                    ),
+                    trailing!,
+                  ],
+                ],
+              ),
+            )
+          : Text(label);
     }
 
-    final leadingForRow = switch (leading) {
-      null => null,
-      final Widget w when label.isNotEmpty => ExcludeSemantics(child: w),
-      final Widget w => w,
+    final Widget button = switch (variant) {
+      _AppButtonVariant.primary => FilledButton(
+        onPressed: onPressed,
+        child: child,
+      ),
+      _AppButtonVariant.standard => Button(
+        onPressed: onPressed,
+        child: child,
+      ),
     };
 
-    final child = (leading != null || trailing != null)
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ?leadingForRow,
-              if (leading != null)
-                const SizedBox(width: AppSpacing.sm, height: AppSpacing.sm),
-              if (label.isNotEmpty) Text(label),
-              if (trailing != null) ...[
-                const SizedBox(width: AppSpacing.sm, height: AppSpacing.sm),
-                trailing!,
-              ],
-            ],
-          )
-        : Text(label);
-
-    final button = Button(
-      onPressed: onPressed,
-      child: child,
-    );
+    final String semanticsLabel;
+    if (isLoadingLayout && label.isEmpty) {
+      semanticsLabel = 'Loading';
+    } else if (label.isEmpty) {
+      semanticsLabel = 'Button';
+    } else {
+      semanticsLabel = label;
+    }
 
     return Semantics(
       button: true,
-      label: label.isEmpty ? 'Button' : label,
+      label: semanticsLabel,
       enabled: onPressed != null,
       child: ConstrainedBox(
         constraints: const BoxConstraints(
