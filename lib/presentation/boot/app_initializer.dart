@@ -126,7 +126,7 @@ class AppInitializer {
           source: source,
         );
       };
-      autoUpdateService.beforeInstallHook = AppCleanup.cleanup;
+      autoUpdateService.beforeInstallHook = AppCleanup.prepareForInstall;
       await autoUpdateService.initialize();
       if (!autoUpdateService.isInitialized) {
         LoggerService.info(

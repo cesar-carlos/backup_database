@@ -407,6 +407,91 @@ void main() {
     );
 
     test(
+      'deletes update_context.json when installer spawn dies immediately',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'auto_update_dead_spawn_test',
+        );
+        final locksDir = Directory(p.join(tempDir.path, 'locks'));
+        final updatesDir = Directory(p.join(tempDir.path, 'updates'));
+        final installerBytes = <int>[1, 2, 3, 4, 5, 6];
+        final payloadFile = File(p.join(tempDir.path, 'payload.exe'));
+        await payloadFile.writeAsBytes(installerBytes);
+        final installerSha256 = await FileHashUtils.computeSha256(payloadFile);
+
+        late final HttpServer server;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final baseUrl = 'http://${server.address.address}:${server.port}';
+
+        unawaited(
+          server.forEach((request) async {
+            if (request.uri.path == '/appcast.xml') {
+              request.response.headers.contentType = ContentType(
+                'application',
+                'xml',
+                charset: 'utf-8',
+              );
+              request.response.write(
+                _buildFeed(
+                  items: [
+                    _buildItem(
+                      version: '3.0.2',
+                      length: installerBytes.length,
+                      sha256: installerSha256,
+                      url: '$baseUrl/BackupDatabase-Setup-3.0.2.exe',
+                    ),
+                  ],
+                ),
+              );
+            } else if (request.uri.path == '/BackupDatabase-Setup-3.0.2.exe') {
+              request.response.add(installerBytes);
+            } else {
+              request.response.statusCode = HttpStatus.notFound;
+            }
+            await request.response.close();
+          }),
+        );
+
+        int? exitCode;
+        final service = AutoUpdateService(
+          dio: Dio(),
+          packageInfoLoader: () async => PackageInfo(
+            appName: 'Backup Database',
+            packageName: 'backup_database',
+            version: '3.0.1',
+            buildNumber: '',
+          ),
+          feedUrlReader: () => '$baseUrl/appcast.xml',
+          locksDirectoryResolver: () async => locksDir,
+          updatesDirectoryResolver: () async => updatesDir,
+          detachedProcessStarter: (executable, arguments) async {
+            return const DetachedProcessHandle(pid: 4242);
+          },
+          processAliveCheck: (_) => false,
+          installerSpawnGracePeriod: const Duration(milliseconds: 700),
+          exitProcess: (code) {
+            exitCode = code;
+          },
+        );
+
+        await service.initialize();
+        await service.checkNow(source: AppUpdateSource.manual);
+
+        expect(exitCode, isNull);
+        expect(service.snapshot.status, AppUpdateStatus.error);
+        expect(
+          await File(p.join(updatesDir.path, 'update_context.json')).exists(),
+          isFalse,
+        );
+
+        await service.dispose();
+        await server.close(force: true);
+        await tempDir.delete(recursive: true);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
       'fails with error when beforeInstallHook exceeds timeout',
       () async {
         final tempDir = await Directory.systemTemp.createTemp(

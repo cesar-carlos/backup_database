@@ -30,7 +30,6 @@ bool _includeComponent(String componentName) {
     'AppSectionCard',
     'DestinationGrid',
     'AppTextField',
-    'DatabaseConfigDataGrid',
     'PasswordField',
     'ScheduleGrid',
     'MessageModal',

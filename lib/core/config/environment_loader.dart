@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:path/path.dart' as p;
 
@@ -142,6 +143,10 @@ class EnvironmentLoader {
   /// puros sem TestWidgetsFlutterBinding).
   static Future<String> Function(String key)? bundledAssetReader;
 
+  /// Override de `C:\ProgramData\...\config\.env` para testes de overlay.
+  @visibleForTesting
+  static File? machineEnvironmentFileOverrideForTest;
+
   static File resolveBundledAssetFile({
     required String assetFileName,
     String? executablePath,
@@ -153,8 +158,14 @@ class EnvironmentLoader {
 
   /// Headless/service fallback: read `data/flutter_assets/<key>` next to
   /// the executable without `WidgetsFlutterBinding` / `rootBundle`.
-  static Future<String> readBundledAssetFromInstallLayout(String key) {
-    return resolveBundledAssetFile(assetFileName: key).readAsString();
+  static Future<String> readBundledAssetFromInstallLayout(
+    String key, {
+    String? executablePath,
+  }) {
+    return resolveBundledAssetFile(
+      assetFileName: key,
+      executablePath: executablePath,
+    ).readAsString();
   }
 
   static EnvironmentLoadPlan resolveLoadPlan({
@@ -239,7 +250,9 @@ class EnvironmentLoader {
     final leakedSecretKeys = <String>{};
 
     try {
-      final externalEnvFile = await resolveMachineEnvironmentFile();
+      final externalEnvFile =
+          machineEnvironmentFileOverrideForTest ??
+          await resolveMachineEnvironmentFile();
       await migrateLegacyWindowsEnvironmentIfNeeded(
         isWindows: Platform.isWindows,
         externalEnvFile: externalEnvFile,
@@ -463,5 +476,6 @@ class EnvironmentLoader {
   /// Reseta o estado mantido pelo loader. Apenas para testes.
   static void resetForTesting() {
     bundledAssetReader = null;
+    machineEnvironmentFileOverrideForTest = null;
   }
 }

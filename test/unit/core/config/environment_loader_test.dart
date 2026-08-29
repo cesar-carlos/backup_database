@@ -66,6 +66,35 @@ void main() {
     });
   });
 
+  group('EnvironmentLoader.readBundledAssetFromInstallLayout', () {
+    test('reads data/flutter_assets next to the executable', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'env_install_layout_',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final exe = File(p.join(tempDir.path, 'app', 'backup_database.exe'));
+      final asset = File(
+        p.join(tempDir.path, 'app', 'data', 'flutter_assets', '.env'),
+      );
+      await asset.parent.create(recursive: true);
+      await asset.writeAsString(
+        'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+      );
+
+      final text = await EnvironmentLoader.readBundledAssetFromInstallLayout(
+        '.env',
+        executablePath: exe.path,
+      );
+
+      expect(text, contains('AUTO_UPDATE_FEED_URL='));
+    });
+  });
+
   group('EnvironmentLoader.migrateLegacyWindowsEnvironmentIfNeeded', () {
     test(
       'copies legacy app env into ProgramData and preserves a backup',
@@ -202,6 +231,41 @@ void main() {
       expect(outcome.missingRequiredKeys, contains('AUTO_UPDATE_FEED_URL'));
       expect(outcome.isHealthy, isFalse);
     });
+
+    test(
+      'overlays AUTO_UPDATE_FEED_URL from bundled reader when ProgramData '
+      'env is missing the required key',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('env_overlay_');
+        addTearDown(() async {
+          if (await tempDir.exists()) {
+            await tempDir.delete(recursive: true);
+          }
+        });
+
+        final externalEnv = File(p.join(tempDir.path, 'config', '.env'));
+        await externalEnv.parent.create(recursive: true);
+        await externalEnv.writeAsString('OTHER_KEY=value\n');
+
+        EnvironmentLoader.machineEnvironmentFileOverrideForTest = externalEnv;
+        EnvironmentLoader.bundledAssetReader = (key) async {
+          expect(key, EnvironmentLoader.bundledAssetFileName);
+          return 'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n';
+        };
+
+        final outcome = await EnvironmentLoader.loadIfNeeded(
+          logPrefix: '[overlay-test]',
+        );
+
+        expect(outcome.attemptedFallback, isTrue);
+        expect(outcome.missingRequiredKeys, isEmpty);
+        expect(
+          dotenv.env['AUTO_UPDATE_FEED_URL'],
+          'https://example.com/appcast.xml',
+        );
+      },
+      skip: !Platform.isWindows,
+    );
   });
 
   group('EnvironmentLoader bundled secret leak guard', () {

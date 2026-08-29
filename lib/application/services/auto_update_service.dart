@@ -999,6 +999,7 @@ class AutoUpdateService {
     final currentVersion = await _resolveCurrentVersion();
     String? targetVersion;
     var handoffExitInvoked = false;
+    var installerSpawnConfirmed = false;
     int? installerBytes;
     AppUpdateInstallContext? installContext;
 
@@ -1251,6 +1252,7 @@ class AutoUpdateService {
           r'%TEMP%\Setup Log*.txt.',
         );
       }
+      installerSpawnConfirmed = true;
 
       checkStopwatch.stop();
       await transitionStage(AppUpdateStage.completed);
@@ -1327,7 +1329,10 @@ class AutoUpdateService {
           blockReason: e.reason,
         ),
       );
-      await _removeInstallContextOnEarlyFailure(e.stage);
+      await _removeInstallContextOnEarlyFailure(
+        e.stage,
+        installerSpawnConfirmed: installerSpawnConfirmed,
+      );
       await _persistDiagnostics(
         source: source,
         attemptNumber: attemptNumber,
@@ -1367,7 +1372,10 @@ class AutoUpdateService {
           lastCheckDuration: checkStopwatch.elapsed,
         ),
       );
-      await _removeInstallContextOnEarlyFailure(currentStage);
+      await _removeInstallContextOnEarlyFailure(
+        currentStage,
+        installerSpawnConfirmed: installerSpawnConfirmed,
+      );
       await _persistDiagnostics(
         source: source,
         attemptNumber: attemptNumber,
@@ -1765,18 +1773,14 @@ class AutoUpdateService {
     return context;
   }
 
-  /// Remove `update_context.json` quando o pipeline aborta antes de
-  /// `launchingInstaller`. Sem isso, restos de contextos de falhas
-  /// intermediarias poderiam ser interpretados por uma execucao manual
-  /// do `restore_update_state.ps1` (fora do fluxo normal) — operadores
-  /// confundem o estado.
+  /// Remove `update_context.json` when the pipeline aborts before the
+  /// installer is confirmed alive. After a confirmed spawn the installer
+  /// owns the context — do not delete it.
   Future<void> _removeInstallContextOnEarlyFailure(
-    AppUpdateStage failureStage,
-  ) async {
-    if (failureStage == AppUpdateStage.launchingInstaller ||
-        failureStage == AppUpdateStage.completed) {
-      // Apos lancar o instalador, ele e' quem decide o que fazer com o
-      // contexto — preservamos.
+    AppUpdateStage failureStage, {
+    required bool installerSpawnConfirmed,
+  }) async {
+    if (installerSpawnConfirmed || failureStage == AppUpdateStage.completed) {
       return;
     }
     try {

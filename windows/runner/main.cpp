@@ -67,9 +67,12 @@ static std::string ToLowerCopy(std::string value) {
 }
 
 // Returns true if the process should run in headless service mode.
+// Contract shared with Dart ServiceModeDetector
+// (lib/core/utils/service_mode_detector.dart):
 // Layer 1: Session 0 — services always run in Session 0; no GPU/desktop.
-// Layer 2: --run-as-service argument (NSSM AppParameters).
-// Layer 3: SERVICE_MODE env (NSSM AppEnvironmentExtra).
+// Layer 2: exact --run-as-service argument (NSSM AppParameters).
+// Layer 3: SERVICE_MODE env in {server, 1, true} after lowercasing.
+// C++ does not trim SERVICE_MODE; Dart does.
 static bool IsServiceMode(const std::vector<std::string>& args) {
   DWORD session_id = 0;
   if (::ProcessIdToSessionId(::GetCurrentProcessId(), &session_id)) {

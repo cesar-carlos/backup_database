@@ -13,6 +13,15 @@ import 'package:backup_database/presentation/managers/managers.dart';
 class AppCleanup {
   AppCleanup._();
 
+  /// Soft prep before launching the silent installer: stop work that
+  /// would conflict with the setup, but keep the process usable if spawn
+  /// fails (mutex, DB, tray and window stay up).
+  static Future<void> prepareForInstall() async {
+    LoggerService.info('Preparando aplicativo para instalacao...');
+    await _stopRuntimeWork();
+    LoggerService.info('Preparacao para instalacao concluida');
+  }
+
   /// Sequência de shutdown da aplicação. Cada etapa é independente e
   /// resiliente a falhas: erros são logados mas não impedem as próximas
   /// (caso contrário, um erro em "fechar tray" deixaria o lock de
@@ -32,7 +41,30 @@ class AppCleanup {
   /// 6. Dispose de tray e window managers.
   static Future<void> cleanup() async {
     LoggerService.info('Encerrando aplicativo...');
+    await _stopRuntimeWork();
 
+    await _runStep('fechar banco de dados', () async {
+      if (service_locator.getIt.isRegistered<IAppDatabaseLifecycle>()) {
+        await service_locator.getIt<IAppDatabaseLifecycle>().close();
+      }
+    });
+
+    await _runStep('liberar lock de instância única', () async {
+      if (service_locator.getIt.isRegistered<ISingleInstanceService>()) {
+        await service_locator.getIt<ISingleInstanceService>().releaseLock();
+      }
+    });
+
+    await _runStep('destruir tray', () async => TrayManagerService().dispose());
+    await _runStep(
+      'destruir window manager',
+      () async => WindowManagerService().dispose(),
+    );
+
+    LoggerService.info('Aplicativo encerrado');
+  }
+
+  static Future<void> _stopRuntimeWork() async {
     await _runStep('cancelar backups em execução', () async {
       if (service_locator.getIt.isRegistered<IBackupCancellationService>()) {
         service_locator.getIt<IBackupCancellationService>().cancelAllRunning();
@@ -68,26 +100,6 @@ class AppCleanup {
         service_locator.getIt<ITemporaryBackupCleanupScheduler>().stop();
       }
     });
-
-    await _runStep('fechar banco de dados', () async {
-      if (service_locator.getIt.isRegistered<IAppDatabaseLifecycle>()) {
-        await service_locator.getIt<IAppDatabaseLifecycle>().close();
-      }
-    });
-
-    await _runStep('liberar lock de instância única', () async {
-      if (service_locator.getIt.isRegistered<ISingleInstanceService>()) {
-        await service_locator.getIt<ISingleInstanceService>().releaseLock();
-      }
-    });
-
-    await _runStep('destruir tray', () async => TrayManagerService().dispose());
-    await _runStep(
-      'destruir window manager',
-      () async => WindowManagerService().dispose(),
-    );
-
-    LoggerService.info('Aplicativo encerrado');
   }
 
   /// Executa uma etapa do shutdown isolando falhas. Etapas com [getIt]

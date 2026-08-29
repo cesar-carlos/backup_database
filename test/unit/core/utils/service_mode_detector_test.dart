@@ -32,5 +32,52 @@ void main() {
         expect(result, isFalse);
       },
     );
+
+    test('matchesServiceArgument should require exact --run-as-service', () {
+      expect(
+        ServiceModeDetector.matchesServiceArgument(const ['--run-as-service']),
+        isTrue,
+      );
+      expect(
+        ServiceModeDetector.matchesServiceArgument(const ['--mode=server']),
+        isFalse,
+      );
+      expect(
+        ServiceModeDetector.matchesServiceArgument(const <String>[]),
+        isFalse,
+      );
+    });
+
+    test('matchesServiceModeEnvValue should accept server, 1 and true', () {
+      expect(ServiceModeDetector.matchesServiceModeEnvValue('server'), isTrue);
+      expect(ServiceModeDetector.matchesServiceModeEnvValue('1'), isTrue);
+      expect(ServiceModeDetector.matchesServiceModeEnvValue('true'), isTrue);
+      expect(
+        ServiceModeDetector.matchesServiceModeEnvValue(' SERVER '),
+        isTrue,
+      );
+      expect(ServiceModeDetector.matchesServiceModeEnvValue('True'), isTrue);
+    });
+
+    test('matchesServiceModeEnvValue should reject unknown values', () {
+      expect(ServiceModeDetector.matchesServiceModeEnvValue(null), isFalse);
+      expect(ServiceModeDetector.matchesServiceModeEnvValue(''), isFalse);
+      expect(ServiceModeDetector.matchesServiceModeEnvValue('ui'), isFalse);
+      expect(
+        ServiceModeDetector.matchesServiceModeEnvValue('yes'),
+        isFalse,
+      );
+    });
+
+    test('validServiceModeValues should match the C++ runner set', () {
+      expect(
+        ServiceModeDetector.validServiceModeValues,
+        equals({'server', '1', 'true'}),
+      );
+      expect(
+        ServiceModeDetector.serviceArgFlag,
+        equals('--run-as-service'),
+      );
+    });
   });
 }

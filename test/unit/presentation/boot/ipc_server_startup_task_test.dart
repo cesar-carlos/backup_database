@@ -33,6 +33,7 @@ IpcServerStartupTask _buildTask({
 }) {
   return IpcServerStartupTask(
     isWindowManagementEnabled: () => windowEnabled,
+    isWindowReady: () => true,
     showWindow: () async {
       events.add('show');
     },
@@ -100,5 +101,85 @@ void main() {
       expect(events, equals(['start_ipc']));
       expect(warnings.first, contains('Erro ao inicializar IPC Server'));
     });
+  });
+
+  group('IpcServerStartupTask SHOW_WINDOW queue', () {
+    test(
+      'queues SHOW_WINDOW until window is ready then flushes once',
+      () async {
+        final events = <String>[];
+        final infoLogs = <String>[];
+        var windowReady = false;
+        late final Future<void> Function() capturedShow;
+
+        final task = IpcServerStartupTask(
+          isWindowManagementEnabled: () => true,
+          isWindowReady: () => windowReady,
+          showWindow: () async {
+            events.add('show');
+          },
+          runSchedule: (id) async => 0,
+          startIpcServer:
+              ({required onShowWindow, required onRunSchedule}) async {
+                capturedShow = onShowWindow;
+              },
+          logInfo: infoLogs.add,
+          logWarning: _ignoreLogWithError,
+          logError: _ignoreLogWithError,
+        );
+
+        await task.start(_config());
+        await capturedShow();
+        await capturedShow();
+
+        expect(events, isEmpty);
+        expect(
+          infoLogs.where((line) => line.contains('ipc_show_window_queued')),
+          isNotEmpty,
+        );
+
+        windowReady = true;
+        await task.markWindowReadyAndFlush();
+
+        expect(events, equals(['show']));
+        expect(
+          infoLogs.where((line) => line.contains('ipc_show_window_flushed')),
+          hasLength(1),
+        );
+
+        await task.markWindowReadyAndFlush();
+        expect(events, equals(['show']));
+      },
+    );
+
+    test(
+      'does not flush queued SHOW_WINDOW when window feature is off',
+      () async {
+        final events = <String>[];
+        late final Future<void> Function() capturedShow;
+
+        final task = IpcServerStartupTask(
+          isWindowManagementEnabled: () => false,
+          isWindowReady: () => false,
+          showWindow: () async {
+            events.add('show');
+          },
+          runSchedule: (id) async => 0,
+          startIpcServer:
+              ({required onShowWindow, required onRunSchedule}) async {
+                capturedShow = onShowWindow;
+              },
+          logInfo: _ignoreLog,
+          logWarning: _ignoreLogWithError,
+          logError: _ignoreLogWithError,
+        );
+
+        await task.start(_config());
+        await capturedShow();
+        await task.markWindowReadyAndFlush();
+
+        expect(events, isEmpty);
+      },
+    );
   });
 }

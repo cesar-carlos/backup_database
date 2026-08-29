@@ -6,13 +6,20 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:win32/win32.dart';
 
+/// Headless Windows-service detection.
+///
+/// Contract shared with `windows/runner/main.cpp` `IsServiceMode`:
+/// 1. Session 0 (Windows services have no interactive desktop).
+/// 2. Exact argument `--run-as-service` (NSSM AppParameters).
+/// 3. `SERVICE_MODE` in {server, 1, true} after lowercasing.
+///    Dart also trims; the C++ runner does not.
 class ServiceModeDetector {
   static const int _serviceSessionId = 0;
-  static const String _serviceArgFlag = '--run-as-service';
+  static const String serviceArgFlag = '--run-as-service';
 
   /// Accepted values for the SERVICE_MODE environment variable.
   /// Rejects arbitrary strings to avoid false positives.
-  static const Set<String> _validServiceModeValues = {'server', '1', 'true'};
+  static const Set<String> validServiceModeValues = {'server', '1', 'true'};
 
   static bool _isServiceMode = false;
   static bool _checked = false;
@@ -74,26 +81,24 @@ class ServiceModeDetector {
 
       // Layer 2: explicit --run-as-service argument injected by NSSM via
       // AppParameters. Semantically distinct from --mode=server (functional).
-      if (_hasServiceArgument(argsForServiceFlag)) {
+      if (matchesServiceArgument(argsForServiceFlag)) {
         _isServiceMode = true;
         LoggerService.info(
           '[ServiceModeDetector] MATCH layer-2: argument '
-          '"$_serviceArgFlag" → service mode',
+          '"$serviceArgFlag" → service mode',
         );
         return true;
       }
       LoggerService.info(
         '[ServiceModeDetector] layer-2 skip: argument '
-        '"$_serviceArgFlag" not present '
+        '"$serviceArgFlag" not present '
         '(args=$argsForServiceFlag)',
       );
 
       // Layer 3: SERVICE_MODE environment variable injected by NSSM via
       // AppEnvironmentExtra. Only accepted values: server | 1 | true.
       final rawServiceMode = Platform.environment['SERVICE_MODE'];
-      final normalizedServiceMode = rawServiceMode?.trim().toLowerCase();
-      if (normalizedServiceMode != null &&
-          _validServiceModeValues.contains(normalizedServiceMode)) {
+      if (matchesServiceModeEnvValue(rawServiceMode)) {
         _isServiceMode = true;
         LoggerService.info(
           '[ServiceModeDetector] MATCH layer-3: env SERVICE_MODE="$rawServiceMode" '
@@ -105,7 +110,7 @@ class ServiceModeDetector {
         LoggerService.warning(
           '[ServiceModeDetector] layer-3 skip: env SERVICE_MODE="$rawServiceMode" '
           'is not an accepted value '
-          '(accepted: ${_validServiceModeValues.join(", ")})',
+          '(accepted: ${validServiceModeValues.join(", ")})',
         );
       } else {
         LoggerService.info(
@@ -136,6 +141,15 @@ class ServiceModeDetector {
       sessionId == _serviceSessionId;
 
   /// Returns true if [args] contains the dedicated service execution flag.
-  static bool _hasServiceArgument(List<String> args) =>
-      args.contains(_serviceArgFlag);
+  @visibleForTesting
+  static bool matchesServiceArgument(List<String> args) =>
+      args.contains(serviceArgFlag);
+
+  /// Returns true if [raw] is an accepted `SERVICE_MODE` value.
+  /// Trims and lowercases; the C++ runner lowercases only.
+  @visibleForTesting
+  static bool matchesServiceModeEnvValue(String? raw) {
+    final normalized = raw?.trim().toLowerCase();
+    return normalized != null && validServiceModeValues.contains(normalized);
+  }
 }

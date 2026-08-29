@@ -130,18 +130,24 @@ Testes novos:
 
 ### F4 — [MÉDIO] Race acquire→IPC mostrava “Unknown user” espúrio
 
-Entre `checkAndLock` (passo cedo no bootstrap) e `startIpcServer`
-(executado dentro de `initializeUiServices`, ~300-500ms depois do
-`setupServiceLocator`) há uma janela em que a 1ª instância **já tem o
-mutex** mas **ainda não responde no IPC**. Se o usuário desse
-duplo-clique no atalho nessa janela, a 2ª UI via `existingUser=null` e
-`existingRole=null`, e exibia o dialog “Não foi possível identificar o
-usuário da instância existente” — confuso, porque a instância está
-literalmente abrindo agora.
+Entre `checkAndLock` (passo cedo no bootstrap) e `startIpcServer` há
+uma janela em que a 1ª instância **já tem o mutex** mas **ainda não
+responde no IPC**. Se o usuário der duplo-clique no atalho nessa
+janela, a 2ª UI via `existingUser=null` e `existingRole=null`, e
+exibia o dialog “Não foi possível identificar o usuário da instância
+existente” — confuso, porque a instância está literalmente abrindo.
 
-Mitigação:
+**Atualização (boot residual 2026-08-29):** `startIpcServer` corre
+logo após o DI (`ipc_ready`), **não** dentro de
+`initializeUiServices`. A janela acquire→IPC encolheu. O handler
+`SHOW_WINDOW` ainda depende de `WindowManagerService.isInitialized`
+(janela nativa sobe depois, em `initializeUiServices`); pedidos
+chegados nesse intervalo são enfileirados e flushed por
+`IpcServerStartupTask.markWindowReadyAndFlush()`.
 
-- `SingleInstanceChecker._getExistingInfo` agora faz retry interno
+Mitigação original (ainda válida):
+
+- `SingleInstanceChecker._getExistingInfo` faz retry interno
   com `ownerInfoMaxAttempts=3` (default) e `ownerInfoRetryDelay=250ms`.
   Pior caso adicional na 2ª UI: ~500ms para deixar a 1ª subir o IPC.
 - Parâmetros injetáveis no construtor (`ownerInfoMaxAttempts`,

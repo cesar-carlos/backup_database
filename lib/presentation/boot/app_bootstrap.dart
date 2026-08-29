@@ -236,6 +236,19 @@ class AppBootstrapDependencies {
       logDebug: LoggerService.debug,
     );
 
+    final ipcServerStartupTask = AppBootstrap._buildIpcServerStartupTask();
+    UiSchedulerPolicy? windowsServiceSkipPolicy;
+    Future<bool> skipIfWindowsServiceRunning(
+      UiSchedulerFallbackMode fallbackMode,
+    ) async {
+      windowsServiceSkipPolicy ??= UiSchedulerPolicy(
+        service_locator.getIt<IWindowsServiceService>(),
+        onWarning: LoggerService.warning,
+        fallbackMode: fallbackMode,
+      );
+      return windowsServiceSkipPolicy!.shouldSkipSchedulerInUiMode();
+    }
+
     return AppBootstrapDependencies(
       environment: BootstrapEnvironment(
         executableArguments: () => Platform.executableArguments,
@@ -277,24 +290,25 @@ class AppBootstrapDependencies {
             },
         getLaunchConfig: AppInitializer.getLaunchConfig,
         executeScheduledBackupAndExit: ScheduledBackupExecutor.executeAndExit,
-        initializeUiServices: AppBootstrap._defaultInitializeUiServices,
-        ipcServerStartupTask: AppBootstrap._buildIpcServerStartupTask(),
+        initializeUiServices:
+            ({
+              required launchConfig,
+              required bootstrapConfig,
+            }) async {
+              await AppBootstrap._defaultInitializeUiServices(
+                launchConfig: launchConfig,
+                bootstrapConfig: bootstrapConfig,
+              );
+              await ipcServerStartupTask.markWindowReadyAndFlush();
+            },
+        ipcServerStartupTask: ipcServerStartupTask,
         localSchedulerStartupTask: UiSchedulerStartupTask(
           isTaskSchedulerEnabled: () {
             return service_locator
                 .getIt<FeatureAvailabilityService>()
                 .isTaskSchedulerEnabled;
           },
-          shouldSkipScheduler: (fallbackMode) async {
-            final windowsServiceService = service_locator
-                .getIt<IWindowsServiceService>();
-            final schedulerPolicy = UiSchedulerPolicy(
-              windowsServiceService,
-              onWarning: LoggerService.warning,
-              fallbackMode: fallbackMode,
-            );
-            return schedulerPolicy.shouldSkipSchedulerInUiMode();
-          },
+          shouldSkipScheduler: skipIfWindowsServiceRunning,
           startScheduler: () async {
             await service_locator.getIt<ISchedulerService>().start();
           },
@@ -333,16 +347,7 @@ class AppBootstrapDependencies {
             return service_locator.getIt
                 .isRegistered<ITemporaryBackupCleanupScheduler>();
           },
-          shouldSkipCleanup: (fallbackMode) async {
-            final windowsServiceService = service_locator
-                .getIt<IWindowsServiceService>();
-            final cleanupPolicy = UiSchedulerPolicy(
-              windowsServiceService,
-              onWarning: LoggerService.warning,
-              fallbackMode: fallbackMode,
-            );
-            return cleanupPolicy.shouldSkipSchedulerInUiMode();
-          },
+          shouldSkipCleanup: skipIfWindowsServiceRunning,
           startScheduler: () {
             service_locator.getIt<ITemporaryBackupCleanupScheduler>().start();
           },
@@ -666,10 +671,11 @@ class AppBootstrap {
   static IpcServerStartupTask _buildIpcServerStartupTask() {
     return IpcServerStartupTask(
       isWindowManagementEnabled: () {
-        final features = service_locator.getIt<FeatureAvailabilityService>();
-        return features.isWindowManagementEnabled &&
-            WindowManagerService().isInitialized;
+        return service_locator
+            .getIt<FeatureAvailabilityService>()
+            .isWindowManagementEnabled;
       },
+      isWindowReady: () => WindowManagerService().isInitialized,
       showWindow: () => WindowManagerService().show(),
       runSchedule: ScheduledBackupExecutor.execute,
       startIpcServer:

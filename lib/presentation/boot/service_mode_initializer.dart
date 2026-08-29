@@ -22,6 +22,7 @@ import 'package:backup_database/domain/services/i_temporary_backup_cleanup_sched
 import 'package:backup_database/domain/services/i_windows_service_event_logger.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart';
 import 'package:backup_database/presentation/boot/service_account_probe.dart';
@@ -260,10 +261,7 @@ class ServiceModeInitializer {
               serviceName: _serviceName,
               processService: service_locator.getIt<ProcessService>(),
             ),
-            beforeInstallHook: () async {
-              await shutdownHandler?.shutdown();
-              await singleInstanceService?.releaseLock();
-            },
+            beforeInstallHook: AppCleanup.prepareForInstall,
           ).configureAndStart();
         },
       );
