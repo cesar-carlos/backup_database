@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "encoding_utils.ps1")
+. (Join-Path $PSScriptRoot "service_utils.ps1")
 
 function Get-StringValue([string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
@@ -46,23 +47,6 @@ function Resolve-ExecutableFromImagePath([string]$ImagePath) {
 
     $token = ($trimmed -split "\s+")[0]
     return Get-StringValue -Value $token
-}
-
-function Get-NssmValue(
-    [string]$NssmPath,
-    [string]$Name,
-    [string[]]$Arguments
-) {
-    if ([string]::IsNullOrWhiteSpace($NssmPath) -or -not (Test-Path $NssmPath)) {
-        return $null
-    }
-
-    $result = & $NssmPath get $Name @Arguments 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        return $null
-    }
-
-    return Get-StringValue -Value (($result | Out-String).Trim())
 }
 
 # S2 da auditoria: captura valores de AppExit (Default/77/78) que estavam

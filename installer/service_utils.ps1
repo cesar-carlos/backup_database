@@ -148,6 +148,91 @@ function Start-WindowsServiceWithPolling {
         -InitialDelaySeconds $InitialDelaySeconds
 }
 
+function ConvertFrom-NssmOutput {
+    param(
+        [AllowNull()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrEmpty($Value)) {
+        return $null
+    }
+
+    $cleaned = ($Value -replace "`0", "").Trim()
+    if ([string]::IsNullOrWhiteSpace($cleaned)) {
+        return $null
+    }
+    return $cleaned
+}
+
+function Get-NssmValue {
+    param(
+        [string]$NssmPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    if ([string]::IsNullOrWhiteSpace($NssmPath) -or -not (Test-Path $NssmPath)) {
+        return $null
+    }
+
+    $result = & $NssmPath get $Name @Arguments 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        return $null
+    }
+
+    return ConvertFrom-NssmOutput -Value (($result | Out-String).TrimEnd())
+}
+
+function Wait-ServiceRemoved {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ServiceName,
+        [int]$TimeoutSeconds = $script:ServiceStartPollingTimeoutSeconds,
+        [int]$IntervalSeconds = $script:ServiceStartPollingIntervalSeconds,
+        [int]$InitialDelaySeconds = $script:ServiceStartPollingInitialDelaySeconds
+    )
+
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $pollCount = 0
+
+    if ($null -eq (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
+        Write-Host "Wait-ServiceRemoved: '$ServiceName' already absent"
+        return $true
+    }
+
+    if ($InitialDelaySeconds -gt 0) {
+        Start-Sleep -Seconds $InitialDelaySeconds
+    }
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds $IntervalSeconds
+        $pollCount++
+        $exists = $null -ne (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)
+
+        Write-Host (
+            "Wait-ServiceRemoved: poll=$pollCount exists=$exists"
+        )
+
+        if (-not $exists) {
+            Write-Host (
+                "Wait-ServiceRemoved: converged in $($stopwatch.ElapsedMilliseconds)ms"
+            )
+            return $true
+        }
+    }
+
+    Write-Warning (
+        "Timeout ao aguardar remocao de '$ServiceName' apos " +
+        "$($stopwatch.ElapsedMilliseconds)ms"
+    )
+    return $false
+}
+
 function Wait-ServiceStopped {
     param(
         [Parameter(Mandatory = $true)]

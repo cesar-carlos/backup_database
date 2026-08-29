@@ -60,7 +60,23 @@ Write-OptionalToolStatus -Label "[6/10] Verificando pg_basebackup (PostgreSQL)..
 Write-OptionalToolStatus -Label "[7/10] Verificando gbak (Firebird)..." -CommandName "gbak" -OnlyIfUsing "Firebird"
 Write-OptionalToolStatus -Label "[8/10] Verificando nbackup (Firebird)..." -CommandName "nbackup" -OnlyIfUsing "Firebird"
 Write-OptionalToolStatus -Label "[9/10] Verificando gstat (Firebird)..." -CommandName "gstat" -OnlyIfUsing "Firebird"
-Write-OptionalToolStatus -Label "[10/10] Verificando isql (Firebird)..." -CommandName "isql" -OnlyIfUsing "Firebird"
+
+Write-Host "[10/10] Verificando isql (Firebird)..." -ForegroundColor Yellow
+$isqlPath = Test-CommandInPath -CommandName "isql"
+$gbakPath = Test-CommandInPath -CommandName "gbak"
+$nbackupPath = Test-CommandInPath -CommandName "nbackup"
+if ($isqlPath -and $gbakPath -and $nbackupPath) {
+    Write-Host "  OK: isql encontrado no PATH com gbak/nbackup (kit Firebird)" -ForegroundColor Green
+    Write-Host "      Localizacao: $isqlPath" -ForegroundColor Gray
+} elseif ($isqlPath) {
+    Write-Host "  AVISO: isql encontrado, mas gbak/nbackup nao estao no PATH" -ForegroundColor Yellow
+    Write-Host "         Pode ser outro isql (Sybase/Informix), nao o do Firebird" -ForegroundColor Gray
+    Write-Host "         Consulte: docs\\path_setup.md" -ForegroundColor Yellow
+} else {
+    Write-Host "  AVISO: isql nao encontrado no PATH" -ForegroundColor Yellow
+    Write-Host "         Necessario apenas se voce usar Firebird" -ForegroundColor Gray
+    Write-Host "         Consulte: docs\\path_setup.md" -ForegroundColor Yellow
+}
 Write-Host ""
 
 Write-Host "========================================" -ForegroundColor Cyan

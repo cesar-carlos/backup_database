@@ -68,7 +68,17 @@ $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
     Write-Host "Serviço já existe. Removendo versão anterior..." -ForegroundColor Yellow
     & $NssmPath remove $ServiceName confirm
-    Start-Sleep -Seconds 2
+    $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
+    if (Test-Path $serviceUtilsPath) {
+        . $serviceUtilsPath
+        if (-not (Wait-ServiceRemoved -ServiceName $ServiceName)) {
+            Write-Host "ERRO: serviço '$ServiceName' ainda marcado para exclusao." -ForegroundColor Red
+            Pause-IfInteractive
+            exit 1
+        }
+    } else {
+        Start-Sleep -Seconds 2
+    }
 }
 
 # Instalar o serviço (apenas o executável, sem argumentos inline)

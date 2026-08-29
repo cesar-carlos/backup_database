@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/application/services/auto_update_service.dart';
+import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,6 +15,31 @@ const _sparkleNs = 'http://www.andymatuschak.org/xml-namespaces/sparkle';
 
 void main() {
   _registerDisabledReasonTests();
+
+  group('AutoUpdateService.installerArgumentsFor', () {
+    test('passes /MODE=client for client installations', () {
+      expect(
+        AutoUpdateService.installerArgumentsFor(AppMode.client),
+        const [
+          '/VERYSILENT',
+          '/SUPPRESSMSGBOXES',
+          '/NORESTART',
+          '/MODE=client',
+        ],
+      );
+    });
+
+    test('maps server and unified to /MODE=server', () {
+      expect(
+        AutoUpdateService.installerArgumentsFor(AppMode.server),
+        contains('/MODE=server'),
+      );
+      expect(
+        AutoUpdateService.installerArgumentsFor(AppMode.unified),
+        contains('/MODE=server'),
+      );
+    });
+  });
 
   group('AutoUpdateService.parseAppcast', () {
     test('parses a valid Windows release with sha256 and length', () {
@@ -316,7 +342,12 @@ void main() {
         );
         expect(
           launchedArguments,
-          const ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'],
+          const [
+            '/VERYSILENT',
+            '/SUPPRESSMSGBOXES',
+            '/NORESTART',
+            '/MODE=server',
+          ],
         );
         expect(
           snapshots.map((snapshot) => snapshot.status),

@@ -90,8 +90,9 @@ void main() {
         expect(setup, contains('AUTO_UPDATE_FEED_URL'));
         expect(
           setup,
-          contains('instalacao silenciosa abortada por merge_env.ps1 exit 2'),
+          contains('instalacao silenciosa segue apos merge_env.ps1 exit 2'),
         );
+        expect(setup, isNot(contains('Abort;')));
         expect(
           setup,
           contains('restore_update_state.ps1 exit 2'),
@@ -100,6 +101,113 @@ void main() {
           setup,
           contains('update_context.json preservado para retry'),
         );
+      },
+    );
+
+    test(
+      'setup.iss restores mode and does not uninstall previous version',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+        final iss = await _loadSetupIssParser();
+
+        expect(setup, isNot(contains('function FindUninstaller')));
+        expect(
+          iss.routineContains('InitializeSetup', '/VERYSILENT'),
+          isFalse,
+        );
+        expect(
+          iss.routineContains('InitializeSetup', 'unins000.exe'),
+          isFalse,
+        );
+        expect(setup, contains(r'{param:MODE}'));
+        expect(setup, contains(r'{app}\.install_mode'));
+        expect(setup, contains('read_json_app_mode.ps1'));
+        expect(setup, contains('ResolveSelectedMode'));
+        expect(
+          setup,
+          contains(
+            'Silent update: skipping startup task/service install',
+          ),
+        );
+        expect(
+          setup,
+          contains('restore_update_state owns operational state'),
+        );
+      },
+    );
+
+    test(
+      'setup.iss treats VC++ redist success codes and hides UI',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+        final iss = await _loadSetupIssParser();
+
+        expect(setup, contains('IsVCRedistSuccessExitCode'));
+        expect(setup, contains('ExitCode = 1638'));
+        expect(setup, contains('ExitCode = 3010'));
+        expect(setup, contains('ExitCode = 1641'));
+        expect(
+          iss.routineContains('PrepareToInstall', 'SW_HIDE'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('PrepareToInstall', 'SW_SHOW'),
+          isFalse,
+        );
+      },
+    );
+
+    test(
+      'setup.iss detects the app by exact image name and does not kill nssm',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+        final iss = await _loadSetupIssParser();
+
+        expect(
+          iss.routineContains('IsAppRunning', 'IMAGENAME eq'),
+          isTrue,
+        );
+        expect(setup, isNot(contains("CloseApp('nssm.exe')")));
+        expect(setup, isNot(contains('taskkill.exe /IM nssm.exe')));
+      },
+    );
+
+    test(
+      'setup.iss removes client startup task on uninstall',
+      () async {
+        final iss = await _loadSetupIssParser();
+        expect(
+          iss.routineContains(
+            'CurUninstallStepChanged',
+            'DeleteClientStartupTask',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('InitializeUninstall', 'UninstallSilent'),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'setup.iss defaults wizard language to Brazilian Portuguese',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+        expect(setup, contains('brazilianportuguese'));
+        expect(
+          setup,
+          contains(r'compiler:Languages\BrazilianPortuguese.isl'),
+        );
+        expect(setup, contains('compiler:Default.isl'));
       },
     );
 
@@ -365,7 +473,83 @@ void main() {
         );
         expect(serviceUtils, contains('function Wait-ServiceStopped'));
         expect(serviceUtils, contains('function Test-ServiceScQueryStopped'));
+        expect(serviceUtils, contains('function Wait-ServiceRemoved'));
+        expect(serviceUtils, contains('function ConvertFrom-NssmOutput'));
+        expect(serviceUtils, contains('function Get-NssmValue'));
+        expect(serviceUtils, contains('-replace "`0"'));
       },
+    );
+
+    test(
+      'install restore and uninstall wait for service removal',
+      () async {
+        final install = await _repoFile(
+          p.join('installer', 'install_service.ps1'),
+        ).readAsString();
+        final restore = await _repoFile(
+          p.join('installer', 'restore_update_state.ps1'),
+        ).readAsString();
+        final uninstall = await _repoFile(
+          p.join('installer', 'uninstall_service.ps1'),
+        ).readAsString();
+        final capture = await _repoFile(
+          p.join('installer', 'capture_update_context.ps1'),
+        ).readAsString();
+        final merge = await _repoFile(
+          p.join('installer', 'merge_env.ps1'),
+        ).readAsString();
+        final build = await _repoFile(
+          p.join('installer', 'build_installer.py'),
+        ).readAsString();
+
+        expect(install, contains('Wait-ServiceRemoved'));
+        expect(restore, contains('Wait-ServiceRemoved'));
+        expect(uninstall, contains('Wait-ServiceRemoved'));
+        expect(uninstall, contains('NonInteractive'));
+        expect(capture, contains('service_utils.ps1'));
+        expect(merge, contains('Read-Utf8NoBomFile'));
+        expect(restore, contains('Read-Utf8NoBomFile'));
+        expect(
+          build,
+          contains(
+            '727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743',
+          ),
+        );
+      },
+    );
+
+    test(
+      'ConvertFrom-NssmOutput strips UTF-16 null bytes',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'nssm_utf16_strip_test',
+        );
+        final utilsPath = p.normalize(
+          p.join(Directory.current.path, 'installer', 'service_utils.ps1'),
+        );
+        final scriptPath = p.join(tempDir.path, 'strip.ps1');
+        await File(scriptPath).writeAsString(
+          ". '$utilsPath'\n"
+          "\$v = 'A' + [char]0 + 'p' + [char]0 + 'p'\n"
+          'Write-Output (ConvertFrom-NssmOutput -Value \$v)\n',
+        );
+
+        final result = await Process.run('powershell.exe', <String>[
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          scriptPath,
+        ]);
+        expect(
+          result.exitCode,
+          0,
+          reason: 'stderr=${result.stderr} stdout=${result.stdout}',
+        );
+        expect(result.stdout.toString().trim(), 'App');
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
     );
 
     test(

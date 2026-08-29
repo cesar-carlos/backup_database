@@ -21,6 +21,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "encoding_utils.ps1")
+
 # §audit-2026-05-28: capturar erros do script em arquivo dedicado.
 # Antes, throws subiam para o stderr do Inno Setup que ia parar em
 # logs do Setup que ninguem revisita pos-install. Agora gravamos
@@ -169,7 +171,7 @@ if (-not (Test-Path $ContextPath)) {
 # alem do SHA-256 ja validado pelo Dart antes do handoff).
 Test-AuthenticodeSignature -Path $AppPath
 
-$context = Get-Content -Path $ContextPath -Raw | ConvertFrom-Json
+$context = Read-Utf8NoBomFile -Path $ContextPath | ConvertFrom-Json
 $schemaVersion = 0
 if ($null -ne $context.schemaVersion) {
     $schemaVersion = [int]$context.schemaVersion
@@ -206,7 +208,18 @@ if ($serviceExists) {
         & $NssmPath stop $ServiceName 2>$null | Out-Null
         Start-Sleep -Seconds 2
         & $NssmPath remove $ServiceName confirm 2>$null | Out-Null
-        Start-Sleep -Seconds 2
+        $serviceUtilsPath = Join-Path $AppDirectory 'tools\service_utils.ps1'
+        if (-not (Test-Path $serviceUtilsPath)) {
+            $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
+        }
+        if (Test-Path $serviceUtilsPath) {
+            . $serviceUtilsPath
+            if (-not (Wait-ServiceRemoved -ServiceName $ServiceName)) {
+                throw "Servico $ServiceName ainda marcado para exclusao apos nssm remove"
+            }
+        } else {
+            Start-Sleep -Seconds 2
+        }
     }
 
     & $NssmPath install $ServiceName "`"$AppPath`""

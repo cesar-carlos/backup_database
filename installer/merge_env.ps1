@@ -55,7 +55,8 @@ function ConvertTo-KeyMap([string]$Path) {
         return $map
     }
 
-    foreach ($line in Get-Content -Path $Path) {
+    $content = Read-Utf8NoBomFile -Path $Path
+    foreach ($line in ($content -split "`r`n|`n|`r")) {
         if ($line -match '^\s*#' -or $line -notmatch '=') {
             continue
         }

@@ -129,6 +129,14 @@ O instalador oferece dois modos:
 - `Server Mode`
 - `Client Mode`
 
+O auto-update silencioso passa `/MODE=server` ou `/MODE=client` para o
+Inno Setup preservar o modo no upgrade (a pagina customizada nao e
+restaurada por `UsePreviousTasks`). Sem `/MODE=`, o setup le
+`update_context.json` e, se faltar, `{app}\.install_mode`.
+
+Upgrade e overwrite nativo (`Flags: ignoreversion`): o setup nao
+desinstala a versao anterior antes de copiar arquivos.
+
 ## Servico Windows
 
 O servico continua baseado em NSSM e inicia o app com:

@@ -548,11 +548,21 @@ class AutoUpdateService {
   /// Espera curta antes do `exit()` para o S.O. registrar o spawn detached.
   static const Duration _exitGracePeriod = Duration(milliseconds: 250);
 
-  static const List<String> _installerArguments = <String>[
-    '/VERYSILENT',
-    '/SUPPRESSMSGBOXES',
-    '/NORESTART',
-  ];
+  /// Argumentos do Inno Setup para auto-update silencioso.
+  ///
+  /// `/MODE=` preserva server vs client no wizard customizado, que o Inno
+  /// nao restaura via `UsePreviousTasks`. `unified` cai em `server`.
+  @visibleForTesting
+  static List<String> installerArgumentsFor(AppMode mode) {
+    final modeArg = mode == AppMode.client ? 'client' : 'server';
+    return <String>[
+      '/VERYSILENT',
+      '/SUPPRESSMSGBOXES',
+      '/NORESTART',
+      '/MODE=$modeArg',
+    ];
+  }
+
   static const Duration defaultLockStaleAfter = Duration(hours: 2);
   @visibleForTesting
   static const int updateContextSchemaVersion = 2;
@@ -1223,7 +1233,10 @@ class AutoUpdateService {
 
       await transitionStage(AppUpdateStage.launchingInstaller);
 
-      final spawnHandle = await _launchInstaller(installer);
+      final spawnHandle = await _launchInstaller(
+        installer,
+        mode: installContext.appMode,
+      );
       final spawnAlive = await _waitForInstallerSpawn(spawnHandle);
       if (!spawnAlive) {
         // O processo do instalador morreu antes da janela de graca. Pode
@@ -1454,12 +1467,16 @@ class AutoUpdateService {
     }
   }
 
-  Future<DetachedProcessHandle?> _launchInstaller(File installer) async {
+  Future<DetachedProcessHandle?> _launchInstaller(
+    File installer, {
+    required AppMode mode,
+  }) async {
+    final arguments = installerArgumentsFor(mode);
     LoggerService.info(
       'Iniciando instalador silencioso: ${installer.path} '
-      '${_installerArguments.join(' ')}',
+      '${arguments.join(' ')}',
     );
-    return _detachedProcessStarter(installer.path, _installerArguments);
+    return _detachedProcessStarter(installer.path, arguments);
   }
 
   /// Confirma que o instalador detached realmente iniciou. Estrategia:

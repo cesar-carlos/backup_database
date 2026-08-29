@@ -27,6 +27,7 @@ VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
 # Binario oficial 2.24 (win64) — mesmo layout esperado por setup.iss
 NSSM_ZIP_URL = "https://nssm.cc/release/nssm-2.24.zip"
 NSSM_ZIP_MEMBER = "nssm-2.24/win64/nssm.exe"
+NSSM_ZIP_SHA256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
 TRAY_ICON_CUSTOM_MARKER = ".tray_icon_custom"
 
 
@@ -329,6 +330,15 @@ def ensure_nssm_exe(script_root: Path) -> bool:
         print(f"ERRO: falha ao baixar NSSM: {exc}")
         print(f"Baixe manualmente de: {NSSM_ZIP_URL}")
         print(f"Extraia win64/nssm.exe para: {nssm_exe}")
+        return False
+
+    digest = wiu.sha256_file(zip_path).lower()
+    if digest != NSSM_ZIP_SHA256:
+        zip_path.unlink(missing_ok=True)
+        print(
+            "ERRO: SHA-256 do nssm-2.24.zip nao confere. "
+            f"obtido={digest} esperado={NSSM_ZIP_SHA256}"
+        )
         return False
 
     try:
