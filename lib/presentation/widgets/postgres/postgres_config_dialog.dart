@@ -142,9 +142,30 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.tag),
             ),
-            const SizedBox(height: 16),
-            _buildHostPortFields(context),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
+            HostPortFields(
+              hostController: _hostController,
+              portController: _portController,
+              hostLabel: appLocaleString(context, 'Host', 'Host'),
+              portLabel: appLocaleString(context, 'Porta', 'Port'),
+              hostHint: appLocaleString(
+                context,
+                'localhost ou IP',
+                'localhost or IP',
+              ),
+              portHint: '$_kDefaultPostgresPort',
+              hostValidator: (String? value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Host é obrigatório',
+                    'Host is required',
+                  );
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
             _buildDatabaseSection(context),
             const SizedBox(height: 16),
             AppTextField(
@@ -176,26 +197,20 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
                 'User password',
               ),
             ),
-            const SizedBox(height: 24),
-            InfoLabel(
-              label: appLocaleString(context, 'Habilitado', 'Enabled'),
-              child: ToggleSwitch(
-                checked: _isEnabled,
-                onChanged: (bool value) {
-                  setState(() {
-                    _isEnabled = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appLocaleString(
+            const SizedBox(height: AppSpacing.lg),
+            LabeledToggle(
+              title: appLocaleString(context, 'Habilitado', 'Enabled'),
+              description: appLocaleString(
                 context,
                 'Configuração ativa para uso em agendamentos',
                 'Configuration active for schedules',
               ),
-              style: FluentTheme.of(context).typography.caption,
+              value: _isEnabled,
+              onChanged: (bool value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
             ),
           ],
         ),
@@ -211,48 +226,6 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
         SaveButton(onPressed: _save, isEditing: isEditing),
       ],
       onSubmitIntent: _save,
-    );
-  }
-
-  Widget _buildHostPortFields(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 3,
-          child: AppTextField(
-            controller: _hostController,
-            label: appLocaleString(context, 'Host', 'Host'),
-            hint: appLocaleString(
-              context,
-              'localhost ou IP',
-              'localhost or IP',
-            ),
-            validator: (String? value) {
-              if (value == null || value.trim().isEmpty) {
-                return appLocaleString(
-                  context,
-                  'Host é obrigatório',
-                  'Host is required',
-                );
-              }
-              return null;
-            },
-            prefixIcon: const Icon(FluentIcons.server),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: NumericField(
-            controller: _portController,
-            label: appLocaleString(context, 'Porta', 'Port'),
-            hint: '$_kDefaultPostgresPort',
-            prefixIcon: FluentIcons.number_field,
-            minValue: 1,
-            maxValue: 65535,
-          ),
-        ),
-      ],
     );
   }
 
@@ -285,35 +258,12 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
             },
             prefixIcon: const Icon(FluentIcons.database),
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: context.colors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: context.colors.info.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  FluentIcons.info,
-                  size: 18,
-                  color: context.colors.info,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    appLocaleString(
-                      context,
-                      'Preencha host, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
-                      'Fill host, port, username and password, then click "Test connection" to load databases in the dropdown',
-                    ),
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ),
-              ],
+          const SizedBox(height: AppSpacing.sm),
+          AppCallout(
+            message: appLocaleString(
+              context,
+              'Preencha host, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
+              'Fill host, port, username and password, then click "Test connection" to load databases in the dropdown',
             ),
           ),
         ],

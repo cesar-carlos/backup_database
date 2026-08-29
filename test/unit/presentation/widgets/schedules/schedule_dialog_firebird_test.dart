@@ -248,6 +248,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> openBackupTypeDropdown(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(1920, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpAndSettle();
+    final combo = find.byType(ComboBox<BackupType>);
+    expect(combo, findsOneWidget);
+    await tester.ensureVisible(combo);
+    await tester.pumpAndSettle();
+    await tester.tap(combo);
+    await tester.pumpAndSettle();
+  }
+
   Schedule firebirdScheduleWithLog() => Schedule(
     name: 'FB nightly',
     databaseConfigId: 'fb-cfg-1',
@@ -295,8 +307,7 @@ void main() {
 
         await selectFirebirdDatabaseType(tester);
 
-        await tester.tap(find.text('Full').at(0));
-        await tester.pumpAndSettle();
+        await openBackupTypeDropdown(tester);
 
         expect(find.text('Full Single'), findsOneWidget);
         expect(find.text('Diferencial'), findsOneWidget);
@@ -542,8 +553,7 @@ void main() {
         await tester.pumpAndSettle();
 
         await selectFirebirdDatabaseType(tester);
-        await tester.tap(find.text('Full').at(0));
-        await tester.pumpAndSettle();
+        await openBackupTypeDropdown(tester);
         await tester.tap(find.text('Full Single'));
         await tester.pumpAndSettle();
         await tester.tap(find.text(ScheduleDialogStrings.tabSettings));

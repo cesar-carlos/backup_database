@@ -172,23 +172,15 @@ class DestinationsPage extends StatelessWidget {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: const Text('Tem certeza que deseja excluir este destino?'),
-        actions: [
-          CancelButton(onPressed: () => Navigator.of(context).pop(false)),
-          ActionButton(
-            label: 'Excluir',
-            icon: FluentIcons.delete,
-            onPressed: () => Navigator.of(context).pop(true),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Confirmar Exclusão',
+      message: 'Tem certeza que deseja excluir este destino?',
+      confirmLabel: 'Excluir',
+      confirmIcon: FluentIcons.delete,
     );
 
-    if ((confirmed ?? false) && context.mounted) {
+    if (confirmed && context.mounted) {
       final success = await destinationProvider.deleteDestination(id);
       if (!context.mounted) return;
 

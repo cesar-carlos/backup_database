@@ -350,77 +350,59 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.tag),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: AppTextField(
-                    controller: _serverNameController,
-                    label: appLocaleString(
-                      context,
-                      'Nome do servidor (Engine Name)',
-                      'Server name (Engine Name)',
-                    ),
-                    hint: appLocaleString(
-                      context,
-                      'Ex: VL (nome do serviço Sybase)',
-                      'Ex: VL (Sybase service name)',
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return appLocaleString(
-                          context,
-                          'Engine Name é obrigatório',
-                          'Engine Name is required',
-                        );
-                      }
-                      // Sanitização contra connection string injection
-                      // (`ENG=foo;DBN=...`). Ver SybaseConnectionFieldValidator.
-                      return SybaseConnectionFieldValidator.validate(
-                        value.trim(),
-                        appLocaleString(
-                          context,
-                          'Nome do servidor (Engine Name)',
-                          'Server name (Engine Name)',
-                        ),
-                      );
-                    },
-                    prefixIcon: const Icon(FluentIcons.server),
+            const SizedBox(height: AppSpacing.md),
+            HostPortFields(
+              hostController: _serverNameController,
+              portController: _portController,
+              hostLabel: appLocaleString(
+                context,
+                'Nome do servidor (Engine Name)',
+                'Server name (Engine Name)',
+              ),
+              portLabel: appLocaleString(context, 'Porta', 'Port'),
+              hostHint: appLocaleString(
+                context,
+                'Ex: VL (nome do serviço Sybase)',
+                'Ex: VL (Sybase service name)',
+              ),
+              portHint: AppConstants.defaultSybasePort.toString(),
+              hostValidator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Engine Name é obrigatório',
+                    'Engine Name is required',
+                  );
+                }
+                return SybaseConnectionFieldValidator.validate(
+                  value.trim(),
+                  appLocaleString(
+                    context,
+                    'Nome do servidor (Engine Name)',
+                    'Server name (Engine Name)',
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: NumericField(
-                    controller: _portController,
-                    label: appLocaleString(context, 'Porta', 'Port'),
-                    hint: AppConstants.defaultSybasePort.toString(),
-                    prefixIcon: FluentIcons.number_field,
-                    minValue: 1,
-                    maxValue: 65535,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return appLocaleString(
-                          context,
-                          'Porta e obrigatoria',
-                          'Port is required',
-                        );
-                      }
-                      final port = int.tryParse(value);
-                      if (port == null || port < 1 || port > 65535) {
-                        return appLocaleString(
-                          context,
-                          'Porta deve estar entre 1 e 65535',
-                          'Port must be between 1 and 65535',
-                        );
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ],
+                );
+              },
+              portValidator: (value) {
+                if (value == null || value.isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Porta e obrigatoria',
+                    'Port is required',
+                  );
+                }
+                final port = int.tryParse(value);
+                if (port == null || port < 1 || port > 65535) {
+                  return appLocaleString(
+                    context,
+                    'Porta deve estar entre 1 e 65535',
+                    'Port must be between 1 and 65535',
+                  );
+                }
+                return null;
+              },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             AppTextField(
               controller: _databaseNameController,
               label: appLocaleString(
@@ -452,35 +434,12 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.database),
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: context.colors.info.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: context.colors.info.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    FluentIcons.info,
-                    size: 18,
-                    color: context.colors.info,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      appLocaleString(
-                        context,
-                        'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
-                        'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
-                      ),
-                      style: FluentTheme.of(context).typography.caption,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: AppSpacing.sm),
+            AppCallout(
+              message: appLocaleString(
+                context,
+                'O Engine Name e DBN geralmente são iguais ao nome do serviço Sybase (ex: VL)',
+                'Engine Name and DBN are usually equal to Sybase service name (ex: VL)',
               ),
             ),
             const SizedBox(height: 16),
@@ -522,77 +481,45 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
                 );
               },
             ),
-            const SizedBox(height: 16),
-            InfoLabel(
-              label: appLocaleString(context, 'Habilitado', 'Enabled'),
-              child: ToggleSwitch(
-                checked: _isEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    _isEnabled = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appLocaleString(
+            const SizedBox(height: AppSpacing.md),
+            LabeledToggle(
+              title: appLocaleString(context, 'Habilitado', 'Enabled'),
+              description: appLocaleString(
                 context,
                 'Permitir uso desta configuração em agendamentos',
                 'Allow this configuration in schedules',
               ),
-              style: FluentTheme.of(context).typography.caption,
+              value: _isEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
             ),
-            const SizedBox(height: 16),
-            InfoLabel(
-              label: appLocaleString(
+            const SizedBox(height: AppSpacing.md),
+            LabeledToggle(
+              title: appLocaleString(
                 context,
                 'Ambiente de replicação (SQL Remote, MobiLink)',
                 'Replication environment (SQL Remote, MobiLink)',
               ),
-              child: ToggleSwitch(
-                checked: _isReplicationEnvironment,
-                onChanged: (value) {
-                  setState(() {
-                    _isReplicationEnvironment = value;
-                  });
-                },
-              ),
+              value: _isReplicationEnvironment,
+              onChanged: (value) {
+                setState(() {
+                  _isReplicationEnvironment = value;
+                });
+              },
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: context.colors.info.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: context.colors.info.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    FluentIcons.info,
-                    size: 18,
-                    color: context.colors.info,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      appLocaleString(
-                        context,
-                        'Quando ativado, bloqueia backup de log com modo '
-                            '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
-                            'para ambientes com SQL Remote ou MobiLink.',
-                        'When enabled, blocks log backup with "Truncate" '
-                            'mode (TRUNCATE). Use "Rename" or "Only" for '
-                            'environments with SQL Remote or MobiLink.',
-                      ),
-                      style: FluentTheme.of(context).typography.caption,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: AppSpacing.sm),
+            AppCallout(
+              message: appLocaleString(
+                context,
+                'Quando ativado, bloqueia backup de log com modo '
+                    '"Truncar" (TRUNCATE). Use "Renomear" ou "Apenas" '
+                    'para ambientes com SQL Remote ou MobiLink.',
+                'When enabled, blocks log backup with "Truncate" '
+                    'mode (TRUNCATE). Use "Rename" or "Only" for '
+                    'environments with SQL Remote or MobiLink.',
               ),
             ),
           ],

@@ -143,9 +143,26 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
               },
               prefixIcon: const Icon(FluentIcons.tag),
             ),
-            const SizedBox(height: 16),
-            _buildServerPortFields(context),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
+            HostPortFields(
+              hostController: _serverController,
+              portController: _portController,
+              hostLabel: appLocaleString(context, 'Servidor', 'Server'),
+              portLabel: appLocaleString(context, 'Porta', 'Port'),
+              hostHint: r'localhost ou IP\INSTANCIA',
+              portHint: '$_kDefaultSqlServerPort',
+              hostValidator: (String? value) {
+                if (value == null || value.trim().isEmpty) {
+                  return appLocaleString(
+                    context,
+                    'Servidor é obrigatório',
+                    'Server is required',
+                  );
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
             _buildDatabaseSection(context),
             const SizedBox(height: 16),
             InfoLabel(
@@ -203,26 +220,20 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
               ),
               enabled: !_useWindowsAuth,
             ),
-            const SizedBox(height: 24),
-            InfoLabel(
-              label: appLocaleString(context, 'Habilitado', 'Enabled'),
-              child: ToggleSwitch(
-                checked: _isEnabled,
-                onChanged: (bool value) {
-                  setState(() {
-                    _isEnabled = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              appLocaleString(
+            const SizedBox(height: AppSpacing.lg),
+            LabeledToggle(
+              title: appLocaleString(context, 'Habilitado', 'Enabled'),
+              description: appLocaleString(
                 context,
                 'Configuração ativa para uso em agendamentos',
                 'Configuration active for schedules',
               ),
-              style: FluentTheme.of(context).typography.caption,
+              value: _isEnabled,
+              onChanged: (bool value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
             ),
           ],
         ),
@@ -238,44 +249,6 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
         SaveButton(onPressed: _save, isEditing: isEditing),
       ],
       onSubmitIntent: _save,
-    );
-  }
-
-  Widget _buildServerPortFields(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 3,
-          child: AppTextField(
-            controller: _serverController,
-            label: appLocaleString(context, 'Servidor', 'Server'),
-            hint: r'localhost ou IP\INSTANCIA',
-            validator: (String? value) {
-              if (value == null || value.trim().isEmpty) {
-                return appLocaleString(
-                  context,
-                  'Servidor é obrigatório',
-                  'Server is required',
-                );
-              }
-              return null;
-            },
-            prefixIcon: const Icon(FluentIcons.server),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: NumericField(
-            controller: _portController,
-            label: appLocaleString(context, 'Porta', 'Port'),
-            hint: '$_kDefaultSqlServerPort',
-            prefixIcon: FluentIcons.number_field,
-            minValue: 1,
-            maxValue: 65535,
-          ),
-        ),
-      ],
     );
   }
 
@@ -308,35 +281,12 @@ class _SqlServerConfigDialogState extends State<SqlServerConfigDialog> {
             },
             prefixIcon: const Icon(FluentIcons.database),
           ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: context.colors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: context.colors.info.withValues(alpha: 0.3),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  FluentIcons.info,
-                  size: 18,
-                  color: context.colors.info,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    appLocaleString(
-                      context,
-                      'Preencha servidor, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
-                      'Fill server, port, username and password, then click "Test connection" to load databases in the dropdown',
-                    ),
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ),
-              ],
+          const SizedBox(height: AppSpacing.sm),
+          AppCallout(
+            message: appLocaleString(
+              context,
+              'Preencha servidor, porta, usuário e senha, depois clique em "Testar conexão" para carregar os bancos no dropdown',
+              'Fill server, port, username and password, then click "Test connection" to load databases in the dropdown',
             ),
           ),
         ],

@@ -1,6 +1,7 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/presentation/widgets/atoms/destination_type_badge.dart';
 import 'package:backup_database/presentation/widgets/molecules/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -21,8 +22,8 @@ class DestinationListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return ConfigListItem(
       name: destination.name,
-      icon: _getTypeIcon(destination.type),
-      iconColor: _getTypeColor(destination.type),
+      icon: DestinationTypeBadge.iconOf(destination.type),
+      iconColor: DestinationTypeBadge.colorOf(destination.type),
       enabled: destination.enabled,
       onToggleEnabled: onToggleEnabled,
       onEdit: onEdit,
@@ -30,25 +31,9 @@ class DestinationListItem extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _getTypeColor(destination.type).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  _getTypeName(context, destination.type),
-                  style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: _getTypeColor(destination.type),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
+          DestinationTypeBadge(type: destination.type),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             _getConfigSummary(context, destination),
             style: FluentTheme.of(context).typography.body,
@@ -58,51 +43,6 @@ class DestinationListItem extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  IconData _getTypeIcon(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return FluentIcons.folder;
-      case DestinationType.ftp:
-        return FluentIcons.cloud_upload;
-      case DestinationType.googleDrive:
-        return FluentIcons.cloud;
-      case DestinationType.dropbox:
-        return FluentIcons.cloud;
-      case DestinationType.nextcloud:
-        return FluentIcons.cloud;
-    }
-  }
-
-  Color _getTypeColor(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return AppPalette.destinationLocal;
-      case DestinationType.ftp:
-        return AppPalette.destinationFtp;
-      case DestinationType.googleDrive:
-        return AppPalette.destinationGoogleDrive;
-      case DestinationType.dropbox:
-        return AppPalette.destinationDropbox;
-      case DestinationType.nextcloud:
-        return AppPalette.destinationNextcloud;
-    }
-  }
-
-  String _getTypeName(BuildContext context, DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return appLocaleString(context, 'Local', 'Local');
-      case DestinationType.ftp:
-        return 'FTP';
-      case DestinationType.googleDrive:
-        return 'Google Drive';
-      case DestinationType.dropbox:
-        return 'Dropbox';
-      case DestinationType.nextcloud:
-        return 'Nextcloud';
-    }
   }
 
   String _getConfigSummary(
@@ -178,7 +118,7 @@ class DestinationListItem extends StatelessWidget {
           }
           return '$serverUrl $fullPath';
       }
-    } on Object catch (e) {
+    } on Object {
       return '';
     }
   }

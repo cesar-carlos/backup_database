@@ -1,6 +1,10 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_status_chip.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:backup_database/presentation/widgets/molecules/config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -34,6 +38,16 @@ class ScheduleListItem extends StatelessWidget {
     final databaseMeta = DatabaseTypeMetadata.of(
       schedule.databaseType,
     );
+    final runNowLabel = appLocaleString(
+      context,
+      'Executar agora',
+      'Run now',
+    );
+    final transferLabel = appLocaleString(
+      context,
+      'Transferir destinos',
+      'Transfer destinations',
+    );
 
     return ConfigListItem(
       name: schedule.name,
@@ -54,13 +68,15 @@ class ScheduleListItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (onTransferDestinations != null)
-                  IconButton(
-                    icon: const Icon(FluentIcons.fabric_folder),
+                  AppIconButton(
+                    label: transferLabel,
+                    icon: FluentIcons.fabric_folder,
                     onPressed: onTransferDestinations,
                   ),
                 if (onRunNow != null)
-                  IconButton(
-                    icon: const Icon(FluentIcons.play),
+                  AppIconButton(
+                    label: runNowLabel,
+                    icon: FluentIcons.play,
                     onPressed: effectivelyDisabled ? null : onRunNow,
                   ),
               ],
@@ -69,45 +85,26 @@ class ScheduleListItem extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 4),
-          Row(
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: _getScheduleTypeColor(
-                    scheduleTypeFromString(schedule.scheduleType),
-                  ).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
+              AppStatusChip(
+                label: texts.scheduleTypeName(
+                  scheduleTypeFromString(schedule.scheduleType),
                 ),
-                child: Text(
-                  texts.scheduleTypeName(
-                    scheduleTypeFromString(schedule.scheduleType),
-                  ),
-                  style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: _getScheduleTypeColor(
-                      scheduleTypeFromString(schedule.scheduleType),
-                    ),
-                  ),
+                color: _scheduleTypeColor(
+                  scheduleTypeFromString(schedule.scheduleType),
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: databaseMeta.accentColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  databaseMeta.chipLabel,
-                  style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: databaseMeta.accentColor,
-                  ),
-                ),
+              AppStatusChip(
+                label: databaseMeta.chipLabel,
+                color: databaseMeta.accentColor,
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.xs),
           if (schedule.nextRunAt != null)
             Text(
               '${texts.nextRunLabel}: ${DateFormat('dd/MM/yyyy HH:mm').format(schedule.nextRunAt!)}',
@@ -125,16 +122,12 @@ class ScheduleListItem extends StatelessWidget {
     );
   }
 
-  Color _getScheduleTypeColor(ScheduleType type) {
-    switch (type) {
-      case ScheduleType.daily:
-        return AppPalette.scheduleDaily;
-      case ScheduleType.weekly:
-        return AppPalette.scheduleWeekly;
-      case ScheduleType.monthly:
-        return AppPalette.scheduleMonthly;
-      case ScheduleType.interval:
-        return AppPalette.scheduleInterval;
-    }
+  Color _scheduleTypeColor(ScheduleType type) {
+    return switch (type) {
+      ScheduleType.daily => AppPalette.scheduleDaily,
+      ScheduleType.weekly => AppPalette.scheduleWeekly,
+      ScheduleType.monthly => AppPalette.scheduleMonthly,
+      ScheduleType.interval => AppPalette.scheduleInterval,
+    };
   }
 }

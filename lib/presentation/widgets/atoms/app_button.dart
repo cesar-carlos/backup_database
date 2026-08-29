@@ -11,7 +11,7 @@ const double _progressStrokeWidth = 2;
 class AppButton extends StatelessWidget {
   const AppButton._({
     required this.label,
-    required this.variant,
+    required this._variant,
     super.key,
     this.onPressed,
     this.leading,
@@ -93,7 +93,7 @@ class AppButton extends StatelessWidget {
     );
   }
 
-  final _AppButtonVariant variant;
+  final _AppButtonVariant _variant;
   final String label;
   final VoidCallback? onPressed;
   final Widget? leading;
@@ -157,7 +157,7 @@ class AppButton extends StatelessWidget {
           : Text(label);
     }
 
-    final Widget button = switch (variant) {
+    final Widget button = switch (_variant) {
       _AppButtonVariant.primary => FilledButton(
         onPressed: onPressed,
         child: child,

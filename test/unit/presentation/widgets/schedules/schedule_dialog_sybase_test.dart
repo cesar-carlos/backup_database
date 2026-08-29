@@ -196,6 +196,18 @@ void main() {
     expiresAt: DateTime.now().add(const Duration(days: 365)),
   );
 
+  Future<void> openBackupTypeDropdown(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(1920, 1080));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpAndSettle();
+    final combo = find.byType(ComboBox<BackupType>);
+    expect(combo, findsOneWidget);
+    await tester.ensureVisible(combo);
+    await tester.pumpAndSettle();
+    await tester.tap(combo);
+    await tester.pumpAndSettle();
+  }
+
   group('ScheduleDialog - Sybase backup types', () {
     testWidgets(
       'new Sybase schedule shows only Full and Log (no Differential)',
@@ -221,8 +233,7 @@ void main() {
         await tester.tap(find.text('Sybase SQL Anywhere'));
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Full').at(0));
-        await tester.pumpAndSettle();
+        await openBackupTypeDropdown(tester);
 
         expect(find.text('Full'), findsAtLeast(1));
         expect(find.text('Log de Transações'), findsOneWidget);
@@ -262,8 +273,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Full').at(0));
-        await tester.pumpAndSettle();
+        await openBackupTypeDropdown(tester);
 
         expect(find.text('Incremental (Transaction Log)'), findsOneWidget);
         expect(find.text('Full'), findsAtLeast(1));

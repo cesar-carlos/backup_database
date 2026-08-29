@@ -159,45 +159,28 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               prefixIcon: const Icon(FluentIcons.tag),
             ),
             const SizedBox(height: AppSpacing.md),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: AppTextField(
-                    controller: _hostController,
-                    label: appLocaleString(context, 'Host', 'Host'),
-                    hint: appLocaleString(
-                      context,
-                      'localhost ou IP',
-                      'localhost or IP',
-                    ),
-                    validator: (String? value) {
-                      if (!_useEmbedded &&
-                          (value == null || value.trim().isEmpty)) {
-                        return appLocaleString(
-                          context,
-                          'Host é obrigatório',
-                          'Host is required',
-                        );
-                      }
-                      return null;
-                    },
-                    prefixIcon: const Icon(FluentIcons.server),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: NumericField(
-                    controller: _portController,
-                    label: appLocaleString(context, 'Porta', 'Port'),
-                    hint: '$_kDefaultFirebirdPort',
-                    prefixIcon: FluentIcons.number_field,
-                    minValue: 1,
-                    maxValue: 65535,
-                  ),
-                ),
-              ],
+            HostPortFields(
+              hostController: _hostController,
+              portController: _portController,
+              hostLabel: appLocaleString(context, 'Host', 'Host'),
+              portLabel: appLocaleString(context, 'Porta', 'Port'),
+              hostHint: appLocaleString(
+                context,
+                'localhost ou IP',
+                'localhost or IP',
+              ),
+              portHint: '$_kDefaultFirebirdPort',
+              hostEnabled: !_useEmbedded,
+              hostValidator: (String? value) {
+                if (!_useEmbedded && (value == null || value.trim().isEmpty)) {
+                  return appLocaleString(
+                    context,
+                    'Host é obrigatório',
+                    'Host is required',
+                  );
+                }
+                return null;
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             AppTextField(
@@ -378,25 +361,19 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
               style: FluentTheme.of(context).typography.caption,
             ),
             const SizedBox(height: AppSpacing.md),
-            InfoLabel(
-              label: appLocaleString(context, 'Habilitado', 'Enabled'),
-              child: ToggleSwitch(
-                checked: _isEnabled,
-                onChanged: (bool value) {
-                  setState(() {
-                    _isEnabled = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              appLocaleString(
+            LabeledToggle(
+              title: appLocaleString(context, 'Habilitado', 'Enabled'),
+              description: appLocaleString(
                 context,
                 'Configuração ativa para uso em agendamentos',
                 'Configuration active for schedules',
               ),
-              style: FluentTheme.of(context).typography.caption,
+              value: _isEnabled,
+              onChanged: (bool value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
             ),
             const SizedBox(height: AppSpacing.md),
             InfoLabel(

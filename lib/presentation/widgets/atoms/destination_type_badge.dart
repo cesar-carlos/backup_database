@@ -9,6 +9,26 @@ class DestinationTypeBadge extends StatelessWidget {
 
   final DestinationType type;
 
+  static Color colorOf(DestinationType type) {
+    return switch (type) {
+      DestinationType.local => AppPalette.destinationLocal,
+      DestinationType.ftp => AppPalette.destinationFtp,
+      DestinationType.googleDrive => AppPalette.destinationGoogleDrive,
+      DestinationType.dropbox => AppPalette.destinationDropbox,
+      DestinationType.nextcloud => AppPalette.destinationNextcloud,
+    };
+  }
+
+  static IconData iconOf(DestinationType type) {
+    return switch (type) {
+      DestinationType.local => FluentIcons.folder,
+      DestinationType.ftp => FluentIcons.cloud_upload,
+      DestinationType.googleDrive => FluentIcons.cloud,
+      DestinationType.dropbox => FluentIcons.cloud,
+      DestinationType.nextcloud => FluentIcons.cloud,
+    };
+  }
+
   String get _label {
     switch (type) {
       case DestinationType.local:
@@ -24,26 +44,11 @@ class DestinationTypeBadge extends StatelessWidget {
     }
   }
 
-  Color get _color {
-    switch (type) {
-      case DestinationType.local:
-        return AppPalette.destinationLocal;
-      case DestinationType.ftp:
-        return AppPalette.destinationFtp;
-      case DestinationType.googleDrive:
-        return AppPalette.destinationGoogleDrive;
-      case DestinationType.dropbox:
-        return AppPalette.destinationDropbox;
-      case DestinationType.nextcloud:
-        return AppPalette.destinationNextcloud;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppStatusChip(
       label: _label,
-      color: _color,
+      color: colorOf(type),
     );
   }
 }

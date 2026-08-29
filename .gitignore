@@ -87,4 +87,5 @@ scripts/__pycache__/
 *.pyc
 
 # Flutter golden failure dumps (not masters)
+test/golden/**/failures/
 widgetbook/test/failures/

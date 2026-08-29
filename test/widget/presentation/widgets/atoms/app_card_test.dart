@@ -31,7 +31,7 @@ void main() {
         .widgetList<Container>(find.byType(Container))
         .map((Container container) => container.decoration)
         .whereType<BoxDecoration>();
-    for (final BoxDecoration decoration in decorations) {
+    for (final decoration in decorations) {
       expect(decoration.boxShadow ?? const <BoxShadow>[], isEmpty);
     }
   });

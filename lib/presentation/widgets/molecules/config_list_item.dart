@@ -1,5 +1,8 @@
+import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Molecule** — generic configuration row with toggle and row actions.
@@ -35,8 +38,11 @@ class ConfigListItem extends StatelessWidget {
         (enabled
             ? AppPalette.primary
             : FluentTheme.of(context).resources.textFillColorSecondary);
+    final editLabel = appLocaleString(context, 'Editar', 'Edit');
+    final duplicateLabel = appLocaleString(context, 'Duplicar', 'Duplicate');
+    final deleteLabel = appLocaleString(context, 'Excluir', 'Delete');
 
-    return Card(
+    return AppCard(
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: enabled
@@ -62,15 +68,25 @@ class ConfigListItem extends StatelessWidget {
               ToggleSwitch(checked: enabled, onChanged: onToggleEnabled),
             if (onEdit != null) ...[
               const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                icon: const Icon(FluentIcons.edit),
+              AppIconButton(
+                label: editLabel,
+                icon: FluentIcons.edit,
                 onPressed: onEdit,
+              ),
+            ],
+            if (onDuplicate != null) ...[
+              const SizedBox(width: AppSpacing.xs),
+              AppIconButton(
+                label: duplicateLabel,
+                icon: FluentIcons.copy,
+                onPressed: onDuplicate,
               ),
             ],
             if (onDelete != null) ...[
               const SizedBox(width: AppSpacing.xs),
-              IconButton(
-                icon: const Icon(FluentIcons.delete),
+              AppIconButton(
+                label: deleteLabel,
+                icon: FluentIcons.delete,
                 onPressed: onDelete,
               ),
             ],

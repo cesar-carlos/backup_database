@@ -1,5 +1,7 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
+import 'package:backup_database/presentation/widgets/molecules/labeled_toggle.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 const double _factTileMinWidth = 180;
@@ -23,46 +25,12 @@ class SettingsToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final typography = FluentTheme.of(context).typography;
-    final captionStyle = typography.caption;
-    final titleStyle = typography.body?.copyWith(fontWeight: FontWeight.w600);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: titleStyle),
-                  if (description != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(description!, style: captionStyle),
-                  ],
-                  if (disabledReason != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      disabledReason!,
-                      style: captionStyle?.copyWith(
-                        color: context.colors.warning,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            ToggleSwitch(
-              checked: value,
-              onChanged: onChanged,
-              semanticLabel: title,
-            ),
-          ],
-        ),
-      ],
+    return LabeledToggle(
+      title: title,
+      value: value,
+      description: description,
+      onChanged: onChanged,
+      disabledReason: disabledReason,
     );
   }
 }
@@ -161,16 +129,10 @@ class SettingsIconAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
+    return AppIconButton(
       label: label,
-      child: Tooltip(
-        message: label,
-        child: IconButton(
-          icon: Icon(icon),
-          onPressed: onPressed,
-        ),
-      ),
+      icon: icon,
+      onPressed: onPressed,
     );
   }
 }

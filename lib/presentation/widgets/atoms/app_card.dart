@@ -77,7 +77,7 @@ class _AppCardSurface extends StatelessWidget {
       overlayAlpha = 0;
     }
 
-    final Color? backgroundColor = overlayAlpha == 0
+    final backgroundColor = overlayAlpha == 0
         ? null
         : Color.alphaBlend(
             context.colors.outline.withValues(alpha: overlayAlpha),
