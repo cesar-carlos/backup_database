@@ -14,6 +14,8 @@ class FakeRemoteDatabaseConfigConnectionManager extends ConnectionManager {
   int listRemoteDatabaseConfigsCallCount = 0;
   int testRemoteDatabaseConnectionCallCount = 0;
   int deleteRemoteDatabaseConfigCallCount = 0;
+  int createRemoteDatabaseConfigCallCount = 0;
+  int updateRemoteDatabaseConfigCallCount = 0;
 
   RemoteDatabaseType? lastListType;
   String? lastTestConfigId;
@@ -25,6 +27,8 @@ class FakeRemoteDatabaseConfigConnectionManager extends ConnectionManager {
 
   rd.Result<TestDatabaseConnectionResult>? testConnectionResult;
   rd.Result<DatabaseConfigMutationResult>? deleteConfigResult;
+  rd.Result<DatabaseConfigMutationResult>? createConfigResult;
+  rd.Result<DatabaseConfigMutationResult>? updateConfigResult;
 
   @override
   bool get isConnected => simulateConnected;
@@ -91,6 +95,48 @@ class FakeRemoteDatabaseConfigConnectionManager extends ConnectionManager {
             operation: 'deleted',
             databaseType: databaseType,
             configId: configId,
+          ),
+        );
+  }
+
+  @override
+  Future<rd.Result<DatabaseConfigMutationResult>> createRemoteDatabaseConfig({
+    required RemoteDatabaseType databaseType,
+    required Map<String, dynamic> config,
+    String? idempotencyKey,
+  }) async {
+    createRemoteDatabaseConfigCallCount++;
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    return createConfigResult ??
+        rd.Success(
+          DatabaseConfigMutationResult(
+            operation: 'created',
+            databaseType: databaseType,
+            configId: (config['id'] as String?) ?? 'new-1',
+            config: config,
+          ),
+        );
+  }
+
+  @override
+  Future<rd.Result<DatabaseConfigMutationResult>> updateRemoteDatabaseConfig({
+    required RemoteDatabaseType databaseType,
+    required Map<String, dynamic> config,
+    String? idempotencyKey,
+  }) async {
+    updateRemoteDatabaseConfigCallCount++;
+    if (!isConnected) {
+      return rd.Failure(Exception('ConnectionManager not connected'));
+    }
+    return updateConfigResult ??
+        rd.Success(
+          DatabaseConfigMutationResult(
+            operation: 'updated',
+            databaseType: databaseType,
+            configId: (config['id'] as String?) ?? 'upd-1',
+            config: config,
           ),
         );
   }

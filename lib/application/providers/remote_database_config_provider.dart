@@ -1,7 +1,11 @@
+import 'package:backup_database/application/dtos/remote/remote_db_kind.dart';
+import 'package:backup_database/application/dtos/remote/remote_dto_mappers.dart';
 import 'package:backup_database/application/providers/async_state_mixin.dart';
-import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
+
+export 'package:backup_database/application/dtos/remote/remote_db_kind.dart'
+    show RemoteDbKind, remoteDatabaseTypeLabel;
 
 class RemoteDatabaseConfigEntry {
   const RemoteDatabaseConfigEntry({
@@ -13,7 +17,7 @@ class RemoteDatabaseConfigEntry {
 
   final String id;
   final String name;
-  final RemoteDatabaseType databaseType;
+  final RemoteDbKind databaseType;
 
   /// §audit-2026-05-28 wave 3 (P2): payload bruto retornado pelo
   /// servidor (`listRemoteDatabaseConfigs`). Necessário para
@@ -26,7 +30,7 @@ class RemoteDatabaseConfigEntry {
   String get listKey => '${databaseType.wireName}|$id';
 
   static RemoteDatabaseConfigEntry? fromMap(
-    RemoteDatabaseType type,
+    RemoteDbKind type,
     Map<String, dynamic> map,
   ) {
     final id = map['id'];
@@ -42,13 +46,6 @@ class RemoteDatabaseConfigEntry {
     );
   }
 }
-
-String remoteDatabaseTypeLabel(RemoteDatabaseType type) => switch (type) {
-  RemoteDatabaseType.sybase => 'Sybase',
-  RemoteDatabaseType.sqlServer => 'SQL Server',
-  RemoteDatabaseType.postgres => 'PostgreSQL',
-  RemoteDatabaseType.firebird => 'Firebird',
-};
 
 class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
   RemoteDatabaseConfigProvider(this._connectionManager);
@@ -66,9 +63,9 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
 
   bool isDeleting(String listKey) => _deletingKeys.contains(listKey);
 
-  Iterable<RemoteDatabaseType> get _typesToLoad sync* {
-    for (final type in RemoteDatabaseType.values) {
-      if (type == RemoteDatabaseType.firebird &&
+  Iterable<RemoteDbKind> get _typesToLoad sync* {
+    for (final type in RemoteDbKind.values) {
+      if (type == RemoteDbKind.firebird &&
           !_connectionManager.isFirebirdSupported) {
         continue;
       }
@@ -87,7 +84,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
         final merged = <RemoteDatabaseConfigEntry>[];
         for (final type in _typesToLoad) {
           final result = await _connectionManager.listRemoteDatabaseConfigs(
-            type,
+            remoteDbKindToProtocol(type),
           );
           result.fold(
             (list) {
@@ -117,7 +114,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
     notifyListeners();
     try {
       final result = await _connectionManager.testRemoteDatabaseConnection(
-        databaseType: entry.databaseType,
+        databaseType: remoteDbKindToProtocol(entry.databaseType),
         databaseConfigId: entry.id,
       );
       return result.fold(
@@ -147,7 +144,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
   /// Recarrega `_entries` após sucesso para a lista refletir o novo
   /// item sem precisar de pull manual da UI.
   Future<String?> createConfig({
-    required RemoteDatabaseType databaseType,
+    required RemoteDbKind databaseType,
     required Map<String, dynamic> config,
     String? idempotencyKey,
   }) async {
@@ -155,7 +152,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
       return 'Conecte-se a um servidor para criar bancos.';
     }
     final result = await _connectionManager.createRemoteDatabaseConfig(
-      databaseType: databaseType,
+      databaseType: remoteDbKindToProtocol(databaseType),
       config: config,
       idempotencyKey: idempotencyKey,
     );
@@ -175,7 +172,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
   /// Atualiza uma config remota existente. Mesmas semânticas de
   /// [createConfig].
   Future<String?> updateConfig({
-    required RemoteDatabaseType databaseType,
+    required RemoteDbKind databaseType,
     required Map<String, dynamic> config,
     String? idempotencyKey,
   }) async {
@@ -183,7 +180,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
       return 'Conecte-se a um servidor para atualizar bancos.';
     }
     final result = await _connectionManager.updateRemoteDatabaseConfig(
-      databaseType: databaseType,
+      databaseType: remoteDbKindToProtocol(databaseType),
       config: config,
       idempotencyKey: idempotencyKey,
     );
@@ -212,7 +209,7 @@ class RemoteDatabaseConfigProvider extends ChangeNotifier with AsyncStateMixin {
         genericErrorMessage: 'Erro ao excluir banco do servidor',
         action: () async {
           final result = await _connectionManager.deleteRemoteDatabaseConfig(
-            databaseType: entry.databaseType,
+            databaseType: remoteDbKindToProtocol(entry.databaseType),
             configId: entry.id,
           );
           return result.fold(

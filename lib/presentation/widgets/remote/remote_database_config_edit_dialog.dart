@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/remote_database_config_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
-import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:uuid/uuid.dart';
 
@@ -35,7 +35,7 @@ class RemoteDatabaseConfigEditDialog extends StatefulWidget {
   /// o `databaseType` via picker antes de abrir.
   factory RemoteDatabaseConfigEditDialog.create({
     required RemoteDatabaseConfigProvider provider,
-    required RemoteDatabaseType databaseType,
+    required RemoteDbKind databaseType,
     Key? key,
   }) {
     return RemoteDatabaseConfigEditDialog._(
@@ -50,7 +50,7 @@ class RemoteDatabaseConfigEditDialog extends StatefulWidget {
   /// devolvidos pelo servidor (`listRemoteDatabaseConfigs`).
   factory RemoteDatabaseConfigEditDialog.edit({
     required RemoteDatabaseConfigProvider provider,
-    required RemoteDatabaseType databaseType,
+    required RemoteDbKind databaseType,
     required String configId,
     required Map<String, dynamic> initial,
     Key? key,
@@ -68,7 +68,7 @@ class RemoteDatabaseConfigEditDialog extends StatefulWidget {
   static Future<bool?> show(
     BuildContext context, {
     required RemoteDatabaseConfigProvider provider,
-    required RemoteDatabaseType databaseType,
+    required RemoteDbKind databaseType,
     String? editingConfigId,
     Map<String, dynamic>? initial,
   }) {
@@ -90,7 +90,7 @@ class RemoteDatabaseConfigEditDialog extends StatefulWidget {
   }
 
   final RemoteDatabaseConfigProvider provider;
-  final RemoteDatabaseType databaseType;
+  final RemoteDbKind databaseType;
   final RemoteDatabaseConfigEditMode mode;
   final Map<String, dynamic>? initial;
   final String? editingConfigId;
@@ -113,7 +113,7 @@ class _RemoteDatabaseConfigEditDialogState
   bool _saving = false;
   String? _errorMessage;
 
-  bool get _isFirebird => widget.databaseType == RemoteDatabaseType.firebird;
+  bool get _isFirebird => widget.databaseType == RemoteDbKind.firebird;
   bool get _isEdit => widget.mode == RemoteDatabaseConfigEditMode.edit;
 
   @override
@@ -170,11 +170,11 @@ class _RemoteDatabaseConfigEditDialogState
     return v.toString();
   }
 
-  int _defaultPortFor(RemoteDatabaseType type) => switch (type) {
-    RemoteDatabaseType.sqlServer => 1433,
-    RemoteDatabaseType.postgres => 5432,
-    RemoteDatabaseType.sybase => 5000,
-    RemoteDatabaseType.firebird => 3050,
+  int _defaultPortFor(RemoteDbKind type) => switch (type) {
+    RemoteDbKind.sqlServer => 1433,
+    RemoteDbKind.postgres => 5432,
+    RemoteDbKind.sybase => 5000,
+    RemoteDbKind.firebird => 3050,
   };
 
   String? _validate() {
@@ -284,7 +284,7 @@ class _RemoteDatabaseConfigEditDialogState
   @override
   Widget build(BuildContext context) {
     final typeLabel = remoteDatabaseTypeLabel(widget.databaseType);
-    return ContentDialog(
+    return AppDialogShell(
       constraints: const BoxConstraints(maxWidth: 560),
       title: Text(
         _isEdit
@@ -299,175 +299,104 @@ class _RemoteDatabaseConfigEditDialogState
                 'New remote database ($typeLabel)',
               ),
       ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _LabeledField(
-              label: appLocaleString(context, 'Nome', 'Name'),
-              controller: _nameCtrl,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _LabeledField(
-                    label: appLocaleString(context, 'Host', 'Host'),
-                    controller: _hostCtrl,
-                    enabled: !_saving,
-                  ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            label: appLocaleString(context, 'Nome', 'Name'),
+            controller: _nameCtrl,
+            enabled: !_saving,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          HostPortFields(
+            hostController: _hostCtrl,
+            portController: _portCtrl,
+            hostLabel: appLocaleString(context, 'Host', 'Host'),
+            portLabel: appLocaleString(context, 'Porta', 'Port'),
+            hostEnabled: !_saving,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            label: appLocaleString(context, 'Banco / Database', 'Database'),
+            controller: _databaseCtrl,
+            enabled: !_saving,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  label: appLocaleString(context, 'Usuário', 'Username'),
+                  controller: _usernameCtrl,
+                  enabled: !_saving,
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _LabeledField(
-                    label: appLocaleString(context, 'Porta', 'Port'),
-                    controller: _portCtrl,
-                    enabled: !_saving,
-                    keyboardType: TextInputType.number,
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: AppTextField(
+                  label: _isEdit
+                      ? appLocaleString(
+                          context,
+                          'Senha (vazio = manter)',
+                          'Password (empty = keep)',
+                        )
+                      : appLocaleString(context, 'Senha', 'Password'),
+                  controller: _passwordCtrl,
+                  enabled: !_saving,
+                  obscureText: true,
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            _LabeledField(
-              label: appLocaleString(context, 'Banco / Database', 'Database'),
-              controller: _databaseCtrl,
-              enabled: !_saving,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: _LabeledField(
-                    label: appLocaleString(context, 'Usuário', 'Username'),
-                    controller: _usernameCtrl,
-                    enabled: !_saving,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _LabeledField(
-                    label: _isEdit
-                        ? appLocaleString(
-                            context,
-                            'Senha (vazio = manter)',
-                            'Password (empty = keep)',
-                          )
-                        : appLocaleString(context, 'Senha', 'Password'),
-                    controller: _passwordCtrl,
-                    enabled: !_saving,
-                    obscureText: true,
-                  ),
-                ),
-              ],
-            ),
-            if (_isFirebird) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _LabeledField(
-                label: _isEdit
-                    ? appLocaleString(
-                        context,
-                        'Crypt key (vazio = manter)',
-                        'Crypt key (empty = keep)',
-                      )
-                    : appLocaleString(
-                        context,
-                        'Crypt key (opcional)',
-                        'Crypt key (optional)',
-                      ),
-                controller: _cryptKeyCtrl,
-                enabled: !_saving,
-                obscureText: true,
               ),
             ],
+          ),
+          if (_isFirebird) ...[
             const SizedBox(height: AppSpacing.sm),
-            _LabeledField(
-              label: appLocaleString(
-                context,
-                'Pasta de backup (servidor) — opcional',
-                'Backup folder (server) — optional',
-              ),
-              controller: _backupFolderCtrl,
-              enabled: !_saving,
-            ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              SelectableText.rich(
-                TextSpan(
-                  text: appLocaleString(context, 'Erro: ', 'Error: '),
-                  style: FluentTheme.of(context).typography.body?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: context.colors.danger,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: _errorMessage,
-                      style: TextStyle(
-                        color: context.colors.danger,
-                        fontWeight: FontWeight.normal,
-                      ),
+            AppTextField(
+              label: _isEdit
+                  ? appLocaleString(
+                      context,
+                      'Crypt key (vazio = manter)',
+                      'Crypt key (empty = keep)',
+                    )
+                  : appLocaleString(
+                      context,
+                      'Crypt key (opcional)',
+                      'Crypt key (optional)',
                     ),
-                  ],
-                ),
-              ),
-            ],
+              controller: _cryptKeyCtrl,
+              enabled: !_saving,
+              obscureText: true,
+            ),
           ],
-        ),
+          const SizedBox(height: AppSpacing.sm),
+          AppTextField(
+            label: appLocaleString(
+              context,
+              'Pasta de backup (servidor) — opcional',
+              'Backup folder (server) — optional',
+            ),
+            controller: _backupFolderCtrl,
+            enabled: !_saving,
+          ),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            AppCallout(
+              message: _errorMessage!,
+              tone: AppCalloutTone.danger,
+            ),
+          ],
+        ],
       ),
       actions: [
-        Button(
+        CancelButton(
           onPressed: _saving ? null : () => Navigator.of(context).pop(false),
-          child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _onSubmit,
-          child: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: ProgressRing(strokeWidth: 2),
-                )
-              : Text(
-                  _isEdit
-                      ? appLocaleString(context, 'Salvar', 'Save')
-                      : appLocaleString(context, 'Criar', 'Create'),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.controller,
-    this.enabled = true,
-    this.obscureText = false,
-    this.keyboardType,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final bool enabled;
-  final bool obscureText;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: FluentTheme.of(context).typography.body),
-        const SizedBox(height: AppSpacing.xs),
-        TextBox(
-          controller: controller,
-          enabled: enabled,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
+        AppButton.primary(
+          label: _isEdit
+              ? appLocaleString(context, 'Salvar', 'Save')
+              : appLocaleString(context, 'Criar', 'Create'),
+          onPressed: _saving ? null : () => unawaited(_onSubmit()),
+          isLoading: _saving,
         ),
       ],
     );

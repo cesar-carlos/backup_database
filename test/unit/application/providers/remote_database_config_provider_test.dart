@@ -84,7 +84,7 @@ void main() {
       const entry = RemoteDatabaseConfigEntry(
         id: 'sql-1',
         name: 'Prod',
-        databaseType: RemoteDatabaseType.sqlServer,
+        databaseType: RemoteDbKind.sqlServer,
       );
       connectionManager.testConnectionResult = rd.Success(
         TestDatabaseConnectionResult(
@@ -106,7 +106,7 @@ void main() {
       const entry = RemoteDatabaseConfigEntry(
         id: 'syb-1',
         name: 'ERP',
-        databaseType: RemoteDatabaseType.sybase,
+        databaseType: RemoteDbKind.sybase,
       );
       connectionManager.testConnectionResult = rd.Failure(
         Exception('testRemoteDatabaseConnection timeout'),
@@ -115,6 +115,18 @@ void main() {
       final message = await provider.testConnection(entry);
 
       expect(message, contains('timeout'));
+    });
+  });
+
+  group('RemoteDatabaseConfigProvider.createConfig', () {
+    test('should return null when the server confirms creation', () async {
+      final error = await provider.createConfig(
+        databaseType: RemoteDbKind.sqlServer,
+        config: const {'id': 'sql-new', 'name': 'New'},
+      );
+
+      expect(error, isNull);
+      expect(connectionManager.createRemoteDatabaseConfigCallCount, 1);
     });
   });
 }

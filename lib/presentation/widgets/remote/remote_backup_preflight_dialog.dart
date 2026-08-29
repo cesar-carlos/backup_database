@@ -1,11 +1,12 @@
+import 'package:backup_database/application/dtos/remote/remote_preflight_view.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
-import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 Future<bool?> showRemoteBackupPreflightDialog({
   required BuildContext context,
-  required PreflightResult preflight,
+  required RemotePreflightView preflight,
 }) {
   final isBlocked = preflight.isBlocked;
   return showDialog<bool?>(
@@ -24,7 +25,7 @@ class RemoteBackupPreflightDialog extends StatelessWidget {
     super.key,
   });
 
-  final PreflightResult preflight;
+  final RemotePreflightView preflight;
   final bool isBlocked;
 
   @override
@@ -33,7 +34,7 @@ class RemoteBackupPreflightDialog extends StatelessWidget {
     final failedChecks = preflight.checks.where((c) => !c.passed).toList()
       ..sort(_compareChecksBySeverity);
 
-    return ContentDialog(
+    return AppDialogShell(
       title: Text(
         isBlocked
             ? appLocaleString(
@@ -81,29 +82,23 @@ class RemoteBackupPreflightDialog extends StatelessWidget {
       ),
       actions: isBlocked
           ? [
-              FilledButton(
+              AppButton.primary(
+                label: appLocaleString(context, 'Fechar', 'Close'),
                 onPressed: () => Navigator.of(context).pop(),
-                child: Text(
-                  appLocaleString(context, 'Fechar', 'Close'),
-                ),
               ),
             ]
           : [
-              Button(
+              AppButton(
+                label: appLocaleString(context, 'Cancelar', 'Cancel'),
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(
-                  appLocaleString(context, 'Cancelar', 'Cancel'),
-                ),
               ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(
-                  appLocaleString(
-                    context,
-                    'Continuar mesmo assim',
-                    'Continue anyway',
-                  ),
+              AppButton.primary(
+                label: appLocaleString(
+                  context,
+                  'Continuar mesmo assim',
+                  'Continue anyway',
                 ),
+                onPressed: () => Navigator.of(context).pop(true),
               ),
             ],
     );
@@ -111,13 +106,13 @@ class RemoteBackupPreflightDialog extends StatelessWidget {
 }
 
 int _compareChecksBySeverity(
-  PreflightCheckResult a,
-  PreflightCheckResult b,
+  RemotePreflightCheckView a,
+  RemotePreflightCheckView b,
 ) {
-  int rank(PreflightSeverity s) => switch (s) {
-    PreflightSeverity.blocking => 0,
-    PreflightSeverity.warning => 1,
-    PreflightSeverity.info => 2,
+  int rank(RemotePreflightSeverity s) => switch (s) {
+    RemotePreflightSeverity.blocking => 0,
+    RemotePreflightSeverity.warning => 1,
+    RemotePreflightSeverity.info => 2,
   };
   return rank(a.severity).compareTo(rank(b.severity));
 }
@@ -128,7 +123,7 @@ class _PreflightCheckRow extends StatelessWidget {
     required this.colors,
   });
 
-  final PreflightCheckResult check;
+  final RemotePreflightCheckView check;
   final AppSemanticColors colors;
 
   @override
@@ -181,9 +176,9 @@ class _PreflightCheckRow extends StatelessWidget {
       return colors.success;
     }
     return switch (check.severity) {
-      PreflightSeverity.blocking => colors.danger,
-      PreflightSeverity.warning => colors.warning,
-      PreflightSeverity.info => colors.info,
+      RemotePreflightSeverity.blocking => colors.danger,
+      RemotePreflightSeverity.warning => colors.warning,
+      RemotePreflightSeverity.info => colors.info,
     };
   }
 
@@ -192,9 +187,9 @@ class _PreflightCheckRow extends StatelessWidget {
       return FluentIcons.accept;
     }
     return switch (check.severity) {
-      PreflightSeverity.blocking => FluentIcons.cancel,
-      PreflightSeverity.warning => FluentIcons.warning,
-      PreflightSeverity.info => FluentIcons.info,
+      RemotePreflightSeverity.blocking => FluentIcons.cancel,
+      RemotePreflightSeverity.warning => FluentIcons.warning,
+      RemotePreflightSeverity.info => FluentIcons.info,
     };
   }
 
@@ -203,17 +198,17 @@ class _PreflightCheckRow extends StatelessWidget {
       return appLocaleString(context, 'OK', 'OK');
     }
     return switch (check.severity) {
-      PreflightSeverity.blocking => appLocaleString(
+      RemotePreflightSeverity.blocking => appLocaleString(
         context,
         'Bloqueio',
         'Blocking',
       ),
-      PreflightSeverity.warning => appLocaleString(
+      RemotePreflightSeverity.warning => appLocaleString(
         context,
         'Aviso',
         'Warning',
       ),
-      PreflightSeverity.info => appLocaleString(
+      RemotePreflightSeverity.info => appLocaleString(
         context,
         'Informação',
         'Info',

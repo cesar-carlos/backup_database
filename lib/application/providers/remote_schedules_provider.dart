@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
 
+import 'package:backup_database/application/dtos/remote/queued_execution_view.dart';
+import 'package:backup_database/application/dtos/remote/remote_dto_mappers.dart';
+import 'package:backup_database/application/dtos/remote/remote_preflight_view.dart';
+import 'package:backup_database/application/dtos/remote/run_diagnostics_view.dart';
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
@@ -14,9 +18,7 @@ import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
-import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
 import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
-import 'package:backup_database/infrastructure/protocol/preflight_messages.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
@@ -35,7 +37,7 @@ class RemotePreflightRunResult {
   });
 
   final RemotePreflightUiAction action;
-  final PreflightResult? preflight;
+  final RemotePreflightView? preflight;
   final String? errorMessage;
 
   bool get isBlocked => preflight?.isBlocked ?? false;
@@ -125,7 +127,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   double? _transferProgress;
   bool _isTransferringFile = false;
 
-  List<QueuedExecution> _executionQueue = [];
+  List<QueuedExecutionView> _executionQueue = [];
   bool _isLoadingExecutionQueue = false;
   String? _executionQueueError;
 
@@ -146,7 +148,7 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   String? get transferMessage => _transferMessage;
   double? get transferProgress => _transferProgress;
   bool get isTransferringFile => _isTransferringFile;
-  List<QueuedExecution> get executionQueue => _executionQueue;
+  List<QueuedExecutionView> get executionQueue => _executionQueue;
   bool get isLoadingExecutionQueue => _isLoadingExecutionQueue;
   String? get executionQueueError => _executionQueueError;
 
@@ -198,7 +200,9 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     final result = await _connectionManager.getExecutionQueue();
     result.fold(
       (snapshot) {
-        _executionQueue = List<QueuedExecution>.from(snapshot.queue);
+        _executionQueue = snapshot.queue
+            .map(queuedExecutionViewFromProtocol)
+            .toList();
         _isLoadingExecutionQueue = false;
         _executionQueueError = null;
       },
@@ -431,12 +435,12 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         if (preflight.isBlocked || preflight.hasWarnings) {
           return RemotePreflightRunResult(
             action: RemotePreflightUiAction.showDialog,
-            preflight: preflight,
+            preflight: remotePreflightViewFromProtocol(preflight),
           );
         }
         return RemotePreflightRunResult(
           action: RemotePreflightUiAction.proceed,
-          preflight: preflight,
+          preflight: remotePreflightViewFromProtocol(preflight),
         );
       },
       (exception) {
@@ -445,6 +449,43 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           action: RemotePreflightUiAction.proceed,
         );
       },
+    );
+  }
+
+  Future<RunDiagnosticsView> loadRunDiagnostics(
+    String runId, {
+    bool includeErrorDetails = true,
+    int maxLogLines = 500,
+  }) async {
+    final logsResult = await _connectionManager.getRunLogs(
+      runId: runId,
+      maxLines: maxLogLines,
+    );
+    final detailsResult = includeErrorDetails
+        ? await _connectionManager.getRunErrorDetails(runId: runId)
+        : null;
+
+    RunDiagnosticsLogsView? logs;
+    String? logsError;
+    logsResult.fold(
+      (value) => logs = runDiagnosticsLogsFromProtocol(value),
+      (failure) => logsError = failureUserMessage(failure),
+    );
+
+    RunDiagnosticsErrorView? errorDetails;
+    String? errorDetailsError;
+    if (detailsResult != null) {
+      detailsResult.fold(
+        (value) => errorDetails = runDiagnosticsErrorFromProtocol(value),
+        (failure) => errorDetailsError = failureUserMessage(failure),
+      );
+    }
+
+    return RunDiagnosticsView(
+      logs: logs,
+      logsError: logsError,
+      errorDetails: errorDetails,
+      errorDetailsError: errorDetailsError,
     );
   }
 
