@@ -9,13 +9,26 @@ import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
-import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_behavior.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_oauth_dialog.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftp_advanced.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftp_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_google_drive_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_google_oauth_dialog.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_identity.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_labels.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_local_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_nextcloud_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_oauth_credentials_card.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_oauth_status_card.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_type_meta.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
@@ -30,7 +43,8 @@ class DestinationDialog extends StatefulWidget {
   }) {
     return showDialog<BackupDestination>(
       context: context,
-      builder: (context) => DestinationDialog(destination: destination),
+      builder: (BuildContext context) =>
+          DestinationDialog(destination: destination),
     );
   }
 
@@ -38,22 +52,24 @@ class DestinationDialog extends StatefulWidget {
   State<DestinationDialog> createState() => _DestinationDialogState();
 }
 
-enum _FtpIntegrityPreset { quick, balanced, maximum }
-
 class _DestinationDialogState extends State<DestinationDialog> {
-  final _formKey = GlobalKey<FormState>();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   late DestinationType _selectedType;
-  final _nameController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
 
-  final _localPathController = TextEditingController();
+  final TextEditingController _localPathController = TextEditingController();
   bool _createSubfoldersByDate = true;
 
-  final _ftpHostController = TextEditingController();
-  final _ftpPortController = TextEditingController(text: '21');
-  final _ftpUsernameController = TextEditingController();
-  final _ftpPasswordController = TextEditingController();
-  final _ftpRemotePathController = TextEditingController(text: '/backups');
+  final TextEditingController _ftpHostController = TextEditingController();
+  final TextEditingController _ftpPortController = TextEditingController(
+    text: '21',
+  );
+  final TextEditingController _ftpUsernameController = TextEditingController();
+  final TextEditingController _ftpPasswordController = TextEditingController();
+  final TextEditingController _ftpRemotePathController = TextEditingController(
+    text: '/backups',
+  );
   bool _useFtps = false;
   bool _enableResumeFtp = true;
   bool _keepPartOnCancelFtp = true;
@@ -63,25 +79,38 @@ class _DestinationDialogState extends State<DestinationDialog> {
   bool _enableVerboseLogFtp = false;
   bool _enableStrongIntegrityValidationFtp = false;
   bool _enableReadBackValidationFtp = false;
-  _FtpIntegrityPreset _ftpIntegrityPreset = _FtpIntegrityPreset.quick;
-  final _connectionTimeoutSecondsController = TextEditingController();
-  final _uploadTimeoutMinutesController = TextEditingController();
-  final _maxAttemptsFtpController = TextEditingController();
+  FtpIntegrityPreset _ftpIntegrityPreset = FtpIntegrityPreset.quick;
+  final TextEditingController _connectionTimeoutSecondsController =
+      TextEditingController();
+  final TextEditingController _uploadTimeoutMinutesController =
+      TextEditingController();
+  final TextEditingController _maxAttemptsFtpController =
+      TextEditingController();
 
-  final _googleFolderNameController = TextEditingController(text: 'Backups');
+  final TextEditingController _googleFolderNameController =
+      TextEditingController(text: 'Backups');
 
-  final _dropboxFolderPathController = TextEditingController();
-  final _dropboxFolderNameController = TextEditingController(text: 'Backups');
+  final TextEditingController _dropboxFolderPathController =
+      TextEditingController();
+  final TextEditingController _dropboxFolderNameController =
+      TextEditingController(text: 'Backups');
 
-  final _nextcloudServerUrlController = TextEditingController();
-  final _nextcloudUsernameController = TextEditingController();
-  final _nextcloudAppPasswordController = TextEditingController();
-  final _nextcloudRemotePathController = TextEditingController(text: '/');
-  final _nextcloudFolderNameController = TextEditingController(text: 'Backups');
+  final TextEditingController _nextcloudServerUrlController =
+      TextEditingController();
+  final TextEditingController _nextcloudUsernameController =
+      TextEditingController();
+  final TextEditingController _nextcloudAppPasswordController =
+      TextEditingController();
+  final TextEditingController _nextcloudRemotePathController =
+      TextEditingController(text: '/');
+  final TextEditingController _nextcloudFolderNameController =
+      TextEditingController(text: 'Backups');
   bool _nextcloudAllowInvalidCertificates = false;
   NextcloudAuthMode _nextcloudAuthMode = NextcloudAuthMode.appPassword;
 
-  final _retentionDaysController = TextEditingController(text: '7');
+  final TextEditingController _retentionDaysController = TextEditingController(
+    text: '7',
+  );
   bool _isEnabled = true;
   bool _isTestingFtpConnection = false;
   bool _isTestingNextcloudConnection = false;
@@ -90,7 +119,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
   String _dialogLabel(String ptBr, String enUs) {
     if (!mounted) return enUs;
-    return appLocaleString(context, ptBr, enUs);
+    return destinationDialogLabel(context, ptBr, enUs);
   }
 
   @override
@@ -122,7 +151,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           _useFtps = (config['useFtps'] as bool?) ?? false;
           _enableResumeFtp = (config['enableResume'] as bool?) ?? true;
           _keepPartOnCancelFtp = (config['keepPartOnCancel'] as bool?) ?? true;
-          _whenResumeNotSupportedFtp = _parseWhenResumeNotSupported(
+          _whenResumeNotSupportedFtp = parseFtpWhenResumeNotSupported(
             config['whenResumeNotSupported'] as String?,
           );
           _enableVerboseLogFtp = (config['enableVerboseLog'] as bool?) ?? false;
@@ -132,7 +161,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
               (config['enableReadBackValidation'] as bool?) ?? false;
           _ftpAllowInvalidCertificates =
               (config['allowInvalidCertificates'] as bool?) ?? true;
-          _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+          _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
             enableStrongIntegrityValidation:
                 _enableStrongIntegrityValidationFtp,
             enableReadBackValidation: _enableReadBackValidationFtp,
@@ -172,7 +201,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
             (config['appPassword'] as String?) ?? '',
           );
           _nextcloudAuthMode = NextcloudAuthMode.values.firstWhere(
-            (e) => e.name == ((config['authMode'] as String?) ?? ''),
+            (NextcloudAuthMode e) =>
+                e.name == ((config['authMode'] as String?) ?? ''),
             orElse: () => NextcloudAuthMode.appPassword,
           );
           _nextcloudRemotePathController.text =
@@ -229,8 +259,8 @@ class _DestinationDialogState extends State<DestinationDialog> {
     return Row(
       children: [
         Icon(
-          _getTypeIcon(_selectedType),
-          color: _getTypeColor(_selectedType),
+          DestinationDialogTypeMeta.iconOf(_selectedType),
+          color: DestinationDialogTypeMeta.colorOf(_selectedType),
         ),
         const SizedBox(width: 12),
         Text(
@@ -249,309 +279,58 @@ class _DestinationDialogState extends State<DestinationDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox.shrink(),
-          AppSectionCard(
-            title: _dialogLabel('Identificação', 'Identity'),
-            description: _dialogLabel(
-              'Defina o tipo e o nome usados para identificar este destino na operação.',
-              'Define the type and display name used to identify this destination in operations.',
-            ),
-            trailing: DestinationTypeBadge(type: _selectedType),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTypeSelector(),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Consumer<LicenseProvider>(
-            builder: (context, licenseProvider, child) {
-              final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
-                LicenseFeatures.googleDrive,
-              );
-              final hasDropbox = licenseProvider.isFeatureUnlocked(
-                LicenseFeatures.dropbox,
-              );
-              final hasNextcloud = licenseProvider.isFeatureUnlocked(
-                LicenseFeatures.nextcloud,
-              );
-
-              final isGoogleDriveBlocked =
-                  _selectedType == DestinationType.googleDrive &&
-                  !hasGoogleDrive;
-              final isDropboxBlocked =
-                  _selectedType == DestinationType.dropbox && !hasDropbox;
-              final isNextcloudBlocked =
-                  _selectedType == DestinationType.nextcloud && !hasNextcloud;
-
-              if (isGoogleDriveBlocked ||
-                  isDropboxBlocked ||
-                  isNextcloudBlocked) {
-                return InfoBar(
-                  severity: InfoBarSeverity.warning,
-                  isLong: true,
-                  title: Text(
-                    _dialogLabel(
-                      'Recursos premium inativos',
-                      'Premium features inactive',
-                    ),
-                  ),
-                  content: Text(
-                    _dialogLabel(
-                      'Este destino permanece salvo, mas não executa até '
-                          'ativar uma licença premium.',
-                      'This destination stays saved, but will not run until a '
-                          'premium license is activated.',
-                    ),
-                  ),
-                  action: Button(
-                    child: Text(
-                      _dialogLabel('Ver licenciamento', 'View licensing'),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                );
-              }
-
-              return const SizedBox.shrink();
+          DestinationDialogIdentitySection(
+            selectedType: _selectedType,
+            isEditing: isEditing,
+            nameController: _nameController,
+            labelBuilder: _dialogLabel,
+            onTypeChanged: (DestinationType value) {
+              setState(() {
+                _selectedType = value;
+              });
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           AppSectionCard(
-            title: _getTypeSectionTitle(),
-            description: _getTypeSectionDescription(),
+            title: DestinationDialogTypeMeta.sectionTitle(
+              _selectedType,
+              _dialogLabel,
+            ),
+            description: DestinationDialogTypeMeta.sectionDescription(
+              _selectedType,
+              _dialogLabel,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildNameField(),
-                const SizedBox(height: 16),
                 _buildTypeSpecificFields(),
                 if (_selectedType == DestinationType.ftp) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.md),
                   _buildFtpsSection(),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          AppSectionCard(
-            title: _dialogLabel(
-              'Comportamento e retenção',
-              'Behavior and retention',
-            ),
-            description: _dialogLabel(
-              'Controle limpeza automática, disponibilidade do destino e preferências adicionais.',
-              'Control automatic cleanup, destination availability and additional preferences.',
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildRetentionSection(),
-                if (_selectedType == DestinationType.local) ...[
-                  const SizedBox(height: 16),
-                  _buildCreateSubfoldersSwitch(),
-                ],
-                const SizedBox(height: 16),
-                _buildEnabledSwitch(),
-              ],
-            ),
+          const SizedBox(height: AppSpacing.md),
+          DestinationDialogBehaviorSection(
+            selectedType: _selectedType,
+            retentionDaysController: _retentionDaysController,
+            createSubfoldersByDate: _createSubfoldersByDate,
+            isEnabled: _isEnabled,
+            labelBuilder: _dialogLabel,
+            onCreateSubfoldersByDateChanged: (bool value) {
+              setState(() {
+                _createSubfoldersByDate = value;
+              });
+            },
+            onEnabledChanged: (bool value) {
+              setState(() {
+                _isEnabled = value;
+              });
+            },
           ),
         ],
       ),
-    );
-  }
-
-  String _getTypeSectionTitle() {
-    switch (_selectedType) {
-      case DestinationType.local:
-        return _dialogLabel('Pasta local', 'Local folder');
-      case DestinationType.ftp:
-        return _dialogLabel('Configuracao FTP', 'FTP configuration');
-      case DestinationType.googleDrive:
-        return _dialogLabel(
-          'Configuracao do Google Drive',
-          'Google Drive configuration',
-        );
-      case DestinationType.dropbox:
-        return _dialogLabel(
-          'Configuracao do Dropbox',
-          'Dropbox configuration',
-        );
-      case DestinationType.nextcloud:
-        return _dialogLabel(
-          'Configuracao do Nextcloud',
-          'Nextcloud configuration',
-        );
-    }
-  }
-
-  String _getTypeSectionDescription() {
-    switch (_selectedType) {
-      case DestinationType.local:
-        return _dialogLabel(
-          'Escolha a pasta onde os backups serao gravados nesta maquina.',
-          'Choose the folder where backups will be stored on this machine.',
-        );
-      case DestinationType.ftp:
-        return _dialogLabel(
-          'Informe acesso, caminho remoto e preferências de transferência segura.',
-          'Provide access, remote path and secure transfer preferences.',
-        );
-      case DestinationType.googleDrive:
-        return _dialogLabel(
-          'Conecte a conta Google e defina a pasta que recebera os backups.',
-          'Connect a Google account and define which folder will receive backups.',
-        );
-      case DestinationType.dropbox:
-        return _dialogLabel(
-          'Conecte o Dropbox e configure a pasta de publicacao dos backups.',
-          'Connect Dropbox and configure the folder used to publish backups.',
-        );
-      case DestinationType.nextcloud:
-        return _dialogLabel(
-          'Configure URL, credenciais e pasta remota do seu servidor Nextcloud.',
-          'Configure URL, credentials and remote folder for your Nextcloud server.',
-        );
-    }
-  }
-
-  Widget _buildTypeSelector() {
-    return Consumer<LicenseProvider>(
-      builder: (context, licenseProvider, child) {
-        final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.googleDrive,
-        );
-        final hasDropbox = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.dropbox,
-        );
-        final hasNextcloud = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.nextcloud,
-        );
-
-        return AppDropdown<DestinationType>(
-          label: _dialogLabel('Tipo de destino', 'Destination type'),
-          value: _selectedType,
-          placeholder: Text(
-            _dialogLabel('Tipo de destino', 'Destination type'),
-          ),
-          items: DestinationType.values.map((type) {
-            final isGoogleDriveBlocked =
-                type == DestinationType.googleDrive && !hasGoogleDrive;
-            final isDropboxBlocked =
-                type == DestinationType.dropbox && !hasDropbox;
-            final isNextcloudBlocked =
-                type == DestinationType.nextcloud && !hasNextcloud;
-            final isBlocked =
-                isGoogleDriveBlocked || isDropboxBlocked || isNextcloudBlocked;
-
-            return ComboBoxItem<DestinationType>(
-              value: type,
-              enabled: !isBlocked,
-              child: Row(
-                children: [
-                  Icon(
-                    _getTypeIcon(type),
-                    size: 20,
-                    color: isBlocked
-                        ? FluentTheme.of(context)
-                              .resources
-                              .controlStrokeColorDefault
-                              .withValues(alpha: 0.4)
-                        : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            isBlocked
-                                ? '${_getTypeName(type)} (${_dialogLabel('Requer licença', 'License required')})'
-                                : _getTypeName(type),
-                            textAlign: TextAlign.start,
-                            style: TextStyle(
-                              color: isBlocked
-                                  ? FluentTheme.of(context)
-                                        .resources
-                                        .controlStrokeColorDefault
-                                        .withValues(alpha: 0.4)
-                                  : null,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isBlocked) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            FluentIcons.lock,
-                            size: 16,
-                            color: FluentTheme.of(context)
-                                .resources
-                                .controlStrokeColorDefault
-                                .withValues(alpha: 0.4),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-          onChanged: isEditing
-              ? null
-              : (value) {
-                  if (value != null) {
-                    final isGoogleDriveBlocked =
-                        value == DestinationType.googleDrive && !hasGoogleDrive;
-                    final isDropboxBlocked =
-                        value == DestinationType.dropbox && !hasDropbox;
-                    final isNextcloudBlocked =
-                        value == DestinationType.nextcloud && !hasNextcloud;
-
-                    if (isGoogleDriveBlocked ||
-                        isDropboxBlocked ||
-                        isNextcloudBlocked) {
-                      unawaited(
-                        FluentInfoBarFeedback.showWarning(
-                          context,
-                          message: _dialogLabel(
-                            'Este destino requer uma licença válida. Acesse Configurações > Licenciamento para mais informações.',
-                            'This destination requires a valid license. Go to Settings > Licensing for more information.',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-
-                    setState(() {
-                      _selectedType = value;
-                    });
-                  }
-                },
-        );
-      },
-    );
-  }
-
-  Widget _buildNameField() {
-    return AppTextField(
-      controller: _nameController,
-      label: _dialogLabel('Nome do destino', 'Destination name'),
-      hint: _dialogLabel(
-        'Ex: Backup local, FTP servidor, Google Drive, Dropbox',
-        'Ex: Local backup, FTP server, Google Drive, Dropbox',
-      ),
-      prefixIcon: const Icon(FluentIcons.tag),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return _dialogLabel('Nome é obrigatório', 'Name is required');
-        }
-        return null;
-      },
     );
   }
 
@@ -570,7 +349,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildNextcloudFields() {
-    return _NextcloudDestinationFields(
+    return NextcloudDestinationFields(
       serverUrlController: _nextcloudServerUrlController,
       usernameController: _nextcloudUsernameController,
       appPasswordController: _nextcloudAppPasswordController,
@@ -580,7 +359,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
       isTestingConnection: _isTestingNextcloudConnection,
       labelBuilder: _dialogLabel,
-      onAuthModeChanged: (value) {
+      onAuthModeChanged: (NextcloudAuthMode value) {
         setState(() {
           _nextcloudAuthMode = value;
         });
@@ -596,269 +375,95 @@ class _DestinationDialogState extends State<DestinationDialog> {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: Text(_dialogLabel('Atenção', 'Attention')),
-        content: Text(
-          _dialogLabel(
-            'Permitir certificado inválido reduz a segurança da conexão.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
-            'Allowing invalid certificate reduces connection security.\nEnable only if server uses self-signed cert or internal CA.',
-          ),
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(_dialogLabel('Cancelar', 'Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(_dialogLabel('Habilitar', 'Enable')),
-          ),
-        ],
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: _dialogLabel('Atenção', 'Attention'),
+      message: _dialogLabel(
+        'Permitir certificado inválido reduz a segurança da conexão.\nHabilite apenas se o servidor usa certificado self-signed ou CA interna.',
+        'Allowing invalid certificate reduces connection security.\nEnable only if server uses self-signed cert or internal CA.',
       ),
+      confirmLabel: _dialogLabel('Habilitar', 'Enable'),
     );
 
-    if ((confirmed ?? false) && mounted) {
+    if (confirmed && mounted) {
       setState(() => _nextcloudAllowInvalidCertificates = true);
     }
-  }
-
-  Widget _buildRetentionSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        NumericField(
-          controller: _retentionDaysController,
-          label: _dialogLabel('Dias de retenção', 'Retention days'),
-          hint: _dialogLabel(
-            'Ex: 7 (mantem backups por 7 dias)',
-            'Ex: 7 (keeps backups for 7 days)',
-          ),
-          prefixIcon: FluentIcons.delete,
-          minValue: 1,
-        ),
-        const SizedBox(height: 8),
-        _buildRetentionInfo(),
-      ],
-    );
-  }
-
-  Widget _buildRetentionInfo() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(FluentIcons.info, size: 20, color: context.colors.info),
-          const SizedBox(width: 8),
-          Expanded(
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _retentionDaysController,
-              builder: (context, value, child) {
-                final days = int.tryParse(value.text) ?? 7;
-                final cutoffDate = DateTime.now().subtract(
-                  Duration(days: days),
-                );
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _dialogLabel('Limpeza automática', 'Automatic cleanup'),
-                      style: FluentTheme.of(context).typography.caption
-                          ?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: context.colors.info,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _dialogLabel(
-                        'Backups anteriores a ${_formatDate(cutoffDate)} serão excluídos automaticamente após cada backup executado.',
-                        'Backups older than ${_formatDate(cutoffDate)} will be automatically removed after each backup run.',
-                      ),
-                      style: FluentTheme.of(context).typography.caption,
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCreateSubfoldersSwitch() {
-    return InfoLabel(
-      label: _dialogLabel(
-        'Criar subpastas por data',
-        'Create date-based subfolders',
-      ),
-      child: ToggleSwitch(
-        checked: _createSubfoldersByDate,
-        onChanged: (value) {
-          setState(() {
-            _createSubfoldersByDate = value;
-          });
-        },
-      ),
-    );
   }
 
   Widget _buildFtpsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InfoLabel(
-          label: _dialogLabel('Usar FTPS', 'Use FTPS'),
-          child: ToggleSwitch(
-            checked: _useFtps,
-            onChanged: (value) {
-              setState(() {
-                _useFtps = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
+        LabeledToggle(
+          title: _dialogLabel('Usar FTPS', 'Use FTPS'),
+          description: _dialogLabel(
             'Conexão FTP segura (SSL/TLS)',
             'Secure FTP connection (SSL/TLS)',
           ),
-          style: FluentTheme.of(context).typography.caption,
+          value: _useFtps,
+          onChanged: (bool value) {
+            setState(() {
+              _useFtps = value;
+            });
+          },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         if (_useFtps) ...[
-          InfoLabel(
-            label: _dialogLabel(
+          LabeledToggle(
+            title: _dialogLabel(
               'Permitir certificado FTPS invalido',
               'Allow invalid FTPS certificate',
             ),
-            child: ToggleSwitch(
-              checked: _ftpAllowInvalidCertificates,
-              onChanged: (value) {
-                setState(() {
-                  _ftpAllowInvalidCertificates = value;
-                });
-              },
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _dialogLabel(
+            description: _dialogLabel(
               'Compatibilidade com certificados autoassinados. Desative para validar certificados em producao.',
               'Compatibility with self-signed certificates. Turn off to validate production certificates.',
             ),
-            style: FluentTheme.of(context).typography.caption?.copyWith(
-              color: context.colors.warning,
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-        InfoLabel(
-          label: _dialogLabel(
-            'Retomada de upload (REST STREAM)',
-            'Upload resume (REST STREAM)',
-          ),
-          child: ToggleSwitch(
-            checked: _enableResumeFtp,
-            onChanged: (value) {
+            value: _ftpAllowInvalidCertificates,
+            onChanged: (bool value) {
               setState(() {
-                _enableResumeFtp = value;
+                _ftpAllowInvalidCertificates = value;
               });
             },
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
+          const SizedBox(height: AppSpacing.md),
+        ],
+        LabeledToggle(
+          title: _dialogLabel(
+            'Retomada de upload (REST STREAM)',
+            'Upload resume (REST STREAM)',
+          ),
+          description: _dialogLabel(
             'Retomar envio do ponto de interrupção quando o servidor suportar',
             'Resume upload from interruption point when server supports it',
           ),
-          style: FluentTheme.of(context).typography.caption,
+          value: _enableResumeFtp,
+          onChanged: (bool value) {
+            setState(() {
+              _enableResumeFtp = value;
+            });
+          },
         ),
-        const SizedBox(height: 16),
-        ActionButton(
+        const SizedBox(height: AppSpacing.md),
+        AppButton(
           label: _dialogLabel('Testar conexão FTP', 'Test FTP connection'),
           icon: FluentIcons.network_tower,
           onPressed: _testFtpConnection,
           isLoading: _isTestingFtpConnection,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         _buildFtpAdvancedOptions(),
       ],
     );
   }
 
-  FtpWhenResumeNotSupported _parseWhenResumeNotSupported(String? value) {
-    if (value == null) return FtpWhenResumeNotSupported.fallback;
-    return FtpWhenResumeNotSupported.values.firstWhere(
-      (e) => e.name == value,
-      orElse: () => FtpWhenResumeNotSupported.fallback,
-    );
-  }
-
-  _FtpIntegrityPreset _deriveFtpIntegrityPreset({
-    required bool enableStrongIntegrityValidation,
-    required bool enableReadBackValidation,
-  }) {
-    if (!enableStrongIntegrityValidation) {
-      return _FtpIntegrityPreset.quick;
-    }
-    if (enableReadBackValidation) {
-      return _FtpIntegrityPreset.maximum;
-    }
-    return _FtpIntegrityPreset.balanced;
-  }
-
-  void _applyFtpIntegrityPreset(_FtpIntegrityPreset preset) {
-    switch (preset) {
-      case _FtpIntegrityPreset.quick:
-        _enableStrongIntegrityValidationFtp = false;
-        _enableReadBackValidationFtp = false;
-      case _FtpIntegrityPreset.balanced:
-        _enableStrongIntegrityValidationFtp = true;
-        _enableReadBackValidationFtp = false;
-      case _FtpIntegrityPreset.maximum:
-        _enableStrongIntegrityValidationFtp = true;
-        _enableReadBackValidationFtp = true;
-    }
-  }
-
-  Color _getFtpIntegrityImpactColor(BuildContext context) {
-    final colors = context.colors;
-    return switch (_ftpIntegrityPreset) {
-      _FtpIntegrityPreset.quick => colors.success,
-      _FtpIntegrityPreset.balanced => colors.info,
-      _FtpIntegrityPreset.maximum => colors.warning,
-    };
-  }
-
-  String _getFtpIntegrityImpactText() {
-    return switch (_ftpIntegrityPreset) {
-      _FtpIntegrityPreset.quick => _dialogLabel(
-        'Impacto de performance: baixo. Menor confiança de integridade.',
-        'Performance impact: low. Validates size and writes SHA-256 sidecar.',
-      ),
-      _FtpIntegrityPreset.balanced => _dialogLabel(
-        'Impacto de performance: médio. Bom equilíbrio para uso diário.',
-        'Performance impact: medium. Good balance for daily usage.',
-      ),
-      _FtpIntegrityPreset.maximum => _dialogLabel(
-        'Impacto de performance: alto em arquivos grandes devido ao read-back.',
-        'Performance impact: high on large files due to read-back.',
-      ),
-    };
+  void _applyFtpIntegrityPreset(FtpIntegrityPreset preset) {
+    _enableStrongIntegrityValidationFtp =
+        preset.enablesStrongIntegrityValidation;
+    _enableReadBackValidationFtp = preset.enablesReadBackValidation;
   }
 
   Widget _buildFtpAdvancedOptions() {
-    return _FtpAdvancedOptionsSection(
+    return FtpAdvancedOptionsSection(
       integrityPreset: _ftpIntegrityPreset,
       whenResumeNotSupported: _whenResumeNotSupportedFtp,
       enableStrongIntegrityValidation: _enableStrongIntegrityValidationFtp,
@@ -868,22 +473,22 @@ class _DestinationDialogState extends State<DestinationDialog> {
       maxAttemptsController: _maxAttemptsFtpController,
       connectionTimeoutSecondsController: _connectionTimeoutSecondsController,
       uploadTimeoutMinutesController: _uploadTimeoutMinutesController,
-      impactColor: _getFtpIntegrityImpactColor(context),
-      impactText: _getFtpIntegrityImpactText(),
+      impactColor: _ftpIntegrityPreset.impactColor(context),
+      impactText: _ftpIntegrityPreset.impactText(_dialogLabel),
       labelBuilder: _dialogLabel,
-      onPresetChanged: (value) {
+      onPresetChanged: (FtpIntegrityPreset value) {
         setState(() {
           _ftpIntegrityPreset = value;
           _applyFtpIntegrityPreset(value);
         });
       },
-      onEnableStrongIntegrityValidationChanged: (value) {
+      onEnableStrongIntegrityValidationChanged: (bool value) {
         setState(() {
           _enableStrongIntegrityValidationFtp = value;
           if (!value) {
             _enableReadBackValidationFtp = false;
           }
-          _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+          _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
             enableStrongIntegrityValidation:
                 _enableStrongIntegrityValidationFtp,
             enableReadBackValidation: _enableReadBackValidationFtp,
@@ -891,10 +496,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
         });
       },
       onEnableReadBackValidationChanged: _enableStrongIntegrityValidationFtp
-          ? (value) {
+          ? (bool value) {
               setState(() {
                 _enableReadBackValidationFtp = value;
-                _ftpIntegrityPreset = _deriveFtpIntegrityPreset(
+                _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
                   enableStrongIntegrityValidation:
                       _enableStrongIntegrityValidationFtp,
                   enableReadBackValidation: _enableReadBackValidationFtp,
@@ -902,48 +507,21 @@ class _DestinationDialogState extends State<DestinationDialog> {
               });
             }
           : null,
-      onKeepPartOnCancelChanged: (value) {
+      onKeepPartOnCancelChanged: (bool value) {
         setState(() {
           _keepPartOnCancelFtp = value;
         });
       },
-      onWhenResumeNotSupportedChanged: (value) {
+      onWhenResumeNotSupportedChanged: (FtpWhenResumeNotSupported value) {
         setState(() {
           _whenResumeNotSupportedFtp = value;
         });
       },
-      onEnableVerboseLogChanged: (value) {
+      onEnableVerboseLogChanged: (bool value) {
         setState(() {
           _enableVerboseLogFtp = value;
         });
       },
-    );
-  }
-
-  Widget _buildEnabledSwitch() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InfoLabel(
-          label: _dialogLabel('Habilitado', 'Enabled'),
-          child: ToggleSwitch(
-            checked: _isEnabled,
-            onChanged: (value) {
-              setState(() {
-                _isEnabled = value;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          _dialogLabel(
-            'Destino ativo para uso em agendamentos',
-            'Destination active for schedule use',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-      ],
     );
   }
 
@@ -955,7 +533,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildLocalFields() {
-    return _LocalDestinationFields(
+    return LocalDestinationFields(
       pathController: _localPathController,
       labelBuilder: _dialogLabel,
       onSelectFolder: _selectLocalFolder,
@@ -963,7 +541,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildFtpFields() {
-    return _FtpConnectionFields(
+    return FtpConnectionFields(
       hostController: _ftpHostController,
       portController: _ftpPortController,
       usernameController: _ftpUsernameController,
@@ -978,24 +556,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     return ListenableBuilder(
       listenable: googleAuth,
-      builder: (context, _) {
+      builder: (BuildContext context, _) {
         final features = getIt<FeatureAvailabilityService>();
-        return _GoogleDriveDestinationFields(
+        return GoogleDriveDestinationFields(
           oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
-              ? InfoBar(
-                  title: Text(
-                    _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
-                  ),
-                  content: Text(
-                    localizeCompatibilityReason(
-                      context,
-                      reason: features.externalBrowserOAuthDisabledReason,
-                      fallbackPt: 'Não disponível nesta versão do Windows.',
-                      fallbackEn: 'Not available on this Windows version.',
-                    ),
-                  ),
-                  severity: InfoBarSeverity.warning,
-                  isLong: true,
+              ? AppCallout(
+                  tone: AppCalloutTone.warning,
+                  message:
+                      '${_dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in')}. '
+                      '${localizeCompatibilityReason(
+                        context,
+                        reason: features.externalBrowserOAuthDisabledReason,
+                        fallbackPt: 'Não disponível nesta versão do Windows.',
+                        fallbackEn: 'Not available on this Windows version.',
+                      )}',
                 )
               : null,
           authStatus: _buildGoogleAuthStatus(googleAuth),
@@ -1021,7 +595,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
       hint: 'Backups',
       prefixIcon: const Icon(FluentIcons.cloud),
       enabled: googleAuth.isSignedIn,
-      validator: (value) {
+      validator: (String? value) {
         if (value == null || value.trim().isEmpty) {
           return _dialogLabel(
             'Nome da pasta é obrigatório',
@@ -1034,29 +608,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildGoogleNotSignedInWarning() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.colors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.colors.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.warning, color: context.colors.danger),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _dialogLabel(
-                'Conecte-se ao Google para configurar o destino.',
-                'Sign in to Google to configure this destination.',
-              ),
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: context.colors.danger),
-            ),
-          ),
-        ],
+    return AppCallout(
+      tone: AppCalloutTone.danger,
+      message: _dialogLabel(
+        'Conecte-se ao Google para configurar o destino.',
+        'Sign in to Google to configure this destination.',
       ),
     );
   }
@@ -1067,7 +623,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isSignedIn = googleAuth.isSignedIn;
     final isLoading = googleAuth.isLoading;
 
-    return _OAuthStatusCard(
+    return OAuthStatusCard(
       isSignedIn: isSignedIn,
       isLoading: isLoading,
       isConfigured: googleAuth.isConfigured,
@@ -1094,7 +650,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildOAuthConfigSection(GoogleAuthProvider googleAuth) {
-    return _OAuthCredentialsSectionCard(
+    return OAuthCredentialsSectionCard(
       title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
       description: _dialogLabel(
         'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
@@ -1126,7 +682,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Future<void> _showOAuthConfigDialog(GoogleAuthProvider googleAuth) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => _OAuthConfigDialog(
+      builder: (BuildContext dialogContext) => OAuthConfigDialog(
         googleAuth: googleAuth,
         initialClientId: googleAuth.oauthConfig?.clientId ?? '',
         initialClientSecret: googleAuth.oauthConfig?.clientSecret ?? '',
@@ -1148,24 +704,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     return ListenableBuilder(
       listenable: dropboxAuth,
-      builder: (context, _) {
+      builder: (BuildContext context, _) {
         final features = getIt<FeatureAvailabilityService>();
-        return _DropboxDestinationFields(
+        return DropboxDestinationFields(
           oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
-              ? InfoBar(
-                  title: Text(
-                    _dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in'),
-                  ),
-                  content: Text(
-                    localizeCompatibilityReason(
-                      context,
-                      reason: features.externalBrowserOAuthDisabledReason,
-                      fallbackPt: 'Não disponível nesta versão do Windows.',
-                      fallbackEn: 'Not available on this Windows version.',
-                    ),
-                  ),
-                  severity: InfoBarSeverity.warning,
-                  isLong: true,
+              ? AppCallout(
+                  tone: AppCalloutTone.warning,
+                  message:
+                      '${_dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in')}. '
+                      '${localizeCompatibilityReason(
+                        context,
+                        reason: features.externalBrowserOAuthDisabledReason,
+                        fallbackPt: 'Não disponível nesta versão do Windows.',
+                        fallbackEn: 'Not available on this Windows version.',
+                      )}',
                 )
               : null,
           authStatus: _buildDropboxAuthStatus(dropboxAuth),
@@ -1197,7 +749,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           prefixIcon: const Icon(FluentIcons.folder),
           enabled: dropboxAuth.isSignedIn,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         AppTextField(
           controller: _dropboxFolderNameController,
           label: _dialogLabel(
@@ -1207,7 +759,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
           hint: 'Backups',
           prefixIcon: const Icon(FluentIcons.cloud),
           enabled: dropboxAuth.isSignedIn,
-          validator: (value) {
+          validator: (String? value) {
             if (value == null || value.trim().isEmpty) {
               return _dialogLabel(
                 'Nome da pasta é obrigatório',
@@ -1222,29 +774,11 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Widget _buildDropboxNotSignedInWarning() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: context.colors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.colors.danger.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(FluentIcons.warning, color: context.colors.danger),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _dialogLabel(
-                'Conecte-se ao Dropbox para configurar o destino.',
-                'Sign in to Dropbox to configure this destination.',
-              ),
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: context.colors.danger),
-            ),
-          ),
-        ],
+    return AppCallout(
+      tone: AppCalloutTone.danger,
+      message: _dialogLabel(
+        'Conecte-se ao Dropbox para configurar o destino.',
+        'Sign in to Dropbox to configure this destination.',
       ),
     );
   }
@@ -1255,7 +789,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isSignedIn = dropboxAuth.isSignedIn;
     final isLoading = dropboxAuth.isLoading;
 
-    return _OAuthStatusCard(
+    return OAuthStatusCard(
       isSignedIn: isSignedIn,
       isLoading: isLoading,
       isConfigured: dropboxAuth.isConfigured,
@@ -1289,7 +823,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     final isConfigured = dropboxAuth.isConfigured;
     final hasClientId = dropboxAuth.oauthConfig?.clientId.isNotEmpty ?? false;
 
-    return _OAuthCredentialsSectionCard(
+    return OAuthCredentialsSectionCard(
       title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
       description: isConfigured && hasClientId
           ? _dialogLabel(
@@ -1327,7 +861,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
   ) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => _DropboxOAuthConfigDialog(
+      builder: (BuildContext dialogContext) => DropboxOAuthConfigDialog(
         dropboxAuth: dropboxAuth,
         initialClientId: dropboxAuth.oauthConfig?.clientId ?? '',
         initialClientSecret: dropboxAuth.oauthConfig?.clientSecret ?? '',
@@ -1342,58 +876,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
       );
     }
-  }
-
-  IconData _getTypeIcon(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return FluentIcons.folder;
-      case DestinationType.ftp:
-        return FluentIcons.cloud_upload;
-      case DestinationType.googleDrive:
-        return FluentIcons.cloud;
-      case DestinationType.dropbox:
-        return FluentIcons.cloud;
-      case DestinationType.nextcloud:
-        return FluentIcons.cloud;
-    }
-  }
-
-  Color _getTypeColor(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return AppPalette.destinationLocal;
-      case DestinationType.ftp:
-        return AppPalette.destinationFtp;
-      case DestinationType.googleDrive:
-        return AppPalette.destinationGoogleDrive;
-      case DestinationType.dropbox:
-        return AppPalette.destinationDropbox;
-      case DestinationType.nextcloud:
-        return AppPalette.destinationNextcloud;
-    }
-  }
-
-  String _getTypeName(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return _dialogLabel('Pasta local', 'Local folder');
-      case DestinationType.ftp:
-        return _dialogLabel('Servidor FTP', 'FTP server');
-      case DestinationType.googleDrive:
-        return 'Google Drive';
-      case DestinationType.dropbox:
-        return 'Dropbox';
-      case DestinationType.nextcloud:
-        return 'Nextcloud';
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    final day = date.day.toString().padLeft(2, '0');
-    final month = date.month.toString().padLeft(2, '0');
-    final year = date.year;
-    return '$day/$month/$year';
   }
 
   Future<void> _selectLocalFolder() async {
@@ -1709,7 +1191,7 @@ class _DestinationDialogState extends State<DestinationDialog> {
     }
 
     final retentionDays = int.parse(_retentionDaysController.text);
-    String configJson;
+    late final String configJson;
 
     switch (_selectedType) {
       case DestinationType.local:
@@ -1792,1314 +1274,5 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     Navigator.of(context).pop(destination);
-  }
-}
-
-typedef _DialogLabelBuilder = String Function(String ptBr, String enUs);
-
-class _LocalDestinationFields extends StatelessWidget {
-  const _LocalDestinationFields({
-    required this.pathController,
-    required this.labelBuilder,
-    required this.onSelectFolder,
-  });
-
-  final TextEditingController pathController;
-  final _DialogLabelBuilder labelBuilder;
-  final VoidCallback onSelectFolder;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: AppTextField(
-            controller: pathController,
-            label: labelBuilder('Caminho da pasta', 'Folder path'),
-            hint: r'C:\Backups',
-            prefixIcon: const Icon(FluentIcons.folder),
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return labelBuilder(
-                  'Caminho é obrigatório',
-                  'Path is required',
-                );
-              }
-              return null;
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const EdgeInsets.only(top: 24),
-          child: IconButton(
-            icon: const Icon(FluentIcons.folder_open),
-            onPressed: onSelectFolder,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FtpConnectionFields extends StatelessWidget {
-  const _FtpConnectionFields({
-    required this.hostController,
-    required this.portController,
-    required this.usernameController,
-    required this.passwordController,
-    required this.remotePathController,
-    required this.labelBuilder,
-  });
-
-  final TextEditingController hostController;
-  final TextEditingController portController;
-  final TextEditingController usernameController;
-  final TextEditingController passwordController;
-  final TextEditingController remotePathController;
-  final _DialogLabelBuilder labelBuilder;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: AppTextField(
-                controller: hostController,
-                label: labelBuilder('Servidor FTP', 'FTP server'),
-                hint: 'ftp.exemplo.com',
-                prefixIcon: const Icon(FluentIcons.server),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return labelBuilder(
-                      'Servidor é obrigatório',
-                      'Server is required',
-                    );
-                  }
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: NumericField(
-                controller: portController,
-                label: labelBuilder('Porta', 'Port'),
-                hint: '21',
-                prefixIcon: FluentIcons.number_field,
-                minValue: 1,
-                maxValue: 65535,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: usernameController,
-          label: labelBuilder('Usuário', 'Username'),
-          hint: 'usuario_ftp',
-          prefixIcon: const Icon(FluentIcons.contact),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return labelBuilder(
-                'Usuário é obrigatório',
-                'Username is required',
-              );
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        PasswordField(
-          controller: passwordController,
-          label: labelBuilder('Senha FTP', 'FTP password'),
-          hint: labelBuilder('Senha do FTP', 'FTP password'),
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: remotePathController,
-          label: labelBuilder('Caminho remoto', 'Remote path'),
-          hint: '/backups',
-          prefixIcon: const Icon(FluentIcons.folder),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return labelBuilder(
-                'Caminho remoto é obrigatório',
-                'Remote path is required',
-              );
-            }
-            return null;
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _GoogleDriveDestinationFields extends StatelessWidget {
-  const _GoogleDriveDestinationFields({
-    required this.authStatus,
-    required this.folderField,
-    this.oauthAvailabilityWarning,
-    this.oauthConfigSection,
-    this.notSignedInWarning,
-  });
-
-  final Widget? oauthAvailabilityWarning;
-  final Widget authStatus;
-  final Widget? oauthConfigSection;
-  final Widget folderField;
-  final Widget? notSignedInWarning;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (oauthAvailabilityWarning != null) ...[
-          oauthAvailabilityWarning!,
-          const SizedBox(height: 12),
-        ],
-        authStatus,
-        if (oauthConfigSection != null) ...[
-          const SizedBox(height: 16),
-          oauthConfigSection!,
-        ],
-        const SizedBox(height: 16),
-        folderField,
-        if (notSignedInWarning != null) ...[
-          const SizedBox(height: 16),
-          notSignedInWarning!,
-        ],
-      ],
-    );
-  }
-}
-
-class _DropboxDestinationFields extends StatelessWidget {
-  const _DropboxDestinationFields({
-    required this.authStatus,
-    required this.folderFields,
-    this.oauthAvailabilityWarning,
-    this.oauthConfigSection,
-    this.notSignedInWarning,
-  });
-
-  final Widget? oauthAvailabilityWarning;
-  final Widget authStatus;
-  final Widget? oauthConfigSection;
-  final Widget folderFields;
-  final Widget? notSignedInWarning;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (oauthAvailabilityWarning != null) ...[
-          oauthAvailabilityWarning!,
-          const SizedBox(height: 12),
-        ],
-        authStatus,
-        if (oauthConfigSection != null) ...[
-          const SizedBox(height: 16),
-          oauthConfigSection!,
-        ],
-        const SizedBox(height: 16),
-        folderFields,
-        if (notSignedInWarning != null) ...[
-          const SizedBox(height: 16),
-          notSignedInWarning!,
-        ],
-      ],
-    );
-  }
-}
-
-class _OAuthStatusCard extends StatelessWidget {
-  const _OAuthStatusCard({
-    required this.isSignedIn,
-    required this.isLoading,
-    required this.isConfigured,
-    required this.signedInBackgroundColor,
-    required this.signedInBorderColor,
-    required this.signedInIconColor,
-    required this.signedInLabel,
-    required this.signedOutLabel,
-    required this.disconnectLabel,
-    required this.connectLabel,
-    required this.connectingLabel,
-    required this.onDisconnect,
-    this.errorMessage,
-    this.onConnect,
-  });
-
-  final bool isSignedIn;
-  final bool isLoading;
-  final bool isConfigured;
-  final Color signedInBackgroundColor;
-  final Color signedInBorderColor;
-  final Color signedInIconColor;
-  final String signedInLabel;
-  final String signedOutLabel;
-  final String disconnectLabel;
-  final String connectLabel;
-  final String connectingLabel;
-  final String? errorMessage;
-  final VoidCallback onDisconnect;
-  final VoidCallback? onConnect;
-
-  @override
-  Widget build(BuildContext context) {
-    final neutralColor = FluentTheme.of(
-      context,
-    ).resources.controlStrokeColorDefault;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isSignedIn
-            ? signedInBackgroundColor
-            : FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isSignedIn
-              ? signedInBorderColor
-              : neutralColor.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isSignedIn
-                    ? FluentIcons.check_mark
-                    : FluentIcons.cloud_download,
-                color: isSignedIn ? signedInIconColor : neutralColor,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  isSignedIn ? signedInLabel : signedOutLabel,
-                  style: FluentTheme.of(
-                    context,
-                  ).typography.body?.copyWith(fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (isSignedIn)
-            AppButton.icon(
-              icon: FluentIcons.sign_out,
-              label: disconnectLabel,
-              onPressed: isLoading ? null : onDisconnect,
-            )
-          else if (isConfigured)
-            AppButton(
-              label: isLoading ? connectingLabel : connectLabel,
-              onPressed: isLoading ? null : onConnect,
-              leading: isLoading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: ProgressRing(strokeWidth: 2),
-                    )
-                  : const Icon(FluentIcons.signin, size: 18),
-            ),
-          if (errorMessage != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              errorMessage!,
-              style: FluentTheme.of(
-                context,
-              ).typography.caption?.copyWith(color: context.colors.danger),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _OAuthCredentialsSectionCard extends StatelessWidget {
-  const _OAuthCredentialsSectionCard({
-    required this.title,
-    required this.description,
-    required this.actionLabel,
-    required this.onPressed,
-  });
-
-  final String title;
-  final String description;
-  final String actionLabel;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(
-          context,
-        ).resources.cardBackgroundFillColorDefault.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: context.colors.info.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                FluentIcons.settings,
-                color: context.colors.info,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: FluentTheme.of(
-                  context,
-                ).typography.subtitle?.copyWith(color: context.colors.info),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(description, style: FluentTheme.of(context).typography.caption),
-          const SizedBox(height: 12),
-          AppButton.icon(
-            icon: FluentIcons.lock,
-            label: actionLabel,
-            onPressed: onPressed,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FtpAdvancedOptionsSection extends StatelessWidget {
-  const _FtpAdvancedOptionsSection({
-    required this.integrityPreset,
-    required this.whenResumeNotSupported,
-    required this.enableStrongIntegrityValidation,
-    required this.enableReadBackValidation,
-    required this.keepPartOnCancel,
-    required this.enableVerboseLog,
-    required this.maxAttemptsController,
-    required this.connectionTimeoutSecondsController,
-    required this.uploadTimeoutMinutesController,
-    required this.impactColor,
-    required this.impactText,
-    required this.labelBuilder,
-    required this.onPresetChanged,
-    required this.onEnableStrongIntegrityValidationChanged,
-    required this.onKeepPartOnCancelChanged,
-    required this.onWhenResumeNotSupportedChanged,
-    required this.onEnableVerboseLogChanged,
-    this.onEnableReadBackValidationChanged,
-  });
-
-  final _FtpIntegrityPreset integrityPreset;
-  final FtpWhenResumeNotSupported whenResumeNotSupported;
-  final bool enableStrongIntegrityValidation;
-  final bool enableReadBackValidation;
-  final bool keepPartOnCancel;
-  final bool enableVerboseLog;
-  final TextEditingController maxAttemptsController;
-  final TextEditingController connectionTimeoutSecondsController;
-  final TextEditingController uploadTimeoutMinutesController;
-  final Color impactColor;
-  final String impactText;
-  final _DialogLabelBuilder labelBuilder;
-  final ValueChanged<_FtpIntegrityPreset> onPresetChanged;
-  final ValueChanged<bool> onEnableStrongIntegrityValidationChanged;
-  final ValueChanged<bool>? onEnableReadBackValidationChanged;
-  final ValueChanged<bool> onKeepPartOnCancelChanged;
-  final ValueChanged<FtpWhenResumeNotSupported> onWhenResumeNotSupportedChanged;
-  final ValueChanged<bool> onEnableVerboseLogChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          labelBuilder('Opções avançadas', 'Advanced options'),
-          style: FluentTheme.of(context).typography.bodyStrong,
-        ),
-        const SizedBox(height: 12),
-        AppDropdown<_FtpIntegrityPreset>(
-          label: labelBuilder('Preset de integridade', 'Integrity preset'),
-          value: integrityPreset,
-          placeholder: Text(
-            labelBuilder('Maxima integridade', 'Maximum integrity'),
-          ),
-          items: _FtpIntegrityPreset.values
-              .map(
-                (preset) => ComboBoxItem<_FtpIntegrityPreset>(
-                  value: preset,
-                  child: Text(
-                    switch (preset) {
-                      _FtpIntegrityPreset.quick => labelBuilder(
-                        'Rapido',
-                        'Quick',
-                      ),
-                      _FtpIntegrityPreset.balanced => labelBuilder(
-                        'Equilibrado',
-                        'Balanced',
-                      ),
-                      _FtpIntegrityPreset.maximum => labelBuilder(
-                        'Maxima integridade',
-                        'Maximum integrity',
-                      ),
-                    },
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onPresetChanged(value);
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Rapido: so tamanho. Equilibrado: hash remoto. Maxima: hash remoto + read-back quando necessario.',
-            'Quick: size + SHA-256 sidecar. Balanced: remote hash. Maximum: remote hash + read-back when needed.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: impactColor.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: impactColor.withValues(alpha: 0.45)),
-          ),
-          child: Row(
-            children: [
-              Icon(FluentIcons.info, size: 16, color: impactColor),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  impactText,
-                  style: FluentTheme.of(context).typography.caption?.copyWith(
-                    color: impactColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: labelBuilder(
-            'Validacao forte de integridade',
-            'Strong integrity validation',
-          ),
-          child: ToggleSwitch(
-            checked: enableStrongIntegrityValidation,
-            onChanged: onEnableStrongIntegrityValidationChanged,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Alem do tamanho, valida com hash do arquivo remoto para reduzir falsos positivos.',
-            'In addition to file size, validates using remote file hash to reduce false positives.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: labelBuilder(
-            'Read-back quando hash remoto indisponível',
-            'Read-back when remote hash unavailable',
-          ),
-          child: ToggleSwitch(
-            checked: enableReadBackValidation,
-            onChanged: onEnableReadBackValidationChanged,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Baixa o arquivo do FTP e compara SHA-256 com o local. Mais confiavel, porem mais lento para arquivos grandes.',
-            'Downloads the file from FTP and compares SHA-256 with local. More reliable, but slower for large files.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: labelBuilder(
-            'Manter parcial ao cancelar',
-            'Keep partial on cancel',
-          ),
-          child: ToggleSwitch(
-            checked: keepPartOnCancel,
-            onChanged: onKeepPartOnCancelChanged,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Manter arquivo .part no servidor para retomar depois',
-            'Keep .part file on server to resume later',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<FtpWhenResumeNotSupported>(
-          label: labelBuilder(
-            'Quando servidor não suporta retomada',
-            'When server does not support resume',
-          ),
-          value: whenResumeNotSupported,
-          placeholder: Text(
-            labelBuilder(
-              'Fallback (upload completo)',
-              'Fallback (full upload)',
-            ),
-          ),
-          items: FtpWhenResumeNotSupported.values
-              .map(
-                (e) => ComboBoxItem<FtpWhenResumeNotSupported>(
-                  value: e,
-                  child: Text(
-                    e == FtpWhenResumeNotSupported.fallback
-                        ? labelBuilder(
-                            'Fallback (upload completo)',
-                            'Fallback (full upload)',
-                          )
-                        : labelBuilder('Falhar', 'Fail'),
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onWhenResumeNotSupportedChanged(value);
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: labelBuilder('Max. tentativas', 'Max attempts'),
-          controller: maxAttemptsController,
-          hint: labelBuilder('Padrao: 3', 'Default: 3'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Numero maximo de tentativas por upload',
-            'Maximum number of attempts per upload',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        InfoLabel(
-          label: labelBuilder('Log detalhado FTP', 'Verbose FTP log'),
-          child: ToggleSwitch(
-            checked: enableVerboseLog,
-            onChanged: onEnableVerboseLogChanged,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Registrar comandos e respostas do protocolo FTP (util para diagnostico)',
-            'Log FTP protocol commands and responses (useful for troubleshooting)',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: labelBuilder(
-            'Timeout de conexao (s)',
-            'Connection timeout (s)',
-          ),
-          controller: connectionTimeoutSecondsController,
-          hint: labelBuilder('Padrao: 15', 'Default: 15'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Tempo limite para conectar e autenticar no servidor FTP',
-            'Time limit to connect and authenticate to FTP server',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          label: labelBuilder(
-            'Timeout de upload (min)',
-            'Upload timeout (min)',
-          ),
-          controller: uploadTimeoutMinutesController,
-          hint: labelBuilder('Padrao: 60', 'Default: 60'),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          labelBuilder(
-            'Tempo limite para sessao de upload (arquivos grandes podem precisar de mais)',
-            'Time limit for upload session (large files may need more)',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-      ],
-    );
-  }
-}
-
-class _NextcloudDestinationFields extends StatelessWidget {
-  const _NextcloudDestinationFields({
-    required this.serverUrlController,
-    required this.usernameController,
-    required this.appPasswordController,
-    required this.remotePathController,
-    required this.folderNameController,
-    required this.authMode,
-    required this.allowInvalidCertificates,
-    required this.isTestingConnection,
-    required this.labelBuilder,
-    required this.onAuthModeChanged,
-    required this.onAllowInvalidCertificatesChanged,
-    required this.onTestConnection,
-  });
-
-  final TextEditingController serverUrlController;
-  final TextEditingController usernameController;
-  final TextEditingController appPasswordController;
-  final TextEditingController remotePathController;
-  final TextEditingController folderNameController;
-  final NextcloudAuthMode authMode;
-  final bool allowInvalidCertificates;
-  final bool isTestingConnection;
-  final _DialogLabelBuilder labelBuilder;
-  final ValueChanged<NextcloudAuthMode> onAuthModeChanged;
-  final ValueChanged<bool> onAllowInvalidCertificatesChanged;
-  final VoidCallback onTestConnection;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        AppTextField(
-          controller: serverUrlController,
-          label: labelBuilder('URL do Nextcloud', 'Nextcloud URL'),
-          hint: 'https://cloud.exemplo.com',
-          prefixIcon: const Icon(FluentIcons.globe),
-          validator: _validateServerUrl,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: usernameController,
-          label: labelBuilder('Usuário', 'Username'),
-          hint: 'usuario',
-          prefixIcon: const Icon(FluentIcons.contact),
-          validator: _validateUsername,
-        ),
-        const SizedBox(height: 16),
-        AppDropdown<NextcloudAuthMode>(
-          label: labelBuilder('Tipo de credencial', 'Credential type'),
-          value: authMode,
-          placeholder: Text(
-            labelBuilder('Tipo de credencial', 'Credential type'),
-          ),
-          items: NextcloudAuthMode.values.map((mode) {
-            final label = mode == NextcloudAuthMode.appPassword
-                ? labelBuilder(
-                    'App Password (recomendado)',
-                    'App Password (recommended)',
-                  )
-                : labelBuilder('Senha do usuario', 'User password');
-            return ComboBoxItem<NextcloudAuthMode>(
-              value: mode,
-              child: Text(label),
-            );
-          }).toList(),
-          onChanged: (value) {
-            if (value != null) {
-              onAuthModeChanged(value);
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: appPasswordController,
-          label: authMode == NextcloudAuthMode.appPassword
-              ? labelBuilder('App Password', 'App Password')
-              : labelBuilder('Senha do usuario', 'User password'),
-          hint: authMode == NextcloudAuthMode.appPassword
-              ? labelBuilder(
-                  'Senha de aplicativo do Nextcloud',
-                  'Nextcloud app password',
-                )
-              : labelBuilder(
-                  'Senha do usuario do Nextcloud',
-                  'Nextcloud user password',
-                ),
-          prefixIcon: const Icon(FluentIcons.lock),
-          obscureText: true,
-          validator: _validatePassword,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: remotePathController,
-          label: labelBuilder(
-            'Caminho remoto (opcional)',
-            'Remote path (optional)',
-          ),
-          hint: '/ ou /Backups',
-          prefixIcon: const Icon(FluentIcons.folder),
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: folderNameController,
-          label: labelBuilder('Nome da pasta', 'Folder name'),
-          hint: 'Backups',
-          prefixIcon: const Icon(FluentIcons.cloud),
-          validator: _validateFolderName,
-        ),
-        const SizedBox(height: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InfoLabel(
-              label: labelBuilder(
-                'Permitir certificado invalido (self-signed)',
-                'Allow invalid certificate (self-signed)',
-              ),
-              child: ToggleSwitch(
-                checked: allowInvalidCertificates,
-                onChanged: onAllowInvalidCertificatesChanged,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              labelBuilder(
-                'Use apenas se seu Nextcloud usa certificado self-signed ou CA interna.',
-                'Use only if your Nextcloud uses self-signed cert or internal CA.',
-              ),
-              style: FluentTheme.of(context).typography.caption,
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        ActionButton(
-          label: labelBuilder(
-            'Testar conexao Nextcloud',
-            'Test Nextcloud connection',
-          ),
-          icon: FluentIcons.network_tower,
-          onPressed: onTestConnection,
-          isLoading: isTestingConnection,
-        ),
-      ],
-    );
-  }
-
-  String? _validateServerUrl(String? value) {
-    final text = value?.trim() ?? '';
-    if (text.isEmpty) {
-      return labelBuilder('URL e obrigatoria', 'URL is required');
-    }
-
-    final uri = Uri.tryParse(text);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
-      return labelBuilder('URL invalida', 'Invalid URL');
-    }
-    if (uri.scheme != 'https' && uri.scheme != 'http') {
-      return labelBuilder('Use http ou https', 'Use http or https');
-    }
-    return null;
-  }
-
-  String? _validateUsername(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return labelBuilder('Usuário é obrigatório', 'Username is required');
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return authMode == NextcloudAuthMode.appPassword
-          ? labelBuilder(
-              'App Password é obrigatório',
-              'App Password is required',
-            )
-          : labelBuilder(
-              'Senha do usuario e obrigatoria',
-              'User password is required',
-            );
-    }
-    return null;
-  }
-
-  String? _validateFolderName(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return labelBuilder(
-        'Nome da pasta é obrigatório',
-        'Folder name is required',
-      );
-    }
-    return null;
-  }
-}
-
-class _OAuthConfigDialog extends StatefulWidget {
-  const _OAuthConfigDialog({
-    required this.googleAuth,
-    required this.initialClientId,
-    required this.initialClientSecret,
-  });
-  final GoogleAuthProvider googleAuth;
-  final String initialClientId;
-  final String initialClientSecret;
-
-  @override
-  State<_OAuthConfigDialog> createState() => _OAuthConfigDialogState();
-}
-
-class _OAuthConfigDialogState extends State<_OAuthConfigDialog> {
-  late final TextEditingController _clientIdController;
-  late final TextEditingController _clientSecretController;
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _clientIdController = TextEditingController(text: widget.initialClientId);
-    _clientSecretController = TextEditingController(
-      text: widget.initialClientSecret,
-    );
-  }
-
-  @override
-  void dispose() {
-    _clientIdController.dispose();
-    _clientSecretController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_clientIdController.text.trim().isEmpty) {
-      unawaited(
-        MessageModal.showError(
-          context,
-          message: appLocaleString(
-            context,
-            'Client ID é obrigatório',
-            'Client ID is required',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final success = await widget.googleAuth.configureOAuth(
-      clientId: _clientIdController.text.trim(),
-      clientSecret: _clientSecretController.text.trim().isEmpty
-          ? null
-          : _clientSecretController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (success) {
-      Navigator.pop(context, true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppDialogShell(
-      constraints: const BoxConstraints(maxWidth: 800, maxHeight: 760),
-      title: Row(
-        children: [
-          const Icon(FluentIcons.cloud),
-          const SizedBox(width: 8),
-          Text(
-            appLocaleString(
-              context,
-              'Configurar Google OAuth',
-              'Configure Google OAuth',
-            ),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            appLocaleString(
-              context,
-              'Obtenha as credenciais no Google Cloud Console:',
-              'Get credentials from Google Cloud Console:',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 8),
-          _buildInstructions(),
-          const SizedBox(height: 16),
-          AppTextField(
-            controller: _clientIdController,
-            label: 'Client ID',
-            hint: 'xxx.apps.googleusercontent.com',
-            prefixIcon: const Icon(FluentIcons.lock),
-            enabled: !_isLoading,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return appLocaleString(
-                  context,
-                  'Client ID é obrigatório',
-                  'Client ID is required',
-                );
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          PasswordField(
-            controller: _clientSecretController,
-            label: 'Client Secret',
-            hint: 'GOCSPX-xxx',
-            enabled: !_isLoading,
-          ),
-        ],
-      ),
-      actions: [
-        CancelButton(
-          onPressed: _isLoading ? null : () => Navigator.pop(context, false),
-        ),
-        SaveButton(onPressed: _save, isLoading: _isLoading),
-      ],
-    );
-  }
-
-  Widget _buildInstructions() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            appLocaleString(
-              context,
-              '1. Acesse console.cloud.google.com',
-              '1. Go to console.cloud.google.com',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '2. Crie um projeto ou selecione existente',
-              '2. Create a project or select an existing one',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '3. Ative a Google Drive API',
-              '3. Enable Google Drive API',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '4. Crie credenciais OAuth (Desktop)',
-              '4. Create OAuth credentials (Desktop)',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            appLocaleString(
-              context,
-              '5. Na credencial criada, adicione em "URIs de redirecionamento autorizados":',
-              '5. In the created credential, add this under "Authorized redirect URIs":',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: context.colors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: SelectableText(
-              'http://localhost:8085/oauth2redirect',
-              style: FluentTheme.of(context).typography.caption?.copyWith(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            appLocaleString(
-              context,
-              'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
-              'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
-            ),
-            style: FluentTheme.of(context).typography.caption?.copyWith(
-              fontSize: 11,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DropboxOAuthConfigDialog extends StatefulWidget {
-  const _DropboxOAuthConfigDialog({
-    required this.dropboxAuth,
-    required this.initialClientId,
-    required this.initialClientSecret,
-  });
-  final DropboxAuthProvider dropboxAuth;
-  final String initialClientId;
-  final String initialClientSecret;
-
-  @override
-  State<_DropboxOAuthConfigDialog> createState() =>
-      _DropboxOAuthConfigDialogState();
-}
-
-class _DropboxOAuthConfigDialogState extends State<_DropboxOAuthConfigDialog> {
-  late final TextEditingController _clientIdController;
-  late final TextEditingController _clientSecretController;
-  bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _clientIdController = TextEditingController(text: widget.initialClientId);
-    _clientSecretController = TextEditingController(
-      text: widget.initialClientSecret,
-    );
-  }
-
-  @override
-  void dispose() {
-    _clientIdController.dispose();
-    _clientSecretController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_clientIdController.text.trim().isEmpty) {
-      unawaited(
-        MessageModal.showError(
-          context,
-          message: appLocaleString(
-            context,
-            'Client ID é obrigatório',
-            'Client ID is required',
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final success = await widget.dropboxAuth.configureOAuth(
-      clientId: _clientIdController.text.trim(),
-      clientSecret: _clientSecretController.text.trim().isEmpty
-          ? null
-          : _clientSecretController.text.trim(),
-    );
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    if (success) {
-      Navigator.pop(context, true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AppDialogShell(
-      constraints: const BoxConstraints(maxWidth: 800, maxHeight: 760),
-      title: Row(
-        children: [
-          const Icon(FluentIcons.cloud),
-          const SizedBox(width: 8),
-          Text(
-            appLocaleString(
-              context,
-              'Configurar Dropbox OAuth',
-              'Configure Dropbox OAuth',
-            ),
-          ),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            appLocaleString(
-              context,
-              'Obtenha as credenciais no Dropbox App Console:',
-              'Get credentials from Dropbox App Console:',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 8),
-          _buildInstructions(),
-          const SizedBox(height: 16),
-          AppTextField(
-            controller: _clientIdController,
-            label: 'App Key',
-            hint: 'xxxxx',
-            prefixIcon: const Icon(FluentIcons.lock),
-            enabled: !_isLoading,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return appLocaleString(
-                  context,
-                  'App Key é obrigatório',
-                  'App Key is required',
-                );
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 16),
-          PasswordField(
-            controller: _clientSecretController,
-            label: 'App Secret',
-            hint: 'xxxxx',
-            enabled: !_isLoading,
-          ),
-        ],
-      ),
-      actions: [
-        CancelButton(
-          onPressed: _isLoading ? null : () => Navigator.pop(context, false),
-        ),
-        SaveButton(onPressed: _save, isLoading: _isLoading),
-      ],
-    );
-  }
-
-  Widget _buildInstructions() {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: FluentTheme.of(context).resources.cardBackgroundFillColorDefault,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            appLocaleString(
-              context,
-              '1. Acesse dropbox.com/developers/apps',
-              '1. Go to dropbox.com/developers/apps',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '2. Clique em "Create app"',
-              '2. Click "Create app"',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '3. Escolha "Scoped access" e "Full Dropbox"',
-              '3. Choose "Scoped access" and "Full Dropbox"',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          Text(
-            appLocaleString(
-              context,
-              '4. Configure os scopes: files.content.write, files.content.read, account_info.read',
-              '4. Configure scopes: files.content.write, files.content.read, account_info.read',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            appLocaleString(
-              context,
-              '5. Na seção "OAuth 2", adicione em "Redirect URIs":',
-              '5. In section "OAuth 2", add this in "Redirect URIs":',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: context.colors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: SelectableText(
-              'http://localhost:8085/oauth2redirect',
-              style: FluentTheme.of(context).typography.caption?.copyWith(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            appLocaleString(
-              context,
-              'Nota: localhost é o seu próprio computador. O app cria um servidor temporário automaticamente durante a autenticação.',
-              'Note: localhost is your own machine. The app creates a temporary local server during authentication.',
-            ),
-            style: FluentTheme.of(context).typography.caption?.copyWith(
-              fontSize: 11,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
