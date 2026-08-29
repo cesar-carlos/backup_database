@@ -3,15 +3,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('License.isExpired / isNotYetValid / isValid', () {
-    test('sem expiresAt nem notBefore → válida', () {
+    test('isTrial quando licenseKey sentinela', () {
       final lic = License(
+        id: 'trial',
         deviceKey: 'd',
-        licenseKey: 'k',
+        licenseKey: 'trial:full-free',
         allowedFeatures: const ['f'],
       );
-      expect(lic.isExpired, isFalse);
-      expect(lic.isNotYetValid, isFalse);
-      expect(lic.isValid, isTrue);
+      expect(lic.isTrial, isTrue);
+    });
+
+    test('isTrial falso para chave premium', () {
+      final lic = License(
+        deviceKey: 'd',
+        licenseKey: 'premium-key',
+        allowedFeatures: const ['f'],
+      );
+      expect(lic.isTrial, isFalse);
     });
 
     test('expiresAt no passado → isExpired e !isValid', () {

@@ -177,10 +177,9 @@ class ScheduleDialogIntegritySection extends StatelessWidget {
           Consumer<LicenseProvider>(
             builder:
                 (BuildContext context, LicenseProvider licenseProvider, _) {
-                  final license = licenseProvider.currentLicense;
-                  final hasChecksum =
-                      licenseProvider.hasValidLicense &&
-                      (license?.hasFeature(LicenseFeatures.checksum) ?? false);
+                  final hasChecksum = licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.checksum,
+                  );
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,10 +222,9 @@ class ScheduleDialogIntegritySection extends StatelessWidget {
           ),
         Consumer<LicenseProvider>(
           builder: (BuildContext context, LicenseProvider licenseProvider, _) {
-            final license = licenseProvider.currentLicense;
-            final hasVerifyIntegrity =
-                licenseProvider.hasValidLicense &&
-                (license?.hasFeature(LicenseFeatures.verifyIntegrity) ?? false);
+            final hasVerifyIntegrity = licenseProvider.isFeatureUnlocked(
+              LicenseFeatures.verifyIntegrity,
+            );
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

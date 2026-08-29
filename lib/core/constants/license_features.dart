@@ -2,7 +2,6 @@ class LicenseFeatures {
   static const String differentialBackup = 'differential_backup';
   static const String logBackup = 'log_backup';
   static const String intervalSchedule = 'interval_schedule';
-  static const String remoteControl = 'remote_control';
   static const String serverConnection = 'server_connection';
   static const String googleDrive = 'google_drive';
   static const String dropbox = 'dropbox';
@@ -16,7 +15,6 @@ class LicenseFeatures {
     differentialBackup,
     logBackup,
     intervalSchedule,
-    remoteControl,
     serverConnection,
     googleDrive,
     dropbox,

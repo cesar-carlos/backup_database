@@ -86,6 +86,8 @@ class LicenseGenerationService {
         if (notBefore != null) 'notBefore': notBefore.toIso8601String(),
       };
 
+      // Contrato congelado: assina `jsonEncode(data)` na ordem de
+      // inserção deste Map — não JSON canônico.
       final dataJson = jsonEncode(data);
       final messageBytes = Uint8List.fromList(utf8.encode(dataJson));
       final signatureBytes = ed.sign(_privateKey!, messageBytes);

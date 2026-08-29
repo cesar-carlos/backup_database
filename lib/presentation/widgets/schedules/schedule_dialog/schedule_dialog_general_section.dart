@@ -98,14 +98,12 @@ class ScheduleDialogGeneralSection extends StatelessWidget {
         const SizedBox(height: 12),
         Consumer<LicenseProvider>(
           builder: (BuildContext context, LicenseProvider licenseProvider, _) {
-            final license = licenseProvider.currentLicense;
-            final hasDifferential =
-                licenseProvider.hasValidLicense &&
-                (license?.hasFeature(LicenseFeatures.differentialBackup) ??
-                    false);
-            final hasLog =
-                licenseProvider.hasValidLicense &&
-                (license?.hasFeature(LicenseFeatures.logBackup) ?? false);
+            final hasDifferential = licenseProvider.isFeatureUnlocked(
+              LicenseFeatures.differentialBackup,
+            );
+            final hasLog = licenseProvider.isFeatureUnlocked(
+              LicenseFeatures.logBackup,
+            );
 
             final List<BackupType> allTypes;
             if (databaseType == DatabaseType.sybase) {
@@ -218,17 +216,11 @@ class ScheduleDialogGeneralSection extends StatelessWidget {
               }).toList(),
               onChanged: (BackupType? value) {
                 if (value != null) {
-                  final licenseInner = licenseProvider.currentLicense;
-                  final hasDifferentialInner =
-                      licenseProvider.hasValidLicense &&
-                      (licenseInner?.hasFeature(
-                            LicenseFeatures.differentialBackup,
-                          ) ??
-                          false);
-                  final hasLogInner =
-                      licenseProvider.hasValidLicense &&
-                      (licenseInner?.hasFeature(LicenseFeatures.logBackup) ??
-                          false);
+                  final hasDifferentialInner = licenseProvider
+                      .isFeatureUnlocked(LicenseFeatures.differentialBackup);
+                  final hasLogInner = licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.logBackup,
+                  );
 
                   final isDifferentialBlocked =
                       value == BackupType.differential && !hasDifferentialInner;

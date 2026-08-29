@@ -5,6 +5,8 @@ export 'database_config_list_item.dart';
 export 'fluent_info_bar_feedback.dart';
 export 'host_port_fields.dart';
 export 'labeled_toggle.dart';
+export 'license_premium_inactive_info_bar.dart';
+export 'license_trial_reminder_info_bar.dart';
 export 'numeric_field.dart';
 export 'password_field.dart';
 export 'save_button.dart';

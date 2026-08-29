@@ -6,7 +6,9 @@ import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_revocation_checker.dart';
+import 'package:backup_database/domain/services/license_signature_verifier.dart';
 import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
+import 'package:backup_database/infrastructure/license/license_public_keys.dart';
 import 'package:backup_database/infrastructure/license/revocation_list_issued_at_store.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -16,25 +18,25 @@ class SignedRevocationListService implements IRevocationChecker {
     List<int>? publicKeyBytes,
     RevocationListIssuedAtStore? issuedAtStore,
   }) : this._(
-         publicKeyBytes: publicKeyBytes,
+         verifiers:
+             publicKeyBytes != null &&
+                 publicKeyBytes.length == LicensePublicKeys.ed25519PublicKeySize
+             ? {
+                 LicenseConstants.keyIdDefault: Ed25519LicenseVerifier(
+                   publicKeyBytes: publicKeyBytes,
+                 ),
+               }
+             : const {},
          issuedAtStore: issuedAtStore,
        );
 
-  static const _ed25519PublicKeySize = 32;
-
-  final Ed25519LicenseVerifier? _verifier;
+  final Map<String, LicenseSignatureVerifier> _verifiers;
 
   Set<String>? _cachedRevokedKeys;
   DateTime? _cacheExpiresAt;
   final String? _injectedRevocationList;
   final Duration _cacheTtl;
 
-  /// Persistência (best-effort) do maior `issuedAt` já aceito. Impede
-  /// rollback attack — atacante não consegue ressuscitar um device
-  /// revogado servindo uma CRL antiga (válida + assinada) que ainda
-  /// não tinha a revogação dele. Quando o store é `null` (testes /
-  /// modo legado), o anti-rollback opera apenas em memória dentro
-  /// desta instância.
   final RevocationListIssuedAtStore? _issuedAtStore;
   DateTime? _lastAcceptedIssuedAt;
 
@@ -43,40 +45,31 @@ class SignedRevocationListService implements IRevocationChecker {
     required String revocationListJson,
     Duration cacheTtl = LicenseConstants.revocationListTtl,
     RevocationListIssuedAtStore? issuedAtStore,
-  }) => SignedRevocationListService._(
-    publicKeyBytes: publicKeyBytes,
-    injectedRevocationList: revocationListJson,
-    cacheTtl: cacheTtl,
-    issuedAtStore: issuedAtStore,
-  );
+    Map<String, List<int>>? publicKeysByKeyId,
+  }) {
+    final keys =
+        publicKeysByKeyId ?? {LicenseConstants.keyIdDefault: publicKeyBytes};
+    return SignedRevocationListService._(
+      verifiers: {
+        for (final entry in keys.entries)
+          entry.key: Ed25519LicenseVerifier(publicKeyBytes: entry.value),
+      },
+      injectedRevocationList: revocationListJson,
+      cacheTtl: cacheTtl,
+      issuedAtStore: issuedAtStore,
+    );
+  }
 
   SignedRevocationListService._({
-    List<int>? publicKeyBytes,
+    required Map<String, LicenseSignatureVerifier> verifiers,
     this._injectedRevocationList,
     this._cacheTtl = LicenseConstants.revocationListTtl,
     this._issuedAtStore,
-  }) : _verifier =
-           publicKeyBytes != null &&
-               publicKeyBytes.length == _ed25519PublicKeySize
-           ? Ed25519LicenseVerifier(publicKeyBytes: publicKeyBytes)
-           : null;
+  }) : _verifiers = Map.unmodifiable(verifiers);
 
   static String? _readEnvOrNull(String key) {
     try {
       return dotenv.env[key];
-    } on Object {
-      // Tests and some runtime paths may use this service before dotenv is loaded.
-      return null;
-    }
-  }
-
-  static List<int>? _publicKeyFromEnv() {
-    final base64Key = _readEnvOrNull(LicenseConstants.envLicensePublicKey);
-    if (base64Key == null || base64Key.trim().isEmpty) {
-      return null;
-    }
-    try {
-      return base64.decode(base64Key.trim());
     } on Object {
       return null;
     }
@@ -85,9 +78,12 @@ class SignedRevocationListService implements IRevocationChecker {
   factory SignedRevocationListService.fromEnv({
     RevocationListIssuedAtStore? issuedAtStore,
   }) {
-    final keyBytes = _publicKeyFromEnv();
-    return SignedRevocationListService(
-      publicKeyBytes: keyBytes,
+    final keys = LicensePublicKeys.fromEnv().getOrNull() ?? const {};
+    return SignedRevocationListService._(
+      verifiers: {
+        for (final entry in keys.entries)
+          entry.key: Ed25519LicenseVerifier(publicKeyBytes: entry.value),
+      },
       issuedAtStore: issuedAtStore,
     );
   }
@@ -115,9 +111,6 @@ class SignedRevocationListService implements IRevocationChecker {
 
     final raw = await _loadRevocationListRaw();
     if (raw == null || raw.isEmpty) {
-      // Sem fonte de revogação configurada: nada a aplicar. Anota
-      // explicitamente no log a primeira vez para a operação ter
-      // ciência de que não há enforcement remoto.
       if (_cachedRevokedKeys == null) {
         LoggerService.info(
           'Sem fonte de revogação configurada — nenhum deviceKey '
@@ -140,27 +133,14 @@ class SignedRevocationListService implements IRevocationChecker {
         );
       },
       (failure) {
-        // FIX: antes esta ramificação fazia `_cachedRevokedKeys ??= {}`,
-        // o que era fail-OPEN (atacante corrompia a lista → nenhum
-        // device aparecia revogado). Agora preservamos o último
-        // `_cachedRevokedKeys` válido, e só caímos para set vazio se
-        // jamais carregamos uma lista boa antes (estado inicial).
-        // A operação fica com o último snapshot bom até a próxima
-        // tentativa (cache TTL menor para acelerar recuperação).
         final shortenedTtl = _cacheTtl < const Duration(minutes: 1)
             ? _cacheTtl
             : const Duration(minutes: 1);
         _cacheExpiresAt = now.add(shortenedTtl);
-        // Antes interpolava `$failure` direto na string — para `Failure`
-        // gerava `Failure(message: ..., code: null)` no log. Extraímos
-        // `.message` quando é Failure (caso comum aqui — o
-        // `_parseAndVerify` sempre retorna `ValidationFailure`).
         final detail = failure is Failure
             ? failure.message
             : failure.toString();
         if (_cachedRevokedKeys == null) {
-          // Nunca tivemos um snapshot bom — fail-CLOSED não é viável
-          // sem quebrar o fluxo, então logamos de forma conspícua.
           _cachedRevokedKeys = {};
           LoggerService.error(
             'Lista de revogação inválida e sem snapshot anterior em cache: '
@@ -207,8 +187,7 @@ class SignedRevocationListService implements IRevocationChecker {
   }
 
   rd.Result<Set<String>> _parseAndVerify(String raw) {
-    final verifier = _verifier;
-    if (verifier == null) {
+    if (_verifiers.isEmpty) {
       return const rd.Failure(
         ValidationFailure(
           message: 'Chave pública não configurada para verificar lista',
@@ -249,6 +228,19 @@ class SignedRevocationListService implements IRevocationChecker {
       );
     }
 
+    final keyIdRaw = data['keyId'];
+    final keyId = keyIdRaw is String && keyIdRaw.trim().isNotEmpty
+        ? keyIdRaw.trim()
+        : LicenseConstants.keyIdDefault;
+    final verifier = _verifiers[keyId];
+    if (verifier == null) {
+      return rd.Failure(
+        ValidationFailure(
+          message: 'keyId desconhecido na lista de revogação: "$keyId"',
+        ),
+      );
+    }
+
     final dataJson = jsonEncode(data);
     final messageBytes = utf8.encode(dataJson);
 
@@ -286,11 +278,6 @@ class SignedRevocationListService implements IRevocationChecker {
       }
     }
 
-    // Anti-rollback: rejeita CRL cujo `issuedAt` é estritamente menor
-    // que o último já aceito. Atacante poderia gravar uma CRL antiga
-    // (válida + assinada, com `expiresAt` no futuro) que não inclui um
-    // device revogado mais recentemente — sem este check, ressuscita
-    // uma licença revogada.
     final issuedAtStr = data['issuedAt'] as String?;
     DateTime? issuedAt;
     if (issuedAtStr != null) {
@@ -318,8 +305,6 @@ class SignedRevocationListService implements IRevocationChecker {
       }
     }
 
-    // Sucesso: avança o marcador antes de devolver para evitar TOCTOU
-    // entre `verify` e cache update. O store assíncrono é best-effort.
     if (issuedAt != null) {
       _lastAcceptedIssuedAt = issuedAt;
       final store = _issuedAtStore;
@@ -346,8 +331,6 @@ class SignedRevocationListService implements IRevocationChecker {
     }
   }
 
-  /// Hidrata o marcador anti-rollback a partir do store persistente.
-  /// Chamado uma vez no startup pelo DI; chamadas extras são no-op.
   Future<void> ensureLastAcceptedIssuedAtLoaded() async {
     if (_lastAcceptedIssuedAt != null) return;
     final store = _issuedAtStore;

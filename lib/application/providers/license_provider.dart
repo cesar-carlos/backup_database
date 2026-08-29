@@ -2,10 +2,16 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/services/i_license_cache_invalidator.dart';
+import 'package:backup_database/application/services/license_decoder.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
+import 'package:backup_database/application/services/license_trial_policy.dart';
+import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
 import 'package:backup_database/domain/entities/license.dart';
+import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_license_repository.dart';
 import 'package:backup_database/domain/services/i_device_key_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
@@ -18,7 +24,9 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
     required this._licenseRepository,
     required this._deviceKeyService,
     this._cacheInvalidator,
-  }) {
+    this._decoder,
+    LicenseTrialPolicy? trialPolicy,
+  }) : _trialPolicy = trialPolicy ?? LicenseTrialPolicy() {
     unawaited(loadDeviceKey());
     unawaited(loadLicense());
   }
@@ -27,15 +35,108 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
   final ILicenseRepository _licenseRepository;
   final IDeviceKeyService _deviceKeyService;
   final ILicenseCacheInvalidator? _cacheInvalidator;
+  final LicenseDecoder? _decoder;
+  final LicenseTrialPolicy _trialPolicy;
 
-  License? _currentLicense;
+  License? _storedLicense;
+  License? _effectiveLicense;
   String? _deviceKey;
+  bool _isLicenseLoaded = false;
+  bool _isDeviceRevoked = false;
 
-  License? get currentLicense => _currentLicense;
+  License? get storedLicense => _storedLicense;
+  License? get effectiveLicense => _effectiveLicense;
+
+  /// Licença efetiva (trial sintético ou premium válida).
+  License? get currentLicense => _effectiveLicense;
+
   String? get deviceKey => _deviceKey;
   bool get canGenerateLicenses => _generationService.canGenerateLocally;
+  bool get isLicenseLoaded => _isLicenseLoaded;
+  bool get isDeviceRevoked => _isDeviceRevoked;
+  bool get isDecoderDegraded => _decoder != null && !_decoder.isAvailable;
+
   bool get hasValidLicense =>
-      _currentLicense != null && _currentLicense!.isValid;
+      _effectiveLicense != null && _effectiveLicense!.isValid;
+
+  bool get isTrialActive => _effectiveLicense?.isTrial ?? false;
+
+  bool get showTrialReminder => isTrialActive && _trialPolicy.isReminderWindow;
+
+  bool get isTrialEndedWithoutPremium =>
+      _isLicenseLoaded &&
+      !_isDeviceRevoked &&
+      _effectiveLicense == null &&
+      (_storedLicense == null || !_storedLicense!.isValid);
+
+  bool isFeatureUnlocked(String feature) {
+    final license = _effectiveLicense;
+    if (license == null || !license.isValid) return false;
+    return license.hasFeature(feature);
+  }
+
+  bool scheduleUsesLockedPremium(
+    Schedule schedule, [
+    List<BackupDestination> destinations = const [],
+  ]) {
+    if (!_isLicenseLoaded) return false;
+
+    final differentialTypes = {
+      BackupType.differential,
+      BackupType.convertedDifferential,
+    };
+    final logTypes = {BackupType.log, BackupType.convertedLog};
+
+    if (differentialTypes.contains(schedule.backupType) &&
+        !isFeatureUnlocked(LicenseFeatures.differentialBackup)) {
+      return true;
+    }
+    if (logTypes.contains(schedule.backupType) &&
+        !isFeatureUnlocked(LicenseFeatures.logBackup)) {
+      return true;
+    }
+    if (schedule.scheduleType == 'interval' &&
+        !isFeatureUnlocked(LicenseFeatures.intervalSchedule)) {
+      return true;
+    }
+    if (schedule.enableChecksum &&
+        !isFeatureUnlocked(LicenseFeatures.checksum)) {
+      return true;
+    }
+    if (schedule.verifyAfterBackup &&
+        !isFeatureUnlocked(LicenseFeatures.verifyIntegrity)) {
+      return true;
+    }
+    if ((schedule.postBackupScript?.trim().isNotEmpty ?? false) &&
+        !isFeatureUnlocked(LicenseFeatures.postBackupScript)) {
+      return true;
+    }
+
+    final destinationById = {
+      for (final destination in destinations) destination.id: destination,
+    };
+    for (final id in schedule.destinationIds) {
+      final destination = destinationById[id];
+      if (destination != null && destinationUsesLockedPremium(destination)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool destinationUsesLockedPremium(BackupDestination destination) {
+    if (!_isLicenseLoaded) return false;
+    return switch (destination.type) {
+      DestinationType.googleDrive => !isFeatureUnlocked(
+        LicenseFeatures.googleDrive,
+      ),
+      DestinationType.dropbox => !isFeatureUnlocked(LicenseFeatures.dropbox),
+      DestinationType.nextcloud => !isFeatureUnlocked(
+        LicenseFeatures.nextcloud,
+      ),
+      DestinationType.local || DestinationType.ftp => false,
+    };
+  }
 
   Future<void> loadDeviceKey() async {
     await runAsync<void>(
@@ -54,29 +155,43 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
     await runAsync<void>(
       genericErrorMessage: 'Erro ao carregar licença',
       action: () async {
-        // Usa `getStoredLicense` (não `getCurrentLicense`) para que a UI
-        // consiga renderizar status "Licença expirada"/"Ainda não em
-        // vigor". Antes a UI só conseguia mostrar "Sem licença" para
-        // qualquer falha, porque `getCurrentLicense` filtra
-        // expirada/revogada por contrato.
-        //
-        // Validações de feature continuam passando por
-        // `LicensePolicyService` → `getCurrentLicense` no caminho de
-        // execução de backup; o getter `hasValidLicense` aqui aplica
-        // `License.isValid` (expira/notBefore), sem revogação — para
-        // gating remoto a UI deve consultar policy quando crítico.
-        final licenseResult = await _validationService.getStoredLicense();
-        licenseResult.fold(
-          (license) => _currentLicense = license,
-          (failure) {
-            _currentLicense = null;
-            // NotFound não é erro de negócio: usuário ainda não cadastrou
-            // licença. Sinalizamos limpando estado, sem propagar a falha.
-            if (failure is! core.NotFoundFailure) {
-              throw failure;
-            }
-          },
-        );
+        try {
+          final results = await Future.wait([
+            _validationService.getStoredLicense(),
+            _validationService.getCurrentLicense(),
+          ]);
+          final storedResult = results[0];
+          final currentResult = results[1];
+
+          storedResult.fold(
+            (license) => _storedLicense = license,
+            (failure) {
+              _storedLicense = null;
+              if (failure is! core.NotFoundFailure) {
+                throw failure;
+              }
+            },
+          );
+
+          currentResult.fold(
+            (license) {
+              _effectiveLicense = license;
+              _isDeviceRevoked = false;
+            },
+            (failure) {
+              _effectiveLicense = null;
+              final message = failure is core.Failure
+                  ? failure.message
+                  : failure.toString();
+              _isDeviceRevoked = message.contains('revogada');
+              if (failure is core.ServerFailure) {
+                throw failure;
+              }
+            },
+          );
+        } finally {
+          _isLicenseLoaded = true;
+        }
       },
     );
   }
@@ -101,14 +216,29 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
         );
 
         final saveResult = await _licenseRepository.upsertByDeviceKey(license);
-        return saveResult.fold(
-          (saved) {
-            _cacheInvalidator?.invalidateLicenseCache();
-            _currentLicense = saved;
-            return true;
+        final saved = saveResult.getOrNull();
+        if (saved == null) {
+          throw saveResult.exceptionOrNull()!;
+        }
+
+        _cacheInvalidator?.invalidateLicenseCache();
+        _storedLicense = saved;
+        final currentResult = await _validationService.getCurrentLicense();
+        currentResult.fold(
+          (current) {
+            _effectiveLicense = current;
+            _isDeviceRevoked = false;
           },
-          (failure) => throw failure,
+          (failure) {
+            _effectiveLicense = null;
+            final message = failure is core.Failure
+                ? failure.message
+                : failure.toString();
+            _isDeviceRevoked = message.contains('revogada');
+          },
         );
+        _isLicenseLoaded = true;
+        return true;
       },
     );
     return ok ?? false;
@@ -120,9 +250,6 @@ class LicenseProvider extends ChangeNotifier with AsyncStateMixin {
       return result.fold(
         (allowed) => allowed,
         (failure) {
-          // Fail-closed mas observável: antes engolíamos a falha sem
-          // log, impedindo diagnóstico de "por que feature X aparece
-          // negada?".
           LoggerService.debug(
             'LicenseProvider.isFeatureAllowed("$feature") = false: '
             '${failure is core.Failure ? failure.message : failure}',

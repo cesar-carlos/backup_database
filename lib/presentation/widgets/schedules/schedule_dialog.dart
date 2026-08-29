@@ -430,6 +430,63 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Consumer<LicenseProvider>(
+            builder: (context, licenseProvider, _) {
+              if (!licenseProvider.isLicenseLoaded) {
+                return const SizedBox.shrink();
+              }
+              final destinations = context
+                  .read<DestinationProvider>()
+                  .destinations;
+              final selectedDestinations = destinations
+                  .where((d) => _selectedDestinationIds.contains(d.id))
+                  .toList();
+              final lockedType =
+                  (_backupType == BackupType.differential ||
+                      _backupType == BackupType.convertedDifferential) &&
+                  !licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.differentialBackup,
+                  );
+              final lockedLog =
+                  (_backupType == BackupType.log ||
+                      _backupType == BackupType.convertedLog) &&
+                  !licenseProvider.isFeatureUnlocked(LicenseFeatures.logBackup);
+              final lockedInterval =
+                  _scheduleType == ScheduleType.interval &&
+                  !licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.intervalSchedule,
+                  );
+              final lockedChecksum =
+                  _enableChecksum &&
+                  !licenseProvider.isFeatureUnlocked(LicenseFeatures.checksum);
+              final lockedVerify =
+                  _verifyAfterBackup &&
+                  !licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.verifyIntegrity,
+                  );
+              final lockedScript =
+                  _postBackupScriptController.text.trim().isNotEmpty &&
+                  !licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.postBackupScript,
+                  );
+              final lockedDest = selectedDestinations.any(
+                licenseProvider.destinationUsesLockedPremium,
+              );
+              if (!lockedType &&
+                  !lockedLog &&
+                  !lockedInterval &&
+                  !lockedChecksum &&
+                  !lockedVerify &&
+                  !lockedScript &&
+                  !lockedDest) {
+                return const SizedBox.shrink();
+              }
+              return const Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.md),
+                child: LicensePremiumInactiveInfoBar(),
+              );
+            },
+          ),
           ScheduleDialogGeneralSection(
             formKey: _formKey,
             nameController: _nameController,
@@ -1138,16 +1195,15 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, _) {
-        final license = licenseProvider.currentLicense;
-        final hasGoogleDrive =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
-        final hasDropbox =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
-        final hasNextcloud =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
+        final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.googleDrive,
+        );
+        final hasDropbox = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.dropbox,
+        );
+        final hasNextcloud = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.nextcloud,
+        );
 
         bool isBlocked(DestinationType type) {
           if (type == DestinationType.googleDrive) return !hasGoogleDrive;
@@ -1522,10 +1578,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       context,
       listen: false,
     );
-    final license = licenseProvider.currentLicense;
-    final hasChecksum =
-        licenseProvider.hasValidLicense &&
-        (license?.hasFeature(LicenseFeatures.checksum) ?? false);
+    final hasChecksum = licenseProvider.isFeatureUnlocked(
+      LicenseFeatures.checksum,
+    );
 
     final effectiveEnableChecksum =
         _databaseType == DatabaseType.sqlServer &&

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:backup_database/application/services/license_decoder.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
+import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
 import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,8 +17,10 @@ void main() {
     setUp(() {
       keyPair = ed.generateKey();
       decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          LicenseConstants.keyIdDefault: keyPair.publicKey.bytes,
+        verifiers: {
+          LicenseConstants.keyIdDefault: Ed25519LicenseVerifier(
+            publicKeyBytes: keyPair.publicKey.bytes,
+          ),
         },
       );
       generationService = LicenseGenerationService(
@@ -53,7 +56,7 @@ void main() {
     test('decodes valid v2 license from generation service', () async {
       final genResult = await generationService.generateLicenseKey(
         deviceKey: 'device-v2',
-        allowedFeatures: const ['remote_control', 'email_notification'],
+        allowedFeatures: const ['server_connection', 'email_notification'],
         expiresAt: DateTime.now().add(const Duration(days: 90)),
       );
 
@@ -65,7 +68,10 @@ void main() {
       expect(result.isSuccess(), isTrue);
       final data = result.getOrNull()!;
       expect(data['deviceKey'], 'device-v2');
-      expect(data['allowedFeatures'], ['remote_control', 'email_notification']);
+      expect(data['allowedFeatures'], [
+        'server_connection',
+        'email_notification',
+      ]);
       expect(data['expiresAt'], isNotNull);
     });
 
@@ -89,7 +95,7 @@ void main() {
       expect(result.isError(), isTrue);
     });
 
-    test('rejects v2 license when notBefore is in future', () async {
+    test('accepts v2 license when notBefore is in future', () async {
       final now = DateTime.now();
       final notBefore = now.add(const Duration(days: 1));
 
@@ -102,7 +108,8 @@ void main() {
 
       final result = await decoder.decode(licenseKey);
 
-      expect(result.isError(), isTrue);
+      expect(result.isSuccess(), isTrue);
+      expect(result.getOrNull()!['notBefore'], isNotNull);
     });
 
     test('rejects v2 license when expiresAt is in past', () async {
@@ -266,8 +273,10 @@ void main() {
     setUp(() {
       keyPair = ed.generateKey();
       decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          LicenseConstants.keyIdDefault: keyPair.publicKey.bytes,
+        verifiers: {
+          LicenseConstants.keyIdDefault: Ed25519LicenseVerifier(
+            publicKeyBytes: keyPair.publicKey.bytes,
+          ),
         },
       );
       generationService = LicenseGenerationService(
@@ -324,6 +333,65 @@ void main() {
           );
 
       expect(generateResult.isError(), isTrue);
+    });
+
+    test('persists future notBefore instead of rejecting at paste', () async {
+      final notBefore = DateTime.now().add(const Duration(days: 2));
+      final genResult = await generationService.generateLicenseKey(
+        deviceKey: 'device-compat',
+        allowedFeatures: const ['email_notification'],
+        notBefore: notBefore,
+      );
+      final createResult = await generationService.createLicenseFromKey(
+        licenseKey: genResult.getOrNull()!,
+        deviceKey: 'device-compat',
+      );
+      expect(createResult.isSuccess(), isTrue);
+      expect(createResult.getOrNull()!.isNotYetValid, isTrue);
+    });
+  });
+
+  group('signed bytes follow jsonEncode insertion order', () {
+    test('reordered data keys keep signature invalid', () async {
+      final orderKeyPair = ed.generateKey();
+      final orderDecoder = LicenseDecoder(
+        verifiers: {
+          LicenseConstants.keyIdDefault: Ed25519LicenseVerifier(
+            publicKeyBytes: orderKeyPair.publicKey.bytes,
+          ),
+        },
+      );
+      final orderGeneration = LicenseGenerationService(
+        privateKeyBytes: orderKeyPair.privateKey.bytes,
+        licenseDecoder: orderDecoder,
+      );
+
+      final genResult = await orderGeneration.generateLicenseKey(
+        deviceKey: 'device-order',
+        allowedFeatures: const ['f1'],
+      );
+      final licenseKey = genResult.getOrNull()!;
+      final licenseData = jsonDecode(
+        utf8.decode(base64.decode(licenseKey)),
+      ) as Map<String, dynamic>;
+      final original = Map<String, dynamic>.from(
+        licenseData['data'] as Map<String, dynamic>,
+      );
+      final reordered = <String, dynamic>{
+        'issuer': original['issuer'],
+        'keyId': original['keyId'],
+        'issuedAt': original['issuedAt'],
+        'allowedFeatures': original['allowedFeatures'],
+        'deviceKey': original['deviceKey'],
+        'licenseVersion': original['licenseVersion'],
+      };
+      licenseData['data'] = reordered;
+      final tamperedKey = base64.encode(
+        utf8.encode(jsonEncode(licenseData)),
+      );
+
+      final result = await orderDecoder.decode(tamperedKey);
+      expect(result.isError(), isTrue);
     });
   });
 }

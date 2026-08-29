@@ -1,3 +1,4 @@
+import 'package:backup_database/core/constants/license_trial_constants.dart';
 import 'package:uuid/uuid.dart';
 
 class License {
@@ -61,6 +62,10 @@ class License {
   }
 
   bool get isValid => !isExpired && !isNotYetValid;
+
+  bool get isTrial =>
+      licenseKey == LicenseTrialConstants.trialLicenseKey ||
+      id == LicenseTrialConstants.trialLicenseId;
 
   bool hasFeature(String feature) {
     return allowedFeatures.contains(feature);

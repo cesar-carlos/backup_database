@@ -57,7 +57,6 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       LicenseFeatures.differentialBackup: 'Backup diferencial',
       LicenseFeatures.logBackup: 'Backup de logs',
       LicenseFeatures.intervalSchedule: 'Agendamento por interval',
-      LicenseFeatures.remoteControl: 'Controle remoto',
       LicenseFeatures.serverConnection: 'Conexão ao servidor',
       LicenseFeatures.googleDrive: 'Google Drive',
       LicenseFeatures.dropbox: 'Dropbox',
@@ -228,6 +227,33 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                       ),
                       enabled: !licenseProvider.isLoading,
                     ),
+                    if (licenseProvider.isDecoderDegraded) ...[
+                      AppSpacing.gapMd,
+                      InfoBar(
+                        severity: InfoBarSeverity.warning,
+                        isLong: true,
+                        title: Text(
+                          appLocaleString(
+                            context,
+                            'Decoder de licença indisponível',
+                            'License decoder unavailable',
+                          ),
+                        ),
+                        content: Text(
+                          appLocaleString(
+                            context,
+                            'Não é possível validar uma chave colada neste '
+                                'aparelho. O período de avaliação não depende '
+                                'disso. Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY '
+                                r'em C:\ProgramData\BackupDatabase\config\.env.',
+                            'A pasted license key cannot be validated on this '
+                                'device. The evaluation period does not depend on '
+                                'this. Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY '
+                                r'in C:\ProgramData\BackupDatabase\config\.env.',
+                          ),
+                        ),
+                      ),
+                    ],
                     AppSpacing.gapMd,
                     AppButton.primary(
                       label: appLocaleString(
@@ -263,10 +289,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                       style: FluentTheme.of(context).typography.subtitle,
                     ),
                     AppSpacing.gapMd,
-                    _buildLicenseStatus(licenseProvider.currentLicense),
-                    if (licenseProvider.currentLicense != null) ...[
+                    _buildLicenseStatus(licenseProvider),
+                    if (licenseProvider.showTrialReminder) ...[
                       AppSpacing.gapMd,
-                      _buildLicenseDetails(licenseProvider.currentLicense!),
+                      const LicenseTrialReminderInfoBar(),
+                    ],
+                    if (licenseProvider.effectiveLicense != null) ...[
+                      AppSpacing.gapMd,
+                      _buildLicenseDetails(licenseProvider.effectiveLicense!),
                     ],
                   ],
                 ),
@@ -282,23 +312,152 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     );
   }
 
-  Widget _buildLicenseStatus(License? license) {
-    if (license == null) {
+  Widget _buildLicenseStatus(LicenseProvider licenseProvider) {
+    if (!licenseProvider.isLicenseLoaded) {
       return ListTile(
-        leading: Icon(FluentIcons.cancel, color: context.colors.danger),
-        title: Text(appLocaleString(context, 'Sem licença', 'No license')),
+        leading: const ProgressRing(),
+        title: Text(appLocaleString(context, 'Carregando…', 'Loading…')),
         subtitle: Text(
           appLocaleString(
             context,
-            'Nenhuma licença válida encontrada',
-            'No valid license found',
+            'Consultando licença e período de avaliação',
+            'Checking license and evaluation period',
           ),
         ),
       );
     }
 
-    if (license.isExpired) {
-      final expiresAt = license.expiresAt;
+    final stored = licenseProvider.storedLicense;
+    final effective = licenseProvider.effectiveLicense;
+
+    if (licenseProvider.isDeviceRevoked) {
+      return ListTile(
+        leading: Icon(FluentIcons.blocked, color: context.colors.danger),
+        title: Text(
+          appLocaleString(context, 'Licença revogada', 'License revoked'),
+        ),
+        subtitle: Text(
+          appLocaleString(
+            context,
+            'Este dispositivo está na lista de revogação. A avaliação '
+                'não se aplica.',
+            'This device is on the revocation list. Evaluation does not apply.',
+          ),
+        ),
+      );
+    }
+
+    if (stored != null && stored.isValid && !(effective?.isTrial ?? false)) {
+      return ListTile(
+        leading: Icon(FluentIcons.accept, color: context.colors.success),
+        title: Text(
+          appLocaleString(context, 'Licença válida', 'Valid license'),
+        ),
+        subtitle: Text(
+          stored.expiresAt != null
+              ? appLocaleString(
+                  context,
+                  'Válida até: ${DateFormat('dd/MM/yyyy HH:mm').format(stored.expiresAt!)}',
+                  'Valid until: ${DateFormat('dd/MM/yyyy HH:mm').format(stored.expiresAt!)}',
+                )
+              : appLocaleString(
+                  context,
+                  'Licença permanente',
+                  'Permanent license',
+                ),
+        ),
+      );
+    }
+
+    if (licenseProvider.isTrialActive) {
+      final endsAt = effective?.expiresAt;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            leading: Icon(FluentIcons.calendar, color: context.colors.info),
+            title: Text(
+              appLocaleString(
+                context,
+                'Período de avaliação',
+                'Evaluation period',
+              ),
+            ),
+            subtitle: Text(
+              endsAt != null
+                  ? appLocaleString(
+                      context,
+                      'Todas as features liberadas até 01/10/2027 '
+                          '(${DateFormat('dd/MM/yyyy').format(endsAt)})',
+                      'All features unlocked until 01 Oct 2027 '
+                          '(${DateFormat('dd/MM/yyyy').format(endsAt)})',
+                    )
+                  : appLocaleString(
+                      context,
+                      'Todas as features liberadas até 01/10/2027',
+                      'All features unlocked until 01 Oct 2027',
+                    ),
+            ),
+          ),
+          if (stored != null && stored.isExpired) ...[
+            AppSpacing.gapSm,
+            InfoBar(
+              severity: InfoBarSeverity.warning,
+              isLong: true,
+              title: Text(
+                appLocaleString(
+                  context,
+                  'Licença expirada — avaliação ainda cobre',
+                  'Expired license — evaluation still covers you',
+                ),
+              ),
+              content: Text(
+                stored.expiresAt != null
+                    ? appLocaleString(
+                        context,
+                        'A chave colada expirou em ${DateFormat('dd/MM/yyyy HH:mm').format(stored.expiresAt!)}. '
+                            'Renove para continuar com premium após o trial.',
+                        'The pasted key expired on ${DateFormat('dd/MM/yyyy HH:mm').format(stored.expiresAt!)}. '
+                            'Renew to keep premium after the trial.',
+                      )
+                    : appLocaleString(
+                        context,
+                        'A chave colada está expirada. Renove para continuar '
+                            'com premium após o trial.',
+                        'The pasted key is expired. Renew to keep premium '
+                            'after the trial.',
+                      ),
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (licenseProvider.isTrialEndedWithoutPremium) {
+      return ListTile(
+        leading: Icon(FluentIcons.warning, color: context.colors.warning),
+        title: Text(
+          appLocaleString(
+            context,
+            'Avaliação encerrada',
+            'Evaluation ended',
+          ),
+        ),
+        subtitle: Text(
+          appLocaleString(
+            context,
+            'Backup full + local/FTP continua. Recursos premium ficam '
+                'inativos até ativar uma licença.',
+            'Full backup + local/FTP still runs. Premium features stay '
+                'inactive until a license is activated.',
+          ),
+        ),
+      );
+    }
+
+    if (stored != null && stored.isExpired) {
+      final expiresAt = stored.expiresAt;
       return ListTile(
         leading: Icon(FluentIcons.warning, color: context.colors.warning),
         title: Text(
@@ -320,8 +479,8 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
       );
     }
 
-    if (license.isNotYetValid) {
-      final notBefore = license.notBefore!;
+    if (stored != null && stored.isNotYetValid) {
+      final notBefore = stored.notBefore!;
       return ListTile(
         leading: Icon(FluentIcons.warning, color: context.colors.warning),
         title: Text(
@@ -342,20 +501,14 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     }
 
     return ListTile(
-      leading: Icon(FluentIcons.accept, color: context.colors.success),
-      title: Text(appLocaleString(context, 'Licença válida', 'Valid license')),
+      leading: Icon(FluentIcons.cancel, color: context.colors.danger),
+      title: Text(appLocaleString(context, 'Sem licença', 'No license')),
       subtitle: Text(
-        license.expiresAt != null
-            ? appLocaleString(
-                context,
-                'Válida até: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
-                'Valid until: ${DateFormat('dd/MM/yyyy HH:mm').format(license.expiresAt!)}',
-              )
-            : appLocaleString(
-                context,
-                'Licença permanente',
-                'Permanent license',
-              ),
+        appLocaleString(
+          context,
+          'Nenhuma licença válida encontrada',
+          'No valid license found',
+        ),
       ),
     );
   }
@@ -380,7 +533,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
                   color: context.colors.success,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(feature),
+                Text(_getFeatureLabel(feature)),
               ],
             ),
           ),

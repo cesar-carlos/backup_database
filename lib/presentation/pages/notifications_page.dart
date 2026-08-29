@@ -14,9 +14,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 bool _hasEmailNotificationFeature(LicenseProvider licenseProvider) {
-  final license = licenseProvider.currentLicense;
-  return licenseProvider.hasValidLicense &&
-      (license?.hasFeature(LicenseFeatures.emailNotification) ?? false);
+  return licenseProvider.isFeatureUnlocked(LicenseFeatures.emailNotification);
 }
 
 class NotificationsPage extends StatefulWidget {

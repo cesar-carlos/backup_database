@@ -1,16 +1,18 @@
 import 'dart:typed_data';
 
+import 'package:backup_database/domain/services/license_signature_verifier.dart';
 import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 
 const _ed25519PublicKeySize = 32;
 const _ed25519SignatureSize = 64;
 
-class Ed25519LicenseVerifier {
+class Ed25519LicenseVerifier implements LicenseSignatureVerifier {
   Ed25519LicenseVerifier({required List<int> publicKeyBytes})
     : _publicKey = ed.PublicKey(publicKeyBytes);
 
   final ed.PublicKey _publicKey;
 
+  @override
   bool verify({
     required List<int> messageBytes,
     required List<int> signatureBytes,

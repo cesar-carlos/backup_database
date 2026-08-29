@@ -267,16 +267,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
           const SizedBox(height: 16),
           Consumer<LicenseProvider>(
             builder: (context, licenseProvider, child) {
-              final license = licenseProvider.currentLicense;
-              final hasGoogleDrive =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
-              final hasDropbox =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
-              final hasNextcloud =
-                  licenseProvider.hasValidLicense &&
-                  (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
+              final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
+                LicenseFeatures.googleDrive,
+              );
+              final hasDropbox = licenseProvider.isFeatureUnlocked(
+                LicenseFeatures.dropbox,
+              );
+              final hasNextcloud = licenseProvider.isFeatureUnlocked(
+                LicenseFeatures.nextcloud,
+              );
 
               final isGoogleDriveBlocked =
                   _selectedType == DestinationType.googleDrive &&
@@ -291,12 +290,20 @@ class _DestinationDialogState extends State<DestinationDialog> {
                   isNextcloudBlocked) {
                 return InfoBar(
                   severity: InfoBarSeverity.warning,
+                  isLong: true,
                   title: Text(
-                    _dialogLabel('Recurso bloqueado', 'Feature blocked'),
+                    _dialogLabel(
+                      'Recursos premium inativos',
+                      'Premium features inactive',
+                    ),
                   ),
-                  content: const Text(
-                    'Este destino requer uma licença válida. '
-                    'Acesse Configurações > Licenciamento para mais informações.',
+                  content: Text(
+                    _dialogLabel(
+                      'Este destino permanece salvo, mas não executa até '
+                          'ativar uma licença premium.',
+                      'This destination stays saved, but will not run until a '
+                          'premium license is activated.',
+                    ),
                   ),
                   action: Button(
                     child: Text(
@@ -414,16 +421,15 @@ class _DestinationDialogState extends State<DestinationDialog> {
   Widget _buildTypeSelector() {
     return Consumer<LicenseProvider>(
       builder: (context, licenseProvider, child) {
-        final license = licenseProvider.currentLicense;
-        final hasGoogleDrive =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.googleDrive) ?? false);
-        final hasDropbox =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.dropbox) ?? false);
-        final hasNextcloud =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
+        final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.googleDrive,
+        );
+        final hasDropbox = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.dropbox,
+        );
+        final hasNextcloud = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.nextcloud,
+        );
 
         return AppDropdown<DestinationType>(
           label: _dialogLabel('Tipo de destino', 'Destination type'),
@@ -1688,10 +1694,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
 
     if (_selectedType == DestinationType.nextcloud) {
       final licenseProvider = context.read<LicenseProvider>();
-      final license = licenseProvider.currentLicense;
-      final hasNextcloud =
-          licenseProvider.hasValidLicense &&
-          (license?.hasFeature(LicenseFeatures.nextcloud) ?? false);
+      final hasNextcloud = licenseProvider.isFeatureUnlocked(
+        LicenseFeatures.nextcloud,
+      );
       if (!hasNextcloud) {
         _showError(
           _dialogLabel(

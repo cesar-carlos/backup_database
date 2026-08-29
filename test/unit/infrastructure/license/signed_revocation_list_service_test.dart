@@ -23,11 +23,13 @@ String _signedRevocationListJson({
   required List<String> revoked,
   required DateTime issuedAt,
   DateTime? expiresAt,
+  String? keyId,
 }) {
   final data = <String, dynamic>{
     'revokedDeviceKeys': revoked,
     'issuedAt': issuedAt.toIso8601String(),
     if (expiresAt != null) 'expiresAt': expiresAt.toIso8601String(),
+    'keyId': ?keyId,
   };
   final messageBytes = Uint8List.fromList(utf8.encode(jsonEncode(data)));
   final sig = ed.sign(keyPair.privateKey, messageBytes);
@@ -281,5 +283,51 @@ void main() {
         expect(t2.isBefore(t1), isTrue);
       },
     );
+  });
+
+  group('SignedRevocationListService multi-key', () {
+    test('verifies CRL signed with ed25519-2 via keyId', () async {
+      final keyPairA = ed.generateKey();
+      final keyPairB = ed.generateKey();
+      const revokedKey = 'revoked-by-key-2';
+      final listJson = _signedRevocationListJson(
+        keyPair: keyPairB,
+        revoked: [revokedKey],
+        issuedAt: DateTime.now(),
+        keyId: 'ed25519-2',
+      );
+
+      final service = SignedRevocationListService.forTesting(
+        publicKeyBytes: keyPairA.publicKey.bytes,
+        publicKeysByKeyId: {
+          'ed25519-1': keyPairA.publicKey.bytes,
+          'ed25519-2': keyPairB.publicKey.bytes,
+        },
+        revocationListJson: listJson,
+      );
+
+      expect(await service.isRevoked(revokedKey), isTrue);
+      expect(await service.isRevoked('other'), isFalse);
+    });
+
+    test('rejects CRL with unknown keyId without brute-force', () async {
+      final keyPairA = ed.generateKey();
+      final listJson = _signedRevocationListJson(
+        keyPair: keyPairA,
+        revoked: ['device-1'],
+        issuedAt: DateTime.now(),
+        keyId: 'ed25519-99',
+      );
+
+      final service = SignedRevocationListService.forTesting(
+        publicKeyBytes: keyPairA.publicKey.bytes,
+        publicKeysByKeyId: {
+          'ed25519-1': keyPairA.publicKey.bytes,
+        },
+        revocationListJson: listJson,
+      );
+
+      expect(await service.isRevoked('device-1'), isFalse);
+    });
   });
 }

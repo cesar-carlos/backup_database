@@ -82,6 +82,8 @@ Future<void> setupPresentationModule(GetIt getIt) async {
       licenseRepository: getIt<ILicenseRepository>(),
       deviceKeyService: getIt<IDeviceKeyService>(),
       cacheInvalidator: getIt<ILicenseCacheInvalidator>(),
+      decoder: getIt<LicenseDecoder>(),
+      trialPolicy: getIt<LicenseTrialPolicy>(),
     ),
   );
 

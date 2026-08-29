@@ -1,15 +1,27 @@
 import 'package:backup_database/application/services/license_decoder.dart';
 import 'package:backup_database/application/services/license_generation_service.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
+import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
 import 'package:ed25519_edwards/ed25519_edwards.dart' as ed;
 import 'package:flutter_test/flutter_test.dart';
+
+LicenseDecoder _decoderWith(Map<String, ed.KeyPair> keys) {
+  return LicenseDecoder(
+    verifiers: {
+      for (final entry in keys.entries)
+        entry.key: Ed25519LicenseVerifier(
+          publicKeyBytes: entry.value.publicKey.bytes,
+        ),
+    },
+  );
+}
 
 /// Testes específicos para rotação de chave Ed25519 — o decoder aceita
 /// múltiplas public keys indexadas por `keyId`. Veja
 /// `architectural_patterns.mdc §10` e `docs/adr/016-...` para a
 /// motivação.
 void main() {
-  group('LicenseDecoder.publicKeysByKeyId — multi-key verification', () {
+  group('LicenseDecoder.verifiers — multi-key verification', () {
     late ed.KeyPair keyPairA;
     late ed.KeyPair keyPairB;
 
@@ -19,12 +31,10 @@ void main() {
     });
 
     test('aceita licenças assinadas com qualquer keyId conhecido', () async {
-      final decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          'ed25519-1': keyPairA.publicKey.bytes,
-          'ed25519-2': keyPairB.publicKey.bytes,
-        },
-      );
+      final decoder = _decoderWith({
+        'ed25519-1': keyPairA,
+        'ed25519-2': keyPairB,
+      });
 
       final genA = LicenseGenerationService(
         privateKeyBytes: keyPairA.privateKey.bytes,
@@ -64,11 +74,9 @@ void main() {
       () async {
         // Decoder só conhece chave A. Atacante gera com chave B e
         // marca como `ed25519-2`. Deve ser rejeitada.
-        final decoder = LicenseDecoder(
-          publicKeysByKeyId: {
-            'ed25519-1': keyPairA.publicKey.bytes,
-          },
-        );
+        final decoder = _decoderWith({
+          'ed25519-1': keyPairA,
+        });
 
         final hostileGen = LicenseGenerationService(
           privateKeyBytes: keyPairB.privateKey.bytes,
@@ -78,7 +86,7 @@ void main() {
 
         final lic = await hostileGen.generateLicenseKey(
           deviceKey: 'device-attacker',
-          allowedFeatures: const ['admin', 'remote_control'],
+          allowedFeatures: const ['admin', 'server_connection'],
         );
 
         final dec = await decoder.decode(lic.getOrNull()!);
@@ -97,11 +105,9 @@ void main() {
         // Decoder mapeia ed25519-1 -> chave A. Atacante assina com
         // chave B mas marca o payload como `ed25519-1`. Verifier vai
         // tentar com chave A → falha de assinatura.
-        final decoder = LicenseDecoder(
-          publicKeysByKeyId: {
-            'ed25519-1': keyPairA.publicKey.bytes,
-          },
-        );
+        final decoder = _decoderWith({
+          'ed25519-1': keyPairA,
+        });
 
         final hostileGen = LicenseGenerationService(
           privateKeyBytes: keyPairB.privateKey.bytes,
@@ -127,12 +133,10 @@ void main() {
     );
 
     test('acceptedKeyIds expõe todas as chaves registradas', () {
-      final decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          'ed25519-1': keyPairA.publicKey.bytes,
-          'ed25519-2': keyPairB.publicKey.bytes,
-        },
-      );
+      final decoder = _decoderWith({
+        'ed25519-1': keyPairA,
+        'ed25519-2': keyPairB,
+      });
       expect(
         decoder.acceptedKeyIds.toSet(),
         equals({'ed25519-1', 'ed25519-2'}),
@@ -141,18 +145,7 @@ void main() {
 
     test('rejeita construção com mapa vazio', () {
       expect(
-        () => LicenseDecoder(publicKeysByKeyId: const {}),
-        throwsArgumentError,
-      );
-    });
-
-    test('rejeita construção com chave de tamanho inválido', () {
-      expect(
-        () => LicenseDecoder(
-          publicKeysByKeyId: {
-            'bad': [1, 2, 3],
-          },
-        ),
+        () => LicenseDecoder(verifiers: const {}),
         throwsArgumentError,
       );
     });
@@ -161,11 +154,9 @@ void main() {
   group('LicenseGenerationService.activeKeyId', () {
     test('default é LicenseConstants.keyIdDefault', () {
       final keyPair = ed.generateKey();
-      final decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          LicenseConstants.keyIdDefault: keyPair.publicKey.bytes,
-        },
-      );
+      final decoder = _decoderWith({
+        LicenseConstants.keyIdDefault: keyPair,
+      });
       final gen = LicenseGenerationService(
         privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,
@@ -175,11 +166,9 @@ void main() {
 
     test('override é refletido no payload das licenças geradas', () async {
       final keyPair = ed.generateKey();
-      final decoder = LicenseDecoder(
-        publicKeysByKeyId: {
-          'meu-key-id-customizado': keyPair.publicKey.bytes,
-        },
-      );
+      final decoder = _decoderWith({
+        'meu-key-id-customizado': keyPair,
+      });
       final gen = LicenseGenerationService(
         privateKeyBytes: keyPair.privateKey.bytes,
         licenseDecoder: decoder,

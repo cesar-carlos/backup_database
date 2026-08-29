@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/dashboard_provider.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
@@ -54,6 +55,17 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Consumer<LicenseProvider>(
+              builder: (context, licenseProvider, _) {
+                if (!licenseProvider.showTrialReminder) {
+                  return const SizedBox.shrink();
+                }
+                return const Padding(
+                  padding: EdgeInsets.only(bottom: AppSpacing.md),
+                  child: LicenseTrialReminderInfoBar(),
+                );
+              },
+            ),
             // Server selector (Client Mode only)
             if (isClientMode)
               Consumer<ServerConnectionProvider>(

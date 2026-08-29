@@ -54,4 +54,5 @@ export 'i_windows_machine_startup_service.dart';
 export 'i_windows_message_box.dart';
 export 'i_windows_service_event_logger.dart';
 export 'i_windows_service_service.dart';
+export 'license_signature_verifier.dart';
 export 'upload_progress_callback.dart';

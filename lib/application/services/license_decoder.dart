@@ -3,14 +3,13 @@ import 'dart:convert';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/infrastructure/license/ed25519_license_verifier.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:backup_database/domain/services/license_signature_verifier.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 /// Decodifica e verifica licenças Ed25519 v2 — agora com **suporte a
 /// rotação de chave**.
 ///
-/// O decoder mantém um mapa `keyId → Ed25519LicenseVerifier`. Durante
+/// O decoder mantém um mapa `keyId → LicenseSignatureVerifier`. Durante
 /// a verificação:
 ///
 /// 1. Lê `keyId` do payload assinado.
@@ -19,23 +18,22 @@ import 'package:result_dart/result_dart.dart' as rd;
 ///    um atacante poderia atribuir um `keyId` arbitrário esperando que o
 ///    sistema verificasse com a chave errada).
 ///
+/// Bytes assinados = `utf8.encode(jsonEncode(data))` na ordem de
+/// inserção do Map Dart — **não** JSON canônico. Issuers externos
+/// precisam reproduzir a mesma ordem de campos.
+///
 /// Construção típica:
-/// - [LicenseDecoder.fromEnv] — lê `BACKUP_DATABASE_LICENSE_PUBLIC_KEY`
-///   (legacy, mapeada para [LicenseConstants.keyIdDefault]) e/ou
-///   `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS` (mapa JSON
-///   `{"ed25519-1": "base64", "ed25519-2": "base64"}`). Os dois podem
-///   coexistir; a entrada do JSON tem precedência se houver colisão de
-///   `keyId`.
+/// - [LicenseDecoder] com verifiers montados pelo factory de
+///   infrastructure (`LicenseDecoderFactory.fromEnv`).
 /// - [LicenseDecoder.unavailable] — quando nenhuma chave foi configurada;
 ///   `decode` devolve `ValidationFailure` consistente.
 class LicenseDecoder {
-  LicenseDecoder({required Map<String, List<int>> publicKeysByKeyId})
-    : _verifiers = _buildVerifiers(publicKeysByKeyId),
+  LicenseDecoder({required Map<String, LicenseSignatureVerifier> verifiers})
+    : _verifiers = Map.unmodifiable(verifiers),
       _availabilityFailure = null {
     if (_verifiers.isEmpty) {
       throw ArgumentError(
-        'publicKeysByKeyId must not be empty (provide at least one '
-        'key bytes entry of $_ed25519PublicKeySize bytes).',
+        'verifiers must not be empty (provide at least one keyId).',
       );
     }
   }
@@ -44,134 +42,14 @@ class LicenseDecoder {
     : _verifiers = const {},
       _availabilityFailure = core.ValidationFailure(message: message);
 
-  static const _ed25519PublicKeySize = 32;
-
   /// `keyId → verifier`. Mapa imutável após construção.
-  final Map<String, Ed25519LicenseVerifier> _verifiers;
+  final Map<String, LicenseSignatureVerifier> _verifiers;
   final core.ValidationFailure? _availabilityFailure;
 
   bool get isAvailable => _verifiers.isNotEmpty;
 
   /// `keyId`s aceitos por este decoder. Útil para diagnóstico e logs.
   Iterable<String> get acceptedKeyIds => _verifiers.keys;
-
-  static Map<String, Ed25519LicenseVerifier> _buildVerifiers(
-    Map<String, List<int>> publicKeysByKeyId,
-  ) {
-    final result = <String, Ed25519LicenseVerifier>{};
-    publicKeysByKeyId.forEach((keyId, bytes) {
-      if (bytes.length != _ed25519PublicKeySize) {
-        throw ArgumentError(
-          'Public key for keyId "$keyId" must be exactly '
-          '$_ed25519PublicKeySize bytes, got ${bytes.length}.',
-        );
-      }
-      result[keyId] = Ed25519LicenseVerifier(publicKeyBytes: bytes);
-    });
-    return Map.unmodifiable(result);
-  }
-
-  static rd.Result<List<int>> _publicKeyFromEnv() {
-    final base64Key = dotenv.env[LicenseConstants.envLicensePublicKey];
-    if (base64Key == null || base64Key.trim().isEmpty) {
-      return const rd.Failure(
-        core.ValidationFailure(
-          message:
-              'Chave pública de licença não configurada. '
-              'Configure BACKUP_DATABASE_LICENSE_PUBLIC_KEY.',
-        ),
-      );
-    }
-    try {
-      final decoded = base64.decode(base64Key.trim());
-      if (decoded.length != _ed25519PublicKeySize) {
-        return rd.Failure(
-          core.ValidationFailure(
-            message:
-                'Chave pública inválida. Esperado $_ed25519PublicKeySize bytes, '
-                'recebido ${decoded.length} bytes.',
-          ),
-        );
-      }
-      return rd.Success(decoded);
-    } on Object catch (e) {
-      return rd.Failure(
-        core.ValidationFailure(
-          message: 'Erro ao decodificar chave pública: $e',
-        ),
-      );
-    }
-  }
-
-  /// Lê `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS` (JSON
-  /// `{"keyId": "base64", ...}`) do env e mescla no mapa final. Falhas
-  /// de parse são reportadas como warning **não-fatal** — chaves
-  /// válidas continuam carregadas, inválidas são descartadas com log.
-  static Map<String, List<int>> _publicKeysMapFromEnv() {
-    final raw = dotenv.env[LicenseConstants.envLicensePublicKeys];
-    if (raw == null || raw.trim().isEmpty) return const {};
-    Map<String, dynamic> decoded;
-    try {
-      decoded = jsonDecode(raw.trim()) as Map<String, dynamic>;
-    } on Object catch (e) {
-      LoggerService.warning(
-        'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS com JSON inválido: $e. '
-        'Ignorando esse env e mantendo apenas chave legacy se houver.',
-      );
-      return const {};
-    }
-    final result = <String, List<int>>{};
-    decoded.forEach((keyId, value) {
-      if (value is! String) {
-        LoggerService.warning(
-          'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" '
-          'não é string base64 — ignorada.',
-        );
-        return;
-      }
-      try {
-        final bytes = base64.decode(value.trim());
-        if (bytes.length != _ed25519PublicKeySize) {
-          LoggerService.warning(
-            'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" tem '
-            '${bytes.length} bytes (esperado $_ed25519PublicKeySize) — '
-            'ignorada.',
-          );
-          return;
-        }
-        result[keyId] = bytes;
-      } on Object catch (e) {
-        LoggerService.warning(
-          'BACKUP_DATABASE_LICENSE_PUBLIC_KEYS: entry "$keyId" base64 '
-          'inválido ($e) — ignorada.',
-        );
-      }
-    });
-    return result;
-  }
-
-  /// Constrói o decoder a partir do env. Mescla a chave legacy
-  /// (`PUBLIC_KEY`, mapeada para `keyIdDefault`) com o mapa
-  /// (`PUBLIC_KEYS`). O mapa tem precedência caso o mesmo `keyId`
-  /// apareça nos dois.
-  static rd.Result<LicenseDecoder> fromEnv() {
-    final keys = <String, List<int>>{};
-
-    final legacy = _publicKeyFromEnv();
-    legacy.fold(
-      (bytes) => keys[LicenseConstants.keyIdDefault] = bytes,
-      (_) {},
-    );
-
-    final map = _publicKeysMapFromEnv();
-    keys.addAll(map);
-
-    if (keys.isEmpty) {
-      return rd.Failure(legacy.exceptionOrNull()!);
-    }
-
-    return rd.Success(LicenseDecoder(publicKeysByKeyId: keys));
-  }
 
   Future<rd.Result<Map<String, dynamic>>> decode(String licenseKey) async {
     try {
@@ -289,6 +167,9 @@ class LicenseDecoder {
     }
 
     final signatureBytes = signatureBytesResult.getOrNull()!;
+    // Contrato congelado: a assinatura cobre `jsonEncode(data)` na ordem
+    // de inserção do Map (LinkedHashMap do jsonDecode). Não usar JSON
+    // canônico — licenças já emitidas quebrariam.
     final dataJson = jsonEncode(data);
     final messageBytes = utf8.encode(dataJson);
 
@@ -473,16 +354,6 @@ class LicenseDecoder {
       final parseResult = _parseIsoDate(notBefore, 'notBefore');
       if (parseResult.isError()) {
         return rd.Failure(parseResult.exceptionOrNull()!);
-      }
-      final notBeforeDt = parseResult.getOrThrow();
-      if (now.isBefore(notBeforeDt)) {
-        return rd.Failure(
-          core.ValidationFailure(
-            message:
-                'Licença ainda não válida. Válida a partir de: '
-                '${notBeforeDt.toIso8601String()}',
-          ),
-        );
       }
     }
 

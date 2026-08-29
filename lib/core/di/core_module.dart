@@ -24,6 +24,7 @@ import 'package:backup_database/infrastructure/datasources/local/database_config
 import 'package:backup_database/infrastructure/datasources/local/database_migration_224.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/http/api_client.dart';
+import 'package:backup_database/infrastructure/license/license_decoder_factory.dart';
 import 'package:backup_database/infrastructure/license/revocation_list_issued_at_store.dart';
 import 'package:backup_database/infrastructure/license/signed_revocation_list_service.dart';
 import 'package:backup_database/infrastructure/security/machine_scope_secure_credential_service.dart';
@@ -153,7 +154,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
   );
 
   // License
-  final licenseDecoderResult = LicenseDecoder.fromEnv();
+  final licenseDecoderResult = LicenseDecoderFactory.fromEnv();
   final licenseDecoder = licenseDecoderResult.fold(
     (decoder) => decoder,
     (error) {
@@ -184,6 +185,10 @@ Future<void> setupCoreModule(GetIt getIt) async {
   // não impede inicialização do app.
   unawaited(revocationChecker.ensureLastAcceptedIssuedAtLoaded());
   getIt.registerLazySingleton<LicenseDecoder>(() => licenseDecoder);
+  getIt.registerLazySingleton<LicenseTrialPolicy>(
+    LicenseTrialPolicy.new,
+  );
+  getIt<LicenseTrialPolicy>().logBootStatus();
   getIt.registerLazySingleton<IRevocationChecker>(() => revocationChecker);
   getIt.registerLazySingleton<RevocationListIssuedAtStore>(
     () => issuedAtStore,
@@ -211,6 +216,7 @@ Future<void> setupCoreModule(GetIt getIt) async {
       licenseRepository: getIt<ILicenseRepository>(),
       deviceKeyService: getIt<IDeviceKeyService>(),
       revocationChecker: revocationChecker,
+      trialPolicy: getIt<LicenseTrialPolicy>(),
     ),
   );
   getIt.registerLazySingleton<ILicenseValidationService>(

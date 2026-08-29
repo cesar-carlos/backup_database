@@ -42,11 +42,9 @@ class ScheduleDialogScheduleSection extends StatelessWidget {
         const SizedBox(height: 12),
         Consumer<LicenseProvider>(
           builder: (BuildContext context, LicenseProvider licenseProvider, _) {
-            final license = licenseProvider.currentLicense;
-            final hasInterval =
-                licenseProvider.hasValidLicense &&
-                (license?.hasFeature(LicenseFeatures.intervalSchedule) ??
-                    false);
+            final hasInterval = licenseProvider.isFeatureUnlocked(
+              LicenseFeatures.intervalSchedule,
+            );
 
             return AppDropdown<ScheduleType>(
               label: 'Frequência',
@@ -103,13 +101,9 @@ class ScheduleDialogScheduleSection extends StatelessWidget {
               }).toList(),
               onChanged: (ScheduleType? value) {
                 if (value != null) {
-                  final licenseInner = licenseProvider.currentLicense;
-                  final hasIntervalInner =
-                      licenseProvider.hasValidLicense &&
-                      (licenseInner?.hasFeature(
-                            LicenseFeatures.intervalSchedule,
-                          ) ??
-                          false);
+                  final hasIntervalInner = licenseProvider.isFeatureUnlocked(
+                    LicenseFeatures.intervalSchedule,
+                  );
 
                   if (value == ScheduleType.interval && !hasIntervalInner) {
                     unawaited(

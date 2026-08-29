@@ -7,6 +7,7 @@ export 'legacy_sqlite_folder_import_service.dart';
 export 'license_decoder.dart';
 export 'license_generation_service.dart';
 export 'license_policy_service.dart';
+export 'license_trial_policy.dart';
 export 'license_validation_service.dart';
 export 'log_service.dart';
 export 'metrics_analysis_service.dart';

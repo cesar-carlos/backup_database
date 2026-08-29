@@ -1,3 +1,4 @@
+import 'package:backup_database/application/services/license_trial_policy.dart';
 import 'package:backup_database/application/services/revocation_check_helper.dart';
 import 'package:backup_database/core/errors/failure.dart' as core;
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -13,10 +14,12 @@ class LicenseValidationService implements ILicenseValidationService {
     required this._licenseRepository,
     required this._deviceKeyService,
     this._revocationChecker,
-  });
+    LicenseTrialPolicy? trialPolicy,
+  }) : _trialPolicy = trialPolicy ?? LicenseTrialPolicy();
   final ILicenseRepository _licenseRepository;
   final IDeviceKeyService _deviceKeyService;
   final IRevocationChecker? _revocationChecker;
+  final LicenseTrialPolicy _trialPolicy;
 
   @override
   Future<rd.Result<License>> getCurrentLicense() async {
@@ -24,9 +27,6 @@ class LicenseValidationService implements ILicenseValidationService {
       final deviceKeyResult = await _deviceKeyService.getDeviceKey();
       return await deviceKeyResult.fold(
         (deviceKey) async {
-          // Paraleliza a busca da licença e a checagem de revogação.
-          // Antes eram sequenciais; cada uma pode envolver I/O (DB local
-          // + leitura/parse da revocation list).
           final results = await Future.wait<Object>([
             _licenseRepository.getByDeviceKey(deviceKey),
             RevocationCheckHelper.isRevokedSafe(
@@ -38,33 +38,46 @@ class LicenseValidationService implements ILicenseValidationService {
           final licenseResult = results[0] as rd.Result<License>;
           final revoked = results[1] as bool;
 
+          if (revoked) {
+            LoggerService.warning('Device key revogado — trial não aplica');
+            return const rd.Failure(
+              core.ValidationFailure(message: 'Licença revogada'),
+            );
+          }
+
+          final stored = licenseResult.getOrNull();
+          if (stored != null && stored.isValid) {
+            return rd.Success(stored);
+          }
+
+          if (_trialPolicy.isActive()) {
+            return rd.Success(
+              _trialPolicy.syntheticLicense(deviceKey: deviceKey),
+            );
+          }
+
+          if (stored != null) {
+            if (stored.isExpired) {
+              LoggerService.warning('Licença encontrada mas expirada');
+              return const rd.Failure(
+                core.ValidationFailure(message: 'Licença expirada'),
+              );
+            }
+            if (stored.isNotYetValid) {
+              LoggerService.warning(
+                'Licença encontrada mas ainda nao em vigor (notBefore '
+                '${stored.notBefore?.toIso8601String()})',
+              );
+              return const rd.Failure(
+                core.ValidationFailure(
+                  message: 'Licença ainda não está em vigor',
+                ),
+              );
+            }
+          }
+
           return licenseResult.fold(
-            (license) async {
-              if (license.isExpired) {
-                LoggerService.warning('Licença encontrada mas expirada');
-                return const rd.Failure(
-                  core.ValidationFailure(message: 'Licença expirada'),
-                );
-              }
-              if (license.isNotYetValid) {
-                LoggerService.warning(
-                  'Licença encontrada mas ainda nao em vigor (notBefore '
-                  '${license.notBefore?.toIso8601String()})',
-                );
-                return const rd.Failure(
-                  core.ValidationFailure(
-                    message: 'Licença ainda não está em vigor',
-                  ),
-                );
-              }
-              if (revoked) {
-                LoggerService.warning('Licença encontrada mas revogada');
-                return const rd.Failure(
-                  core.ValidationFailure(message: 'Licença revogada'),
-                );
-              }
-              return rd.Success(license);
-            },
+            rd.Success.new,
             rd.Failure.new,
           );
         },
@@ -81,10 +94,7 @@ class LicenseValidationService implements ILicenseValidationService {
     }
   }
 
-  /// Lê a licença persistida **sem aplicar expiração/revogação**. UI usa
-  /// este método para mostrar o status real ("Licença expirada em X")
-  /// em vez de cair para "Sem licença" quando o `getCurrentLicense` já
-  /// rejeitou. Veja documentação em [ILicenseValidationService].
+  /// Lê a licença persistida **sem aplicar expiração/revogação/trial**.
   @override
   Future<rd.Result<License>> getStoredLicense() async {
     try {
@@ -120,10 +130,6 @@ class LicenseValidationService implements ILicenseValidationService {
           return rd.Success(hasFeature);
         },
         (failure) {
-          // Distingue causas para diagnóstico: feature negada porque a
-          // licença está expirada/revogada/ausente vs erro técnico
-          // (DB indisponível). Antes ambos viravam `Success(false)` e
-          // o usuário não tinha como saber a diferença na UI.
           LoggerService.debug(
             'isFeatureAllowed("$feature") = false: '
             '${failure is core.Failure ? failure.message : failure}',

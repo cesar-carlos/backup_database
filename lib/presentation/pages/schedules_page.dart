@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:backup_database/application/providers/destination_provider.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/constants/integrity_ui_strings.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
@@ -52,8 +55,12 @@ class _SchedulesPageState extends State<SchedulesPage> {
               : null,
         ),
       ],
-      headerBottom: !schedulerOk
-          ? InfoBar(
+      headerBottom: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!schedulerOk)
+            InfoBar(
               title: const Text('Agendamentos'),
               content: Text(
                 localizeCompatibilityReason(
@@ -65,8 +72,30 @@ class _SchedulesPageState extends State<SchedulesPage> {
               ),
               severity: InfoBarSeverity.warning,
               isLong: true,
-            )
-          : null,
+            ),
+          Consumer2<SchedulerProvider, LicenseProvider>(
+            builder: (context, scheduler, license, _) {
+              if (!license.isLicenseLoaded) {
+                return const SizedBox.shrink();
+              }
+              final destinations = context
+                  .watch<DestinationProvider>()
+                  .destinations;
+              final hasLocked = scheduler.schedules.any(
+                (schedule) => license.scheduleUsesLockedPremium(
+                  schedule,
+                  destinations,
+                ),
+              );
+              if (!hasLocked) return const SizedBox.shrink();
+              return const Padding(
+                padding: EdgeInsets.only(top: AppSpacing.sm),
+                child: LicensePremiumInactiveInfoBar(),
+              );
+            },
+          ),
+        ],
+      ),
       body: Consumer<SchedulerProvider>(
         builder: (context, provider, child) {
           if (provider.isLoading) {

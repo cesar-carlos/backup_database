@@ -17,10 +17,9 @@ class ScheduleDialogScriptTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<LicenseProvider>(
       builder: (BuildContext context, LicenseProvider licenseProvider, _) {
-        final license = licenseProvider.currentLicense;
-        final hasPostScript =
-            licenseProvider.hasValidLicense &&
-            (license?.hasFeature(LicenseFeatures.postBackupScript) ?? false);
+        final hasPostScript = licenseProvider.isFeatureUnlocked(
+          LicenseFeatures.postBackupScript,
+        );
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(24),

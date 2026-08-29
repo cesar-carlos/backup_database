@@ -16,6 +16,9 @@ enum VirtualizationPlatform { none, vmware, virtualbox, hyperv, unknown }
 class DeviceKeyService implements IDeviceKeyService {
   DeviceKeyService();
 
+  /// Fórmula de fingerprint **congelada**: alterar CPU/disco/Windows ID
+  /// ou o hash quebra licenças já emitidas. Não mudar sem migração.
+  ///
   /// `getDeviceKey` é determinístico para uma dada máquina e cada chamada
   /// dispara 2-3 `wmic` (Process.run) + leitura de registro + GetVolumeInformation.
   /// Esse processo pode levar 1-3s a frio. Como o resultado não muda em

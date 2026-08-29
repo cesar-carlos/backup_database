@@ -1160,9 +1160,14 @@ ao ler: prefira identidade pelo dado **persistido**.
 ### 10.10 Rotação graceful de chave Ed25519 (multi-key)
 
 Localização: `lib/application/services/license_decoder.dart`
-(construtor `publicKeysByKeyId`) + `LicenseGenerationService.activeKeyId`.
+(construtor `verifiers: Map<String, LicenseSignatureVerifier>`) +
+`LicenseDecoderFactory.fromEnv` na infrastructure +
+`LicenseGenerationService.activeKeyId`.
 
-O decoder mantém um mapa `keyId → verifier`. A verificação:
+Bytes assinados = `utf8.encode(jsonEncode(data))` na ordem de inserção
+do Map Dart — **não** JSON canônico. Não alterar sem reemitir licenças.
+
+O decoder mantém um mapa `keyId → LicenseSignatureVerifier`. A verificação:
 
 1. Lê `keyId` do payload assinado;
 2. Procura o verifier correspondente no mapa;
@@ -1204,10 +1209,19 @@ Quando mexer em qualquer parte do fluxo de licenciamento, verifique:
 - [ ] Senha admin é hash PBKDF2 (não plain) com lockout?
 - [ ] `DeviceKeyService` é singleton com cache (e novos callers usam
       o cache em vez de duplicar logic)?
-- [ ] Code path que aceita licença usa `LicenseDecoder` configurado
-      via `publicKeysByKeyId` (não hard-coda `keyIdDefault`)?
+- [ ] Code path que aceita licença usa `LicenseDecoder` montado via
+      `LicenseDecoderFactory.fromEnv` / mapa `verifiers` (não hard-coda
+      `keyIdDefault`)?
 - [ ] Code path que **emite** licença usa
       `LicenseGenerationService.activeKeyId` (não hard-coda `keyIdDefault`)?
+- [ ] Trial full/free: corte em UTC (`LicenseTrialConstants.trialEndsExclusive`);
+      sintético **nunca** persistido; `getStoredLicense` não devolve sintético;
+      stored expirada/notBefore **não** aborta trial; CRL ganha do trial?
+- [ ] Core (full + local/FTP) não exige licença; premium só via
+      `isFeatureAllowed`? Overrides `LICENSE_TRIAL_*` só em `kDebugMode`?
+- [ ] CRL verifica com o mesmo mapa PUBLIC_KEY(S) + `keyId` (sem brute-force)?
+- [ ] UI: effective síncrono (`isFeatureUnlocked`), sem flash “Sem licença”
+      no first frame; decoder degradado só no paste?
 
 ---
 

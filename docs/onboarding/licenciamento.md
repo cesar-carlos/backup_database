@@ -28,8 +28,8 @@ flowchart LR
   C1 --> C2
   C2 --> C3
   C3 -->|persist| C4
-  C4 -->|policy decisions| C5
-  C4 -->|UI status| C6
+  C4 -->|policy + trial| C5
+  C4 -->|UI stored + effective| C6
   O1 -.->|isRevoked| C2
   O1 -.->|isRevoked| C4
 ```
@@ -39,10 +39,41 @@ flowchart LR
 | Camada | Arquivos chave |
 |---|---|
 | Domain | `lib/domain/entities/license.dart` (`isExpired`, `isNotYetValid`, `isValid`); `lib/domain/services/i_license_validation_service.dart`; `lib/domain/services/i_license_policy_service.dart`; `lib/domain/services/i_revocation_checker.dart`; `lib/domain/repositories/i_license_repository.dart` |
-| Application | `lib/application/services/license_decoder.dart` (Ed25519 verify); `lib/application/services/license_generation_service.dart`; `lib/application/services/license_validation_service.dart`; `lib/application/services/cached_license_validation_service.dart` (TTL 5s); `lib/application/services/license_policy_service.dart` (cache por `runId`); `lib/application/services/revocation_check_helper.dart` (helper único); `lib/application/services/admin_password_verifier.dart` (PBKDF2 + lockout); `lib/application/providers/license_provider.dart` |
+| Application | `license_decoder.dart` (porta `LicenseSignatureVerifier`, sem import de infra); `license_decoder_factory.dart` (`fromEnv`); `license_trial_policy.dart`; `license_generation_service.dart`; `license_validation_service.dart`; `cached_license_validation_service.dart` (TTL 5s); `license_policy_service.dart` (cache por `runId`); `revocation_check_helper.dart`; `admin_password_verifier.dart`; `license_provider.dart` (stored + effective) |
 | Infrastructure | `lib/infrastructure/license/ed25519_license_verifier.dart`; `lib/infrastructure/license/signed_revocation_list_service.dart` (anti-rollback); `lib/infrastructure/license/revocation_list_issued_at_store.dart`; `lib/infrastructure/repositories/license_repository.dart` (upsert em transaction); `lib/infrastructure/external/system/device_key_service.dart` (memoizado); `lib/infrastructure/datasources/local/tables/licenses_table.dart` (com `not_before`) |
 | Presentation | `lib/presentation/widgets/settings/license_settings_tab.dart` (status + gerador admin gated) |
 | Core (guard) | `lib/core/config/environment_loader.dart` — `forbiddenInBundledAssetKeys` |
+
+## Avaliação automática (trial full/free)
+
+Até o **fim de 01/10/2027** (incluso em America/Sao_Paulo; instante
+global `2027-10-02 00:00:00-03:00` = `DateTime.utc(2027, 10, 2, 3)`):
+
+- Qualquer instalação tem **avaliação completa automática** — catálogo
+  inteiro, **sem colar chave**. Política no binário
+  (`LicenseTrialPolicy`), não uma licença Ed25519 empacotada.
+- Premium colada **substitui** o trial (vale o SKU assinado; sem união
+  com “tudo liberado”).
+- Device na **CRL** não usa avaliação.
+
+**Depois do corte**, sem premium válido: **downgrade, não lock**. Backup
+**full + destinos local/FTP** continua. Features premium (Drive/Dropbox/
+Nextcloud, diferencial, log, intervalo, checksum, verify, script, e-mail,
+`server_connection`) falham na **execução e no save** que as exige.
+Agendamentos e destinos **não são apagados**.
+
+`getCurrentLicense` pode devolver o sintético (`id: trial`,
+`licenseKey: trial:full-free`). `getStoredLicense` **nunca** devolve o
+sintético. Linha persistida expirada/notBefore **não** aborta o trial.
+
+Overrides só em **debug** (`LICENSE_TRIAL_FORCE_ENDED`,
+`LICENSE_TRIAL_ENDS_AT`) — ignorados em release. Relógio do SO atrasado
+pode estender o trial (risco aceito no modelo offline). Decoder
+indisponível afeta só o **paste** de chave premium; o trial não depende
+dele.
+
+A CRL usa o **mesmo mapa** `PUBLIC_KEY` + `PUBLIC_KEYS` e o `keyId` do
+payload (sem tentar todas as chaves).
 
 ## Configuração obrigatória
 
@@ -211,8 +242,10 @@ Olhe os logs (`LoggerService.debug`/`warning`):
 - ❌ Comitar `BACKUP_DATABASE_LICENSE_PRIVATE_KEY` no `.env` do repo.
 - ❌ `revocationChecker?.isRevoked(deviceKey) ?? false` direto —
   use `RevocationCheckHelper.isRevokedSafe`.
-- ❌ `getCurrentLicense` para mostrar status na UI (esconde licenças
-  expiradas) — use `getStoredLicense`.
+- ❌ `getCurrentLicense` sozinho para mostrar status na UI (esconde
+  expiradas e mistura trial) — carregue **stored + effective**;
+  `isFeatureUnlocked` lê o effective em memória.
+- ❌ Persistência do sintético de trial no Drift.
 - ❌ Comparar senha admin em texto plano — use `AdminPasswordVerifier`.
 - ❌ Cache de feature no `LicensePolicyService` chaveado por algo que
   não seja `runId`.
