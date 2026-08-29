@@ -7,6 +7,7 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/providers/app_density_provider.dart';
+import 'package:backup_database/presentation/widgets/atoms/empty_state.dart';
 import 'package:backup_database/presentation/widgets/organisms/database_config_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,6 +41,7 @@ void main() {
     );
     await tester.pump();
     expect(find.text('No configuration found'), findsOneWidget);
+    expect(find.byType(EmptyState), findsOneWidget);
   });
 
   testWidgets('DatabaseConfigDataGrid renders SqlServerConfig row', (

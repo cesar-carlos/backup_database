@@ -1,12 +1,13 @@
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
-import 'package:backup_database/core/theme/tokens/app_palette.dart';
-import 'package:backup_database/core/theme/tokens/app_radius.dart';
 import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
+import 'package:backup_database/presentation/widgets/molecules/schedule_dependency_list.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+
+const double _dialogContentWidth = 680;
 
 enum DependencyDialogAction { close, goToSchedules }
 
@@ -53,7 +54,7 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 680,
+        width: _dialogContentWidth,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,67 +71,7 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
               style: FluentTheme.of(context).typography.body,
             ),
             const SizedBox(height: AppSpacing.md),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: schedules.length,
-                separatorBuilder: (_, _) =>
-                    const SizedBox(height: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final schedule = schedules[index];
-                  final isEnabled = schedule.enabled;
-
-                  return AppCard(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        const Icon(FluentIcons.calendar, size: 18),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                schedule.name,
-                                style: FluentTheme.of(context)
-                                    .typography
-                                    .subtitle
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  _Tag(
-                                    label: _getScheduleTypeLabel(
-                                      scheduleTypeFromString(
-                                        schedule.scheduleType,
-                                      ),
-                                      texts,
-                                    ),
-                                    color: AppPalette.scheduleDaily,
-                                  ),
-                                  _Tag(
-                                    label: isEnabled
-                                        ? texts.active
-                                        : texts.inactive,
-                                    color: isEnabled
-                                        ? AppPalette.success
-                                        : AppPalette.grey600,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
+            ScheduleDependencyList(schedules: schedules),
           ],
         ),
       ),
@@ -139,41 +80,13 @@ class DatabaseConfigDependencyDialog extends StatelessWidget {
           onPressed: () =>
               Navigator.of(context).pop(DependencyDialogAction.close),
         ),
-        FilledButton(
+        AppButton.primary(
+          label: texts.goToSchedules,
           onPressed: () => Navigator.of(
             context,
           ).pop(DependencyDialogAction.goToSchedules),
-          child: Text(texts.goToSchedules),
         ),
       ],
-    );
-  }
-
-  String _getScheduleTypeLabel(ScheduleType type, WidgetTexts texts) {
-    return texts.scheduleTypeName(type);
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: AppRadius.circularSm,
-      ),
-      child: Text(
-        label,
-        style: FluentTheme.of(
-          context,
-        ).typography.caption?.copyWith(color: color),
-      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
+import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:backup_database/presentation/widgets/settings/updates_settings_section.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -115,15 +116,15 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.paddingLg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const UpdatesSettingsSection(),
-          const SizedBox(height: 24),
+          AppSpacing.gapLg,
           if (currentAppMode == AppMode.client) ...[
             _buildClientDownloadsSection(context),
-            const SizedBox(height: 24),
+            AppSpacing.gapLg,
           ],
           const MachineStorageSettingsSection(),
         ],
@@ -155,7 +156,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                   children: [
                     Text(
                       appLocaleString(context, 'Pasta atual', 'Current folder'),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style: FluentTheme.of(context).typography.bodyStrong,
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     if (_isLoadingTempPath)
@@ -179,32 +180,33 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: [
-                  FilledButton(
+                  AppButton.primary(
+                    label: appLocaleString(
+                      context,
+                      'Alterar pasta',
+                      'Change folder',
+                    ),
                     onPressed: _isLoadingTempPath
                         ? null
                         : () => unawaited(_changeTempPath()),
-                    child: Text(
-                      appLocaleString(
-                        context,
-                        'Alterar pasta',
-                        'Change folder',
-                      ),
-                    ),
                   ),
-                  Button(
+                  AppButton(
+                    label: appLocaleString(
+                      context,
+                      'Usar padrão do sistema',
+                      'Use system default',
+                    ),
                     onPressed: _isLoadingTempPath
                         ? null
                         : () => unawaited(_resetTempPath()),
-                    child: Text(
-                      appLocaleString(
-                        context,
-                        'Usar padrão do sistema',
-                        'Use system default',
-                      ),
-                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(FluentIcons.refresh),
+                  SettingsIconAction(
+                    label: appLocaleString(
+                      context,
+                      'Atualizar pasta atual',
+                      'Refresh current folder',
+                    ),
+                    icon: FluentIcons.refresh,
                     onPressed: _isLoadingTempPath
                         ? null
                         : () => unawaited(_loadTempPath()),

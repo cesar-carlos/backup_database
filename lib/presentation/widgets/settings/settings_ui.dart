@@ -118,13 +118,13 @@ class SettingsTechnicalItem extends StatelessWidget {
               ),
             ),
             if (onCopy != null)
-              _SettingsIconAction(
+              SettingsIconAction(
                 label: copyLabel,
                 icon: FluentIcons.copy,
                 onPressed: onCopy,
               ),
             if (onOpen != null)
-              _SettingsIconAction(
+              SettingsIconAction(
                 label: openLabel,
                 icon: FluentIcons.open_file,
                 onPressed: onOpen,
@@ -147,11 +147,12 @@ class SettingsTechnicalItem extends StatelessWidget {
   }
 }
 
-class _SettingsIconAction extends StatelessWidget {
-  const _SettingsIconAction({
+class SettingsIconAction extends StatelessWidget {
+  const SettingsIconAction({
     required this.label,
     required this.icon,
-    required this.onPressed,
+    super.key,
+    this.onPressed,
   });
 
   final String label;

@@ -97,16 +97,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final features = getIt<FeatureAvailabilityService>();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: AppSpacing.paddingLg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildAppearanceSection(context, themeProvider),
-          const SizedBox(height: 24),
+          AppSpacing.gapLg,
           _buildStartupSection(context, systemSettings, features),
-          const SizedBox(height: 24),
+          AppSpacing.gapLg,
           _buildTraySection(context, systemSettings, features),
-          const SizedBox(height: 24),
+          AppSpacing.gapLg,
           _buildAboutSection(context),
         ],
       ),
@@ -219,7 +219,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 'Densidade das tabelas',
                 'Table density',
               ),
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: FluentTheme.of(context).typography.bodyStrong,
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -443,7 +443,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth >= 860) {
+          if (constraints.maxWidth >= AppBreakpoints.compact) {
             return IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

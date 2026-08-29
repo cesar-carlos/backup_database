@@ -470,25 +470,16 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                             'panel above before retrying.',
                       )
                     : '',
-                child: FilledButton(
-                  onPressed:
-                      autoUpdateProvider.isChecking ||
-                          autoUpdateProvider.isDisabled
+                child: AppButton.primary(
+                  label: appLocaleString(
+                    context,
+                    'Verificar atualizacoes',
+                    'Check for updates',
+                  ),
+                  isLoading: autoUpdateProvider.isChecking,
+                  onPressed: autoUpdateProvider.isDisabled
                       ? null
                       : autoUpdateProvider.checkForUpdates,
-                  child: autoUpdateProvider.isChecking
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: ProgressRing(strokeWidth: 2),
-                        )
-                      : Text(
-                          appLocaleString(
-                            context,
-                            'Verificar atualizacoes',
-                            'Check for updates',
-                          ),
-                        ),
                 ),
               ),
               // P3#14: ação corretiva inline quando faltam chaves de
@@ -500,20 +491,19 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                       AppUpdateDisabledReason.dotenvLoadFailed ||
                   autoUpdateProvider.disabledReason ==
                       AppUpdateDisabledReason.feedReaderException)
-                Button(
+                AppButton(
+                  label: appLocaleString(
+                    context,
+                    'Abrir pasta de configuracao',
+                    'Open config folder',
+                  ),
                   onPressed: () => unawaited(
                     _openParentDirectory(autoUpdateProvider.configFilePath),
                   ),
-                  child: Text(
-                    appLocaleString(
-                      context,
-                      'Abrir pasta de configuracao',
-                      'Open config folder',
-                    ),
-                  ),
                 ),
               if (autoUpdateProvider.feedUrl != null)
-                Button(
+                AppButton(
+                  label: appLocaleString(context, 'Copiar feed', 'Copy feed'),
                   onPressed: () => unawaited(
                     _copyValue(
                       autoUpdateProvider.feedUrl!,
@@ -529,17 +519,12 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                       ),
                     ),
                   ),
-                  child: Text(
-                    appLocaleString(context, 'Copiar feed', 'Copy feed'),
-                  ),
                 ),
               if (autoUpdateProvider.feedUrl != null)
-                Button(
+                AppButton(
+                  label: appLocaleString(context, 'Abrir feed', 'Open feed'),
                   onPressed: () =>
                       unawaited(_openUrl(autoUpdateProvider.feedUrl!)),
-                  child: Text(
-                    appLocaleString(context, 'Abrir feed', 'Open feed'),
-                  ),
                 ),
             ],
           ),
@@ -580,23 +565,14 @@ class _UpdatesSettingsSectionState extends State<UpdatesSettingsSection> {
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,
                     children: [
-                      FilledButton(
-                        onPressed: autoUpdateProvider.isChecking
-                            ? null
-                            : autoUpdateProvider.checkForUpdates,
-                        child: autoUpdateProvider.isChecking
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: ProgressRing(strokeWidth: 2),
-                              )
-                            : Text(
-                                appLocaleString(
-                                  context,
-                                  'Atualizar agora',
-                                  'Update now',
-                                ),
-                              ),
+                      AppButton.primary(
+                        label: appLocaleString(
+                          context,
+                          'Atualizar agora',
+                          'Update now',
+                        ),
+                        isLoading: autoUpdateProvider.isChecking,
+                        onPressed: autoUpdateProvider.checkForUpdates,
                       ),
                     ],
                   ),

@@ -378,6 +378,11 @@ void main() {
       expect(find.text('Updater technical details'), findsOneWidget);
       expect(find.text('Temporary downloads folder'), findsOneWidget);
       expect(find.byType(MachineStorageSettingsSection), findsOneWidget);
+      expect(find.text('Change folder'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Change folder'),
+        findsOneWidget,
+      );
 
       final updatesTop = tester.getTopLeft(find.text('Updates')).dy;
       final downloadsTop = tester

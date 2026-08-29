@@ -6,6 +6,7 @@ import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_status_chip.dart';
+import 'package:backup_database/presentation/widgets/atoms/empty_state.dart';
 import 'package:backup_database/presentation/widgets/organisms/app_data_grid.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:intl/intl.dart';
@@ -79,24 +80,11 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
           addLabel.trim().isNotEmpty) {
         return AppCard(
           child: SizedBox.expand(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      resolvedEmptyStateMessage,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    FilledButton(
-                      onPressed: onAddWhenEmpty,
-                      child: Text(addLabel),
-                    ),
-                  ],
-                ),
-              ),
+            child: EmptyState(
+              message: resolvedEmptyStateMessage,
+              icon: FluentIcons.add,
+              actionLabel: addLabel,
+              onAction: onAddWhenEmpty,
             ),
           ),
         );
@@ -104,18 +92,13 @@ class DatabaseConfigDataGrid<T extends Object> extends StatelessWidget {
 
       return AppCard(
         child: SizedBox.expand(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: Text(
-                appLocaleString(
-                  context,
-                  'Nenhuma configuração encontrada',
-                  'No configuration found',
-                ),
-                textAlign: TextAlign.center,
-              ),
+          child: EmptyState(
+            message: appLocaleString(
+              context,
+              'Nenhuma configuração encontrada',
+              'No configuration found',
             ),
+            icon: FluentIcons.database,
           ),
         ),
       );

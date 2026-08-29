@@ -28,38 +28,38 @@ mixin _DatabaseConfigPageActions on State<DatabaseConfigPage> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                FilledButton(
-                  child: Text(
-                    DatabaseTypeMetadata.of(DatabaseType.sqlServer).titleLabel,
-                  ),
+                AppButton.primary(
+                  label: DatabaseTypeMetadata.of(
+                    DatabaseType.sqlServer,
+                  ).titleLabel,
                   onPressed: () => Navigator.of(dialogContext).pop(
                     DatabaseType.sqlServer,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FilledButton(
-                  child: Text(
-                    DatabaseTypeMetadata.of(DatabaseType.sybase).titleLabel,
-                  ),
+                AppButton.primary(
+                  label: DatabaseTypeMetadata.of(
+                    DatabaseType.sybase,
+                  ).titleLabel,
                   onPressed: () => Navigator.of(dialogContext).pop(
                     DatabaseType.sybase,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FilledButton(
-                  child: Text(
-                    DatabaseTypeMetadata.of(DatabaseType.postgresql).titleLabel,
-                  ),
+                AppButton.primary(
+                  label: DatabaseTypeMetadata.of(
+                    DatabaseType.postgresql,
+                  ).titleLabel,
                   onPressed: () => Navigator.of(dialogContext).pop(
                     DatabaseType.postgresql,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 if (!hideFirebirdOption) ...[
-                  FilledButton(
-                    child: Text(
-                      DatabaseTypeMetadata.of(DatabaseType.firebird).titleLabel,
-                    ),
+                  AppButton.primary(
+                    label: DatabaseTypeMetadata.of(
+                      DatabaseType.firebird,
+                    ).titleLabel,
                     onPressed: () => Navigator.of(dialogContext).pop(
                       DatabaseType.firebird,
                     ),

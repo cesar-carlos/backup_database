@@ -6,6 +6,7 @@ export 'fluent_info_bar_feedback.dart';
 export 'numeric_field.dart';
 export 'password_field.dart';
 export 'save_button.dart';
+export 'schedule_dependency_list.dart';
 export 'section_header_with_status_badges.dart';
 export 'skeleton_card.dart';
 export 'skeleton_list_item.dart';

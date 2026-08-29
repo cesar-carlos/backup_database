@@ -4,12 +4,14 @@ import 'package:backup_database/application/services/legacy_sqlite_folder_import
 import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hint.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/elevated_legacy_profile_scan_outcome.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/machine_storage_migration.dart';
 import 'package:backup_database/core/utils/windows_legacy_profile_elevated_scan.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -224,7 +226,7 @@ class _MachineStorageSettingsSectionState
                   ),
                 ),
                 if (sourcePathLine != null) ...<Widget>[
-                  const SizedBox(height: 12),
+                  AppSpacing.gapSm,
                   Text(
                     appLocaleString(
                       dialogContext,
@@ -233,24 +235,19 @@ class _MachineStorageSettingsSectionState
                     ),
                     style: FluentTheme.of(dialogContext).typography.caption,
                   ),
-                  const SizedBox(height: 4),
+                  AppSpacing.gapXs,
                   SelectableText(sourcePathLine),
                 ],
               ],
             ),
           ),
           actions: <Widget>[
-            Button(
+            CancelButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(
-                appLocaleString(dialogContext, 'Cancelar', 'Cancel'),
-              ),
             ),
-            FilledButton(
+            AppButton.primary(
+              label: appLocaleString(dialogContext, 'Continuar', 'Continue'),
               onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(
-                appLocaleString(dialogContext, 'Continuar', 'Continue'),
-              ),
             ),
           ],
         );
@@ -446,266 +443,206 @@ class _MachineStorageSettingsSectionState
   @override
   Widget build(BuildContext context) {
     final scanCaption = _scanRecencyCaption(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 16),
-        Text(
-          appLocaleString(
-            context,
-            'Armazenamento na máquina',
-            'Machine storage',
-          ),
-          style: FluentTheme.of(context).typography.subtitle,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          appLocaleString(
-            context,
-            'Dados partilhados por todos os utilizadores neste PC '
-                '(ProgramData no Windows). Use importação se copiou '
-                'bases de outro perfil ou backup manual.',
-            'Data shared by all users on this PC (ProgramData on '
-                'Windows). Use import if you copied databases from '
-                'another profile or a manual backup.',
-          ),
-          style: FluentTheme.of(context).typography.caption,
-        ),
-        const SizedBox(height: 16),
-        Semantics(
-          button: true,
-          label: appLocaleString(
-            context,
-            'Abrir pasta de armazenamento na máquina',
-            'Open machine storage folder',
-          ),
-          child: FilledButton(
+    return AppSectionCard(
+      title: appLocaleString(
+        context,
+        'Armazenamento na máquina',
+        'Machine storage',
+      ),
+      description: appLocaleString(
+        context,
+        'Dados partilhados por todos os utilizadores neste PC '
+            '(ProgramData no Windows). Use importação se copiou '
+            'bases de outro perfil ou backup manual.',
+        'Data shared by all users on this PC (ProgramData on '
+            'Windows). Use import if you copied databases from '
+            'another profile or a manual backup.',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          AppButton.primary(
+            label: appLocaleString(
+              context,
+              'Abrir pasta de armazenamento',
+              'Open storage folder',
+            ),
             onPressed: _openMachineStorageFolder,
-            child: Text(
+          ),
+          if (Platform.isWindows) ...<Widget>[
+            AppSpacing.gapMd,
+            Text(
               appLocaleString(
                 context,
-                'Abrir pasta de armazenamento',
-                'Open storage folder',
+                'Outros perfis Windows (SQLite legado)',
+                'Other Windows profiles (legacy SQLite)',
               ),
+              style: FluentTheme.of(context).typography.bodyStrong,
             ),
-          ),
-        ),
-        if (Platform.isWindows) ...<Widget>[
-          const SizedBox(height: 16),
-          Text(
-            appLocaleString(
-              context,
-              'Outros perfis Windows (SQLite legado)',
-              'Other Windows profiles (legacy SQLite)',
-            ),
-            style: FluentTheme.of(context).typography.bodyStrong,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            appLocaleString(
-              context,
-              r'Perfis em C:\Users\… com bases em AppData\Roaming\Backup Database. '
-                  'Sem permissão de leitura, o perfil não aparece — use '
-                  '"Pesquisar como administrador" ou importação por pasta.',
-              r'Profiles under C:\Users\… with databases in '
-                  r'AppData\Roaming\Backup Database. '
-                  'Without read permission use "Scan as administrator" or '
-                  'folder import.',
-            ),
-            style: FluentTheme.of(context).typography.caption,
-          ),
-          if (scanCaption != null) ...<Widget>[
-            const SizedBox(height: 8),
+            AppSpacing.gapXs,
             Text(
-              scanCaption,
+              appLocaleString(
+                context,
+                r'Perfis em C:\Users\… com bases em AppData\Roaming\Backup Database. '
+                    'Sem permissão de leitura, o perfil não aparece — use '
+                    '"Pesquisar como administrador" ou importação por pasta.',
+                r'Profiles under C:\Users\… with databases in '
+                    r'AppData\Roaming\Backup Database. '
+                    'Without read permission use "Scan as administrator" or '
+                    'folder import.',
+              ),
               style: FluentTheme.of(context).typography.caption,
             ),
-          ],
-          const SizedBox(height: 12),
-          if (_isScanningLegacyProfiles)
-            Row(
-              children: <Widget>[
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: ProgressRing(strokeWidth: 2),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    appLocaleString(
-                      context,
-                      'A procurar outros perfis…',
-                      'Scanning other profiles…',
-                    ),
-                    style: FluentTheme.of(context).typography.caption,
-                  ),
-                ),
-                const IconButton(
-                  icon: Icon(FluentIcons.refresh),
-                  onPressed: null,
-                ),
-              ],
-            )
-          else ...<Widget>[
-            if (_detectedOtherProfileLegacyPaths.isEmpty)
+            if (scanCaption != null) ...<Widget>[
+              AppSpacing.gapXs,
               Text(
-                appLocaleString(
-                  context,
-                  'Nenhum outro perfil com bases detetadas.',
-                  'No other profile with databases detected.',
-                ),
+                scanCaption,
                 style: FluentTheme.of(context).typography.caption,
-              )
-            else ...<Widget>[
+              ),
+            ],
+            AppSpacing.gapSm,
+            if (_isScanningLegacyProfiles)
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Expanded(
-                    child: Semantics(
-                      label: appLocaleString(
-                        context,
-                        'Selecionar perfil Windows com bases de dados legadas',
-                        'Select Windows profile with legacy databases',
-                      ),
-                      child: ComboBox<String>(
-                        value: _selectedOtherProfileLegacyPath,
-                        items: _detectedOtherProfileLegacyPaths.map((
-                          String path,
-                        ) {
-                          final label = legacyWindowsProfileFolderLabel(path);
-                          return ComboBoxItem<String>(
-                            value: path,
-                            child: Text(label),
-                          );
-                        }).toList(),
-                        onChanged: _isImportingSqlite
-                            ? null
-                            : (String? v) {
-                                setState(
-                                  () => _selectedOtherProfileLegacyPath = v,
-                                );
-                              },
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(FluentIcons.refresh),
-                    onPressed: _isImportingSqlite
-                        ? null
-                        : _loadLegacyOtherProfilePaths,
-                  ),
-                ],
-              ),
-              if (_selectedOtherProfileLegacyPath != null) ...<Widget>[
-                const SizedBox(height: 8),
-                SelectableText(
-                  _selectedOtherProfileLegacyPath!,
-                  style: FluentTheme.of(context).typography.caption,
-                ),
-              ],
-              const SizedBox(height: 8),
-              Semantics(
-                button: true,
-                label: appLocaleString(
-                  context,
-                  'Importar bases SQLite da pasta do perfil selecionado',
-                  'Import SQLite databases from selected profile folder',
-                ),
-                child: Button(
-                  onPressed: _isImportingSqlite
-                      ? null
-                      : _importSqliteFromSelectedWindowsProfile,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      if (_isImportingSqlite) ...<Widget>[
-                        const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: ProgressRing(strokeWidth: 2),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Text(
-                        appLocaleString(
-                          context,
-                          'Importar da pasta deste perfil',
-                          'Import from this profile folder',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Button(
-                onPressed: _isImportingSqlite ? null : _elevatedRescanAndMerge,
-                child: Text(
-                  appLocaleString(
-                    context,
-                    'Pesquisar como administrador…',
-                    'Scan as administrator…',
-                  ),
-                ),
-              ),
-            ],
-            if (!_isScanningLegacyProfiles &&
-                _detectedOtherProfileLegacyPaths.isEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Button(
-                onPressed: _isImportingSqlite ? null : _elevatedRescanAndMerge,
-                child: Text(
-                  appLocaleString(
-                    context,
-                    'Pesquisar como administrador…',
-                    'Scan as administrator…',
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ],
-        const SizedBox(height: 8),
-        Semantics(
-          button: true,
-          label: appLocaleString(
-            context,
-            'Importar bases SQLite a partir de uma pasta no disco',
-            'Import SQLite databases from a folder on disk',
-          ),
-          child: Button(
-            onPressed: _isImportingSqlite
-                ? null
-                : _importSqliteDatabasesFromFolder,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                if (_isImportingSqlite) ...<Widget>[
                   const SizedBox(
                     width: 16,
                     height: 16,
                     child: ProgressRing(strokeWidth: 2),
                   ),
-                  const SizedBox(width: 8),
+                  AppSpacing.gapSm,
+                  Expanded(
+                    child: Text(
+                      appLocaleString(
+                        context,
+                        'A procurar outros perfis…',
+                        'Scanning other profiles…',
+                      ),
+                      style: FluentTheme.of(context).typography.caption,
+                    ),
+                  ),
+                  SettingsIconAction(
+                    label: appLocaleString(
+                      context,
+                      'Atualizar pesquisa de perfis',
+                      'Refresh profile scan',
+                    ),
+                    icon: FluentIcons.refresh,
+                  ),
                 ],
+              )
+            else ...<Widget>[
+              if (_detectedOtherProfileLegacyPaths.isEmpty)
                 Text(
                   appLocaleString(
                     context,
-                    'Importar bases SQLite de uma pasta…',
-                    'Import SQLite databases from folder…',
+                    'Nenhum outro perfil com bases detetadas.',
+                    'No other profile with databases detected.',
                   ),
+                  style: FluentTheme.of(context).typography.caption,
+                )
+              else ...<Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: Semantics(
+                        label: appLocaleString(
+                          context,
+                          'Selecionar perfil Windows com bases de dados legadas',
+                          'Select Windows profile with legacy databases',
+                        ),
+                        child: ComboBox<String>(
+                          value: _selectedOtherProfileLegacyPath,
+                          items: _detectedOtherProfileLegacyPaths.map((
+                            String path,
+                          ) {
+                            final label = legacyWindowsProfileFolderLabel(path);
+                            return ComboBoxItem<String>(
+                              value: path,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: _isImportingSqlite
+                              ? null
+                              : (String? v) {
+                                  setState(
+                                    () => _selectedOtherProfileLegacyPath = v,
+                                  );
+                                },
+                        ),
+                      ),
+                    ),
+                    SettingsIconAction(
+                      label: appLocaleString(
+                        context,
+                        'Atualizar pesquisa de perfis',
+                        'Refresh profile scan',
+                      ),
+                      icon: FluentIcons.refresh,
+                      onPressed: _isImportingSqlite
+                          ? null
+                          : _loadLegacyOtherProfilePaths,
+                    ),
+                  ],
+                ),
+                if (_selectedOtherProfileLegacyPath != null) ...<Widget>[
+                  AppSpacing.gapXs,
+                  SelectableText(
+                    _selectedOtherProfileLegacyPath!,
+                    style: FluentTheme.of(context).typography.caption,
+                  ),
+                ],
+                AppSpacing.gapXs,
+                AppButton(
+                  label: appLocaleString(
+                    context,
+                    'Importar da pasta deste perfil',
+                    'Import from this profile folder',
+                  ),
+                  onPressed: _isImportingSqlite
+                      ? null
+                      : _importSqliteFromSelectedWindowsProfile,
+                ),
+                AppSpacing.gapXs,
+                AppButton(
+                  label: appLocaleString(
+                    context,
+                    'Pesquisar como administrador…',
+                    'Scan as administrator…',
+                  ),
+                  onPressed: _isImportingSqlite
+                      ? null
+                      : _elevatedRescanAndMerge,
                 ),
               ],
+              if (_detectedOtherProfileLegacyPaths.isEmpty) ...<Widget>[
+                AppSpacing.gapXs,
+                AppButton(
+                  label: appLocaleString(
+                    context,
+                    'Pesquisar como administrador…',
+                    'Scan as administrator…',
+                  ),
+                  onPressed: _isImportingSqlite
+                      ? null
+                      : _elevatedRescanAndMerge,
+                ),
+              ],
+            ],
+          ],
+          AppSpacing.gapXs,
+          AppButton(
+            label: appLocaleString(
+              context,
+              'Importar bases SQLite de uma pasta…',
+              'Import SQLite databases from folder…',
             ),
+            onPressed: _isImportingSqlite
+                ? null
+                : _importSqliteDatabasesFromFolder,
           ),
-        ),
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 16),
-      ],
+        ],
+      ),
     );
   }
 }

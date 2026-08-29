@@ -1,11 +1,24 @@
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
+import 'package:backup_database/core/theme/tokens/app_radius.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' hide Typography;
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   AppTheme._();
+
+  static ContentDialogThemeData flatDialogTheme(FluentThemeData base) {
+    return ContentDialogThemeData(
+      decoration: BoxDecoration(
+        color: base.menuColor,
+        borderRadius: AppRadius.circularLg,
+        border: Border.all(
+          color: base.resources.cardStrokeColorDefault,
+        ),
+      ),
+    );
+  }
 
   static final AccentColor brandFluentAccent = AccentColor('normal', const {
     'normal': AppPalette.primary,
@@ -19,6 +32,7 @@ class AppTheme {
     return theme.copyWith(
       extensions: const [AppSemanticColors.light],
       accentColor: brandFluentAccent,
+      dialogTheme: flatDialogTheme(theme),
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
         body: montserratTextTheme.bodyMedium,
@@ -40,6 +54,7 @@ class AppTheme {
     return theme.copyWith(
       extensions: const [AppSemanticColors.dark],
       accentColor: brandFluentAccent,
+      dialogTheme: flatDialogTheme(theme),
       typography: Typography.raw(
         caption: montserratTextTheme.bodySmall,
         body: montserratTextTheme.bodyMedium,
