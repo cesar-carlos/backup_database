@@ -21,6 +21,7 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_advanced_database_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_draft.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_firebird_nbackup_section.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_general_section.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_schedule_section.dart';
@@ -1630,112 +1631,47 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       }
     }
 
-    final Schedule schedule;
-    if (_databaseType == DatabaseType.sqlServer) {
-      schedule = Schedule(
-        id: widget.schedule?.id,
-        name: _nameController.text.trim(),
-        databaseConfigId: _selectedDatabaseConfigId!,
-        databaseType: _databaseType,
-        scheduleType: scheduleTypeString,
-        scheduleConfig: scheduleConfigJson,
-        destinationIds: _selectedDestinationIds,
-        backupFolder: _backupFolderController.text.trim(),
-        backupType: effectiveBackupType,
-        compressBackup: _compressBackup,
-        compressionFormat: effectiveCompressionFormat,
-        enabled: _isEnabled,
-        enableChecksum: effectiveEnableChecksum,
-        verifyAfterBackup: _verifyAfterBackup,
-        verifyPolicy: _verifyPolicy,
-        postBackupScript: _postBackupScriptController.text.trim().isEmpty
-            ? null
-            : _postBackupScriptController.text.trim(),
-        lastRunAt: widget.schedule?.lastRunAt,
-        nextRunAt: widget.schedule?.nextRunAt,
-        createdAt: widget.schedule?.createdAt,
-        truncateLog: _truncateLog,
-        backupTimeout: _backupTimeout,
-        verifyTimeout: _verifyTimeout,
-        sqlServerBackupOptions: sqlServerBackupOptions,
-        isConvertedDifferential:
-            widget.schedule?.isConvertedDifferential ?? false,
-      );
-    } else if (_databaseType == DatabaseType.sybase) {
-      final effectiveLogMode =
-          _sybaseLogBackupMode ??
-          (_truncateLog
-              ? SybaseLogBackupMode.truncate
-              : SybaseLogBackupMode.only);
-      final sybaseBackupOptions = SybaseBackupOptions(
-        checkpointLog: _sybaseCheckpointLog,
-        serverSide: _sybaseServerSide,
-        autoTuneWriters: _sybaseAutoTuneWriters,
-        blockSize: _sybaseBlockSize,
-        logBackupMode: effectiveLogMode,
-      );
-      schedule = Schedule(
-        id: widget.schedule?.id,
-        name: _nameController.text.trim(),
-        databaseConfigId: _selectedDatabaseConfigId!,
-        databaseType: _databaseType,
-        scheduleType: scheduleTypeString,
-        scheduleConfig: scheduleConfigJson,
-        destinationIds: _selectedDestinationIds,
-        backupFolder: _backupFolderController.text.trim(),
-        backupType: effectiveBackupType,
-        compressBackup: _compressBackup,
-        compressionFormat: effectiveCompressionFormat,
-        enabled: _isEnabled,
-        enableChecksum: effectiveEnableChecksum,
-        verifyAfterBackup: _verifyAfterBackup,
-        verifyPolicy: _verifyPolicy,
-        postBackupScript: _postBackupScriptController.text.trim().isEmpty
-            ? null
-            : _postBackupScriptController.text.trim(),
-        lastRunAt: widget.schedule?.lastRunAt,
-        nextRunAt: widget.schedule?.nextRunAt,
-        createdAt: widget.schedule?.createdAt,
-        truncateLog: effectiveLogMode == SybaseLogBackupMode.truncate,
-        backupTimeout: _backupTimeout,
-        verifyTimeout: _verifyTimeout,
-        sybaseBackupOptions: sybaseBackupOptions,
-        isConvertedDifferential:
-            widget.schedule?.isConvertedDifferential ??
-            (_backupType == BackupType.differential),
-      );
-    } else {
-      schedule = Schedule(
-        id: widget.schedule?.id,
-        name: _nameController.text.trim(),
-        databaseConfigId: _selectedDatabaseConfigId!,
-        databaseType: _databaseType,
-        scheduleType: scheduleTypeString,
-        scheduleConfig: scheduleConfigJson,
-        destinationIds: _selectedDestinationIds,
-        backupFolder: _backupFolderController.text.trim(),
-        backupType: effectiveBackupType,
-        compressBackup: _compressBackup,
-        compressionFormat: effectiveCompressionFormat,
-        enabled: _isEnabled,
-        enableChecksum: effectiveEnableChecksum,
-        verifyAfterBackup: _verifyAfterBackup,
-        verifyPolicy: _verifyPolicy,
-        postBackupScript: _postBackupScriptController.text.trim().isEmpty
-            ? null
-            : _postBackupScriptController.text.trim(),
-        lastRunAt: widget.schedule?.lastRunAt,
-        nextRunAt: widget.schedule?.nextRunAt,
-        createdAt: widget.schedule?.createdAt,
-        truncateLog: _truncateLog,
-        backupTimeout: _backupTimeout,
-        verifyTimeout: _verifyTimeout,
-        firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
-      );
-    }
+    final draft = ScheduleDialogDraft(
+      id: widget.schedule?.id,
+      name: _nameController.text.trim(),
+      databaseConfigId: _selectedDatabaseConfigId!,
+      databaseType: _databaseType,
+      scheduleTypeString: scheduleTypeString,
+      scheduleConfigJson: scheduleConfigJson,
+      destinationIds: _selectedDestinationIds,
+      backupFolder: _backupFolderController.text.trim(),
+      backupType: effectiveBackupType,
+      compressBackup: _compressBackup,
+      compressionFormat: effectiveCompressionFormat,
+      enabled: _isEnabled,
+      enableChecksum: effectiveEnableChecksum,
+      verifyAfterBackup: _verifyAfterBackup,
+      verifyPolicy: _verifyPolicy,
+      postBackupScript: _postBackupScriptController.text.trim().isEmpty
+          ? null
+          : _postBackupScriptController.text.trim(),
+      lastRunAt: widget.schedule?.lastRunAt,
+      nextRunAt: widget.schedule?.nextRunAt,
+      createdAt: widget.schedule?.createdAt,
+      truncateLog: _truncateLog,
+      backupTimeout: _backupTimeout,
+      verifyTimeout: _verifyTimeout,
+      sqlServerBackupOptions: sqlServerBackupOptions,
+      sybaseBackupOptions: _databaseType == DatabaseType.sybase
+          ? SybaseBackupOptions(
+              checkpointLog: _sybaseCheckpointLog,
+              serverSide: _sybaseServerSide,
+              autoTuneWriters: _sybaseAutoTuneWriters,
+              blockSize: _sybaseBlockSize,
+              logBackupMode: _sybaseLogBackupMode,
+            )
+          : null,
+      firebirdNbackupPhysicalLevel: firebirdNbackupPhysicalLevel,
+      isConvertedDifferential: widget.schedule?.isConvertedDifferential,
+    );
 
     if (mounted) {
-      Navigator.of(context).pop(schedule);
+      Navigator.of(context).pop(draft.toSchedule());
     }
   }
 }

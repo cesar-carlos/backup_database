@@ -6,7 +6,6 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -14,6 +13,11 @@ import 'package:backup_database/domain/repositories/i_user_preferences_repositor
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_local_schedule_timer_section.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_primary_action.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_status_section.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_uac_waiting_banner.dart';
+import 'package:backup_database/presentation/widgets/settings/service/windows_service_uac.dart';
 import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -190,7 +194,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_isUacElevatedOperation(provider)) ...[
-                _ServiceUacWaitingBanner(operation: provider.operation),
+                ServiceUacWaitingBanner(operation: provider.operation),
                 AppSpacing.gapLg,
               ],
               if (!serviceUiOk) ...[
@@ -215,7 +219,10 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                 ),
                 AppSpacing.gapLg,
               ],
-              _buildStatusSection(context, provider),
+              ServiceStatusSection(
+                statusText: _getStatusText(provider),
+                provider: provider,
+              ),
               if (provider.error != null) ...[
                 AppSpacing.gapLg,
                 _buildErrorSection(context, provider),
@@ -223,7 +230,14 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               AppSpacing.gapLg,
               _buildActionsSection(context, provider, serviceUiOk),
               AppSpacing.gapLg,
-              _buildLocalScheduleTimerSection(context),
+              ServiceLocalScheduleTimerSection(
+                isLoading: _isLoadingScheduleTimerPref,
+                enabled: _localScheduleTimerEnabled,
+                onChanged: (bool enabled) {
+                  unawaited(_setLocalScheduleTimerEnabled(enabled));
+                },
+              ),
+
               AppSpacing.gapLg,
               _buildInfoSection(context),
               AppSpacing.gapLg,
@@ -283,68 +297,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     );
   }
 
-  Widget _buildStatusSection(
-    BuildContext context,
-    WindowsServiceProvider provider,
-  ) {
-    return AppSectionCard(
-      title: appLocaleString(context, 'Status do serviço', 'Service status'),
-      description: appLocaleString(
-        context,
-        'Estado atual do processo em background e da instalação do serviço.',
-        'Current background process state and service installation state.',
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              SettingsFactTile(
-                label: appLocaleString(context, 'Estado', 'State'),
-                value: _getStatusText(provider),
-                caption: appLocaleString(
-                  context,
-                  'Situação observada pelo provedor neste instante.',
-                  'State observed by the provider right now.',
-                ),
-              ),
-              if (provider.status?.serviceName != null)
-                SettingsFactTile(
-                  label: appLocaleString(context, 'Serviço', 'Service'),
-                  value: provider.status!.serviceName!,
-                  caption: appLocaleString(
-                    context,
-                    'Nome registrado no Windows Service Manager.',
-                    'Name registered in the Windows Service Manager.',
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppStatusChip(
-            label: _getStatusText(provider),
-            tone: provider.isLoading
-                ? AppStatusChipTone.info
-                : provider.isRunning
-                ? AppStatusChipTone.success
-                : provider.isInstalled
-                ? AppStatusChipTone.warning
-                : AppStatusChipTone.neutral,
-            icon: provider.isLoading
-                ? FluentIcons.sync
-                : provider.isRunning
-                ? FluentIcons.play
-                : provider.isInstalled
-                ? FluentIcons.pause
-                : FluentIcons.circle_ring,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildErrorSection(
     BuildContext context,
     WindowsServiceProvider provider,
@@ -383,7 +335,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
         spacing: AppSpacing.sm,
         runSpacing: AppSpacing.sm,
         children: [
-          _ServicePrimaryAction(
+          ServicePrimaryAction(
             provider: provider,
             actionsDisabled: actionsDisabled,
             serviceActionsEnabled: serviceActionsEnabled,
@@ -421,65 +373,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
                   ? null
                   : () => unawaited(_uninstallService(context, provider)),
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocalScheduleTimerSection(BuildContext context) {
-    return AppSectionCard(
-      title: appLocaleString(
-        context,
-        'Agendamento automático local',
-        'Local automatic scheduling',
-      ),
-      description: appLocaleString(
-        context,
-        'Controla o timer local que verifica agendamentos vencidos.',
-        'Controls the local timer that checks for due schedules.',
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_isLoadingScheduleTimerPref)
-            const ProgressRing()
-          else
-            SettingsToggleRow(
-              title: appLocaleString(
-                context,
-                'Timer de verificação de agendamentos',
-                'Schedule check timer',
-              ),
-              description: appLocaleString(
-                context,
-                'Quando desativado, apenas execuções manuais e comandos remotos continuam ativos.',
-                'When off, only manual runs and remote commands continue to work.',
-              ),
-              value: _localScheduleTimerEnabled,
-              onChanged: (bool enabled) {
-                unawaited(_setLocalScheduleTimerEnabled(enabled));
-              },
-            ),
-          if (!_isLoadingScheduleTimerPref && !_localScheduleTimerEnabled) ...[
-            const SizedBox(height: AppSpacing.md),
-            InfoBar(
-              title: Text(
-                appLocaleString(
-                  context,
-                  'Reinício recomendado',
-                  'Restart recommended',
-                ),
-              ),
-              content: Text(
-                appLocaleString(
-                  context,
-                  'Reinicie o serviço do Windows ou o app em modo servidor para aplicar a preferência ao processo em background.',
-                  'Restart the Windows service or the app in server mode so the background process applies this preference.',
-                ),
-              ),
-              isLong: true,
-            ),
-          ],
         ],
       ),
     );
@@ -616,7 +509,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     if (!provider.isLoading) {
       return false;
     }
-    return _isUacElevatedOperationType(provider.operation);
+    return isUacElevatedOperationType(provider.operation);
   }
 
   Future<void> _installService(
@@ -839,200 +732,5 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return;
     }
     await MessageModal.showError(context, message: errorMessage);
-  }
-}
-
-class _ServicePrimaryAction extends StatelessWidget {
-  const _ServicePrimaryAction({
-    required this.provider,
-    required this.actionsDisabled,
-    required this.serviceActionsEnabled,
-    required this.onRefresh,
-    required this.onInstall,
-    required this.onStart,
-    required this.onRestart,
-  });
-
-  final WindowsServiceProvider provider;
-  final bool actionsDisabled;
-  final bool serviceActionsEnabled;
-  final VoidCallback onRefresh;
-  final VoidCallback onInstall;
-  final VoidCallback onStart;
-  final VoidCallback onRestart;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!serviceActionsEnabled) {
-      return AppButton.primary(
-        label: appLocaleString(
-          context,
-          'Atualizar status',
-          'Refresh status',
-        ),
-        onPressed: provider.isLoading ? null : onRefresh,
-      );
-    }
-
-    final String idleLabel;
-    final VoidCallback onPressed;
-    if (!provider.isInstalled) {
-      idleLabel = appLocaleString(
-        context,
-        'Instalar serviço',
-        'Install service',
-      );
-      onPressed = onInstall;
-    } else if (!provider.isRunning) {
-      idleLabel = appLocaleString(context, 'Iniciar', 'Start');
-      onPressed = onStart;
-    } else {
-      idleLabel = appLocaleString(context, 'Reiniciar', 'Restart');
-      onPressed = onRestart;
-    }
-
-    final isUacWait =
-        provider.isLoading && _isUacElevatedOperationType(provider.operation);
-
-    return AppButton.primary(
-      label: idleLabel,
-      onPressed: actionsDisabled ? null : onPressed,
-      isLoading: isUacWait,
-      loadingLabel: _loadingActionLabel(context),
-    );
-  }
-
-  String _loadingActionLabel(BuildContext context) {
-    return switch (provider.operation) {
-      WindowsServiceOperation.install ||
-      WindowsServiceOperation.uninstall => appLocaleString(
-        context,
-        'Aguardando confirmação do Windows (UAC)...',
-        'Waiting for Windows confirmation (UAC)...',
-      ),
-      WindowsServiceOperation.start => appLocaleString(
-        context,
-        'Iniciando... aguardando UAC',
-        'Starting... waiting for UAC',
-      ),
-      WindowsServiceOperation.stop => appLocaleString(
-        context,
-        'Parando... aguardando UAC',
-        'Stopping... waiting for UAC',
-      ),
-      WindowsServiceOperation.restart => appLocaleString(
-        context,
-        'Reiniciando... aguardando UAC',
-        'Restarting... waiting for UAC',
-      ),
-      _ => appLocaleString(context, 'Processando...', 'Processing...'),
-    };
-  }
-}
-
-bool _isUacElevatedOperationType(WindowsServiceOperation operation) {
-  return operation == WindowsServiceOperation.install ||
-      operation == WindowsServiceOperation.uninstall ||
-      operation == WindowsServiceOperation.start ||
-      operation == WindowsServiceOperation.stop ||
-      operation == WindowsServiceOperation.restart;
-}
-
-class _ServiceUacWaitingBanner extends StatelessWidget {
-  const _ServiceUacWaitingBanner({required this.operation});
-
-  final WindowsServiceOperation operation;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.warning.withValues(alpha: 0.08),
-        borderRadius: AppRadius.circularMd,
-        border: Border.all(
-          color: colors.warning.withValues(alpha: 0.28),
-        ),
-      ),
-      child: InfoBar(
-        title: Text(
-          appLocaleString(
-            context,
-            'Aguardando confirmação do Windows (UAC)...',
-            'Waiting for Windows confirmation (UAC)...',
-          ),
-        ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: ProgressRing(
-                      strokeWidth: 2,
-                      activeColor: colors.warning,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(child: Text(_message(context))),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              appLocaleString(
-                context,
-                'Se nada acontecer, verifique se o prompt do Windows não ficou atrás desta janela. A operação pode levar até cerca de 90 segundos.',
-                'If nothing happens, check whether the Windows prompt is hidden behind this window. The operation may take up to about 90 seconds.',
-              ),
-              style: FluentTheme.of(context).typography.caption,
-            ),
-          ],
-        ),
-        severity: InfoBarSeverity.warning,
-        isLong: true,
-      ),
-    );
-  }
-
-  String _message(BuildContext context) {
-    return switch (operation) {
-      WindowsServiceOperation.install => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para instalar o serviço.',
-        'Confirm the Windows prompt to install the service.',
-      ),
-      WindowsServiceOperation.uninstall => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para remover o serviço.',
-        'Confirm the Windows prompt to remove the service.',
-      ),
-      WindowsServiceOperation.start => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para iniciar o serviço.',
-        'Confirm the Windows prompt to start the service.',
-      ),
-      WindowsServiceOperation.stop => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para parar o serviço.',
-        'Confirm the Windows prompt to stop the service.',
-      ),
-      WindowsServiceOperation.restart => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para reiniciar o serviço.',
-        'Confirm the Windows prompt to restart the service.',
-      ),
-      _ => appLocaleString(
-        context,
-        'Confirme o prompt do Windows para continuar.',
-        'Confirm the Windows prompt to continue.',
-      ),
-    };
   }
 }
