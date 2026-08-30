@@ -21,12 +21,17 @@ import 'package:backup_database/domain/entities/sybase_config.dart';
 import 'package:backup_database/domain/entities/verify_policy.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_advanced_database_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_backup_type_rules.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_database_config_dropdown.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_destination_selector.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_draft.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_firebird_nbackup_section.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_general_section.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_schedule_fields.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_schedule_section.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_script_tab.dart';
 import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/schedules/schedule_dialog/schedule_dialog_sybase_log_mode.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
@@ -131,42 +136,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return <DatabaseType>[...withoutFb, DatabaseType.firebird];
   }
 
-  /// Normaliza `backupType` para um valor valido apos troca de SGBD.
-  ///
-  /// Devolve o **mesmo tipo** se o SGBD suportar (preserva escolha do
-  /// utilizador). So coage para `full` quando o tipo nao se aplica:
-  /// - Nao-postgres / nao-firebird nao suportam `fullSingle`
-  /// - Sybase nao suporta `differential` na UI (apenas full / log).
-  /// - Firebird ja oferece Full / Full Single / Diferencial / Log na
-  ///   UI; `convertedFullSingle` (vindo de import legado) cai para
-  ///   `fullSingle` pois e o equivalente direto na ferramenta gbak.
-  /// - `convertedDifferential` / `convertedLog` ficam preservados para
-  ///   Firebird/Postgres porque a regra do strategy aceita.
-  ///
-  /// Esta funcao **NAO** deve ser chamada no `_save()` — ali o tipo ja
-  /// foi escolhido pelo utilizador e nao deve ser reescrito silenciosamente
-  /// (caso contrario, agendamento incremental existente vira full no
-  /// proximo save, perdendo a cadeia).
-  BackupType _normalizeBackupTypeForDatabase(
-    DatabaseType databaseType,
-    BackupType backupType,
-  ) {
-    if (databaseType != DatabaseType.postgresql &&
-        databaseType != DatabaseType.firebird &&
-        backupType == BackupType.fullSingle) {
-      return BackupType.full;
-    }
-    if (databaseType == DatabaseType.sybase &&
-        backupType == BackupType.differential) {
-      return BackupType.full;
-    }
-    if (databaseType == DatabaseType.firebird &&
-        backupType == BackupType.convertedFullSingle) {
-      return BackupType.fullSingle;
-    }
-    return backupType;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -180,7 +149,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       _databaseType = widget.schedule!.databaseType;
       _selectedDatabaseConfigId = widget.schedule!.databaseConfigId;
       _scheduleType = scheduleTypeFromString(widget.schedule!.scheduleType);
-      _backupType = _normalizeBackupTypeForDatabase(
+      _backupType = normalizeBackupTypeForDatabase(
         _databaseType,
         widget.schedule!.backupType,
       );
@@ -505,7 +474,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
                     setState(() {
                       _selectedDatabaseConfigId = null;
                       _databaseType = value;
-                      _backupType = _normalizeBackupTypeForDatabase(
+                      _backupType = normalizeBackupTypeForDatabase(
                         _databaseType,
                         _backupType,
                       );
@@ -516,7 +485,39 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               'database_config_dropdown_${_databaseType}_${_selectedDatabaseConfigId ?? 'null'}',
             ),
             databaseConfigDropdownBuilder: (BuildContext context) =>
-                _buildDatabaseConfigDropdown(),
+                ScheduleDialogDatabaseConfigDropdown(
+                  databaseType: _databaseType,
+                  selectedConfigId: _selectedDatabaseConfigId,
+                  sqlServerConfigsLength: _sqlServerConfigs.length,
+                  sybaseConfigsLength: _sybaseConfigs.length,
+                  postgresConfigsLength: _postgresConfigs.length,
+                  firebirdConfigsLength: _firebirdConfigs.length,
+                  onSqlServerConfigsSynced: (List<SqlServerConfig> configs) {
+                    setState(() {
+                      _sqlServerConfigs = configs;
+                    });
+                  },
+                  onSybaseConfigsSynced: (List<SybaseConfig> configs) {
+                    setState(() {
+                      _sybaseConfigs = configs;
+                    });
+                  },
+                  onPostgresConfigsSynced: (List<PostgresConfig> configs) {
+                    setState(() {
+                      _postgresConfigs = configs;
+                    });
+                  },
+                  onFirebirdConfigsSynced: (List<FirebirdConfig> configs) {
+                    setState(() {
+                      _firebirdConfigs = configs;
+                    });
+                  },
+                  onSelectedConfigIdChanged: (String? id) {
+                    setState(() {
+                      _selectedDatabaseConfigId = id;
+                    });
+                  },
+                ),
             backupType: _backupType,
             isSybaseConvertedDifferential:
                 _databaseType == DatabaseType.sybase &&
@@ -548,9 +549,60 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
             sybaseLogModeSelector:
                 _backupType == BackupType.log &&
                     _databaseType == DatabaseType.sybase
-                ? _buildSybaseLogBackupModeSelector()
+                ? ScheduleDialogSybaseLogModeSelector(
+                    logBackupMode: _sybaseLogBackupMode,
+                    truncateLog: _truncateLog,
+                    onChanged: (SybaseLogBackupMode value) {
+                      setState(() {
+                        _sybaseLogBackupMode = value;
+                        _truncateLog = value == SybaseLogBackupMode.truncate;
+                      });
+                    },
+                  )
                 : null,
-            scheduleFields: _buildScheduleFields(),
+            scheduleFields: ScheduleDialogScheduleFields(
+              scheduleType: _scheduleType,
+              hour: _hour,
+              minute: _minute,
+              selectedDaysOfWeek: _selectedDaysOfWeek,
+              selectedDaysOfMonth: _selectedDaysOfMonth,
+              intervalMinutesController: _intervalMinutesController,
+              onHourChanged: (int value) {
+                setState(() {
+                  _hour = value;
+                });
+              },
+              onMinuteChanged: (int value) {
+                setState(() {
+                  _minute = value;
+                });
+              },
+              onDayOfWeekToggled: (int dayNumber, bool selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedDaysOfWeek.add(dayNumber);
+                  } else if (_selectedDaysOfWeek.length > 1) {
+                    _selectedDaysOfWeek.remove(dayNumber);
+                  }
+                  _selectedDaysOfWeek.sort();
+                });
+              },
+              onDayOfMonthToggled: (int day, bool selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedDaysOfMonth.add(day);
+                  } else if (_selectedDaysOfMonth.length > 1) {
+                    _selectedDaysOfMonth.remove(day);
+                  }
+                  _selectedDaysOfMonth.sort();
+                });
+              },
+              onIntervalMinutesChanged: (int minutes) {
+                setState(() {
+                  _intervalMinutes = minutes;
+                });
+              },
+            ),
           ),
         ],
       ),
@@ -559,7 +611,19 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
 
   Widget _buildSettingsTab() {
     return ScheduleDialogSettingsTab(
-      destinationSelector: _buildDestinationSelector(),
+      destinationSelector: ScheduleDialogDestinationSelector(
+        destinations: _destinations,
+        selectedDestinationIds: _selectedDestinationIds,
+        onDestinationToggled: (String destinationId, bool selected) {
+          setState(() {
+            if (selected) {
+              _selectedDestinationIds.add(destinationId);
+            } else {
+              _selectedDestinationIds.remove(destinationId);
+            }
+          });
+        },
+      ),
       backupFolderController: _backupFolderController,
       onSelectBackupFolderPressed: () {
         unawaited(_selectBackupFolder());
@@ -703,634 +767,6 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         );
       },
     );
-  }
-
-  Widget _buildSybaseLogBackupModeSelector() {
-    final effectiveMode =
-        _sybaseLogBackupMode ??
-        (_truncateLog
-            ? SybaseLogBackupMode.truncate
-            : SybaseLogBackupMode.only);
-    return AppDropdown<SybaseLogBackupMode>(
-      label: 'Modo de log após backup',
-      value: effectiveMode,
-      items: const [
-        ComboBoxItem(
-          value: SybaseLogBackupMode.truncate,
-          child: Text('Truncar (liberar espaço)'),
-        ),
-        ComboBoxItem(
-          value: SybaseLogBackupMode.only,
-          child: Text('Apenas backup (sem alterar log)'),
-        ),
-        ComboBoxItem(
-          value: SybaseLogBackupMode.rename,
-          child: Text('Renomear (recomendado para replicação)'),
-        ),
-      ],
-      onChanged: (value) {
-        if (value != null) {
-          setState(() {
-            _sybaseLogBackupMode = value;
-            _truncateLog = value == SybaseLogBackupMode.truncate;
-          });
-        }
-      },
-    );
-  }
-
-  Widget _buildDatabaseConfigDropdown() {
-    if (_databaseType == DatabaseType.firebird) {
-      return Consumer<FirebirdConfigProvider>(
-        builder: (context, provider, child) {
-          final firebirdItems = provider.configs.map((config) {
-            return ComboBoxItem<String>(
-              value: config.id,
-              child: Text(
-                '${config.name} (${config.host}:${config.port}/'
-                '${config.databaseFile})',
-              ),
-            );
-          }).toList();
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _firebirdConfigs.length != provider.configs.length) {
-              setState(() {
-                _firebirdConfigs = provider.configs;
-              });
-            }
-          });
-
-          String? validValue;
-          if (_selectedDatabaseConfigId != null) {
-            final exists = firebirdItems.any(
-              (item) => item.value == _selectedDatabaseConfigId,
-            );
-            validValue = exists ? _selectedDatabaseConfigId : null;
-            if (!exists) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _selectedDatabaseConfigId = null;
-                  });
-                }
-              });
-            }
-          } else {
-            validValue = null;
-          }
-
-          return AppDropdown<String>(
-            label: 'Configuração de Banco',
-            value: validValue,
-            placeholder: Text(
-              firebirdItems.isEmpty
-                  ? 'Nenhuma configuração disponível'
-                  : 'Selecione uma configuração',
-            ),
-            items: firebirdItems.isEmpty
-                ? [
-                    ComboBoxItem<String>(
-                      child: Text(
-                        'Nenhuma configuração disponível',
-                        style: FluentTheme.of(context).typography.caption
-                            ?.copyWith(fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  ]
-                : firebirdItems,
-            onChanged: firebirdItems.isEmpty
-                ? null
-                : (value) {
-                    setState(() {
-                      _selectedDatabaseConfigId = value;
-                    });
-                  },
-          );
-        },
-      );
-    }
-
-    if (_databaseType == DatabaseType.sqlServer) {
-      return Consumer<SqlServerConfigProvider>(
-        builder: (context, provider, child) {
-          final sqlServerItems = provider.configs.map((config) {
-            return ComboBoxItem<String>(
-              value: config.id,
-              child: Text(
-                '${config.name} (${config.server}:${config.database})',
-              ),
-            );
-          }).toList();
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted &&
-                _sqlServerConfigs.length != provider.configs.length) {
-              setState(() {
-                _sqlServerConfigs = provider.configs;
-              });
-            }
-          });
-
-          String? validValue;
-          if (_selectedDatabaseConfigId != null) {
-            final exists = sqlServerItems.any(
-              (item) => item.value == _selectedDatabaseConfigId,
-            );
-            validValue = exists ? _selectedDatabaseConfigId : null;
-            if (!exists) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _selectedDatabaseConfigId = null;
-                  });
-                }
-              });
-            }
-          } else {
-            validValue = null;
-          }
-
-          return AppDropdown<String>(
-            label: 'Configuração de Banco',
-            value: validValue,
-            placeholder: Text(
-              sqlServerItems.isEmpty
-                  ? 'Nenhuma configuração disponível'
-                  : 'Selecione uma configuração',
-            ),
-            items: sqlServerItems.isEmpty
-                ? [
-                    ComboBoxItem<String>(
-                      child: Text(
-                        'Nenhuma configuração disponível',
-                        style: FluentTheme.of(context).typography.caption
-                            ?.copyWith(fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  ]
-                : sqlServerItems,
-            onChanged: sqlServerItems.isEmpty
-                ? null
-                : (value) {
-                    setState(() {
-                      _selectedDatabaseConfigId = value;
-                    });
-                  },
-          );
-        },
-      );
-    }
-
-    if (_databaseType == DatabaseType.postgresql) {
-      return Consumer<PostgresConfigProvider>(
-        builder: (context, provider, child) {
-          final postgresItems = provider.configs.map((config) {
-            return ComboBoxItem<String>(
-              value: config.id,
-              child: Text(
-                '${config.name} (${config.host}:${config.port}/${config.database})',
-              ),
-            );
-          }).toList();
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _postgresConfigs.length != provider.configs.length) {
-              setState(() {
-                _postgresConfigs = provider.configs;
-              });
-            }
-          });
-
-          String? validValue;
-          if (_selectedDatabaseConfigId != null) {
-            final exists = postgresItems.any(
-              (item) => item.value == _selectedDatabaseConfigId,
-            );
-            validValue = exists ? _selectedDatabaseConfigId : null;
-            if (!exists) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  setState(() {
-                    _selectedDatabaseConfigId = null;
-                  });
-                }
-              });
-            }
-          } else {
-            validValue = null;
-          }
-
-          return AppDropdown<String>(
-            label: 'Configuração de Banco',
-            value: validValue,
-            placeholder: Text(
-              postgresItems.isEmpty
-                  ? 'Nenhuma configuração disponível'
-                  : 'Selecione uma configuração',
-            ),
-            items: postgresItems.isEmpty
-                ? [
-                    ComboBoxItem<String>(
-                      child: Text(
-                        'Nenhuma configuração disponível',
-                        style: FluentTheme.of(context).typography.caption
-                            ?.copyWith(fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  ]
-                : postgresItems,
-            onChanged: postgresItems.isEmpty
-                ? null
-                : (value) {
-                    setState(() {
-                      _selectedDatabaseConfigId = value;
-                    });
-                  },
-          );
-        },
-      );
-    }
-
-    return Consumer<SybaseConfigProvider>(
-      builder: (context, provider, child) {
-        final sybaseItems = provider.configs.map((config) {
-          return ComboBoxItem<String>(
-            value: config.id,
-            child: Text('${config.name} (${config.serverName}:${config.port})'),
-          );
-        }).toList();
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _sybaseConfigs.length != provider.configs.length) {
-            setState(() {
-              _sybaseConfigs = provider.configs;
-            });
-          }
-        });
-
-        String? validValue;
-        if (_selectedDatabaseConfigId != null) {
-          final exists = sybaseItems.any(
-            (item) => item.value == _selectedDatabaseConfigId,
-          );
-          validValue = exists ? _selectedDatabaseConfigId : null;
-          if (!exists) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                setState(() {
-                  _selectedDatabaseConfigId = null;
-                });
-              }
-            });
-          }
-        } else {
-          validValue = null;
-        }
-
-        return AppDropdown<String>(
-          label: 'Configuração de Banco',
-          value: validValue,
-          placeholder: Text(
-            sybaseItems.isEmpty
-                ? 'Nenhuma configuração disponível'
-                : 'Selecione uma configuração',
-          ),
-          items: sybaseItems.isEmpty
-              ? [
-                  ComboBoxItem<String>(
-                    child: Text(
-                      'Nenhuma configuração disponível',
-                      style: FluentTheme.of(context).typography.caption
-                          ?.copyWith(fontStyle: FontStyle.italic),
-                    ),
-                  ),
-                ]
-              : sybaseItems,
-          onChanged: sybaseItems.isEmpty
-              ? null
-              : (value) {
-                  setState(() {
-                    _selectedDatabaseConfigId = value;
-                  });
-                },
-        );
-      },
-    );
-  }
-
-  Widget _buildScheduleFields() {
-    switch (_scheduleType) {
-      case ScheduleType.daily:
-        return _buildTimeSelector();
-      case ScheduleType.weekly:
-        return Column(
-          children: [
-            _buildDayOfWeekSelector(),
-            const SizedBox(height: 16),
-            _buildTimeSelector(),
-          ],
-        );
-      case ScheduleType.monthly:
-        return Column(
-          children: [
-            _buildDayOfMonthSelector(),
-            const SizedBox(height: 16),
-            _buildTimeSelector(),
-          ],
-        );
-      case ScheduleType.interval:
-        return _buildIntervalSelector();
-    }
-  }
-
-  Widget _buildTimeSelector() {
-    return Row(
-      children: [
-        Expanded(
-          child: AppDropdown<int>(
-            label: 'Hora',
-            value: _hour,
-            placeholder: const Text('Hora'),
-            items: List.generate(24, (index) {
-              return ComboBoxItem<int>(
-                value: index,
-                child: Text(index.toString().padLeft(2, '0')),
-              );
-            }),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _hour = value;
-                });
-              }
-            },
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: AppDropdown<int>(
-            label: 'Minuto',
-            value: _minute,
-            placeholder: const Text('Minuto'),
-            items: List.generate(60, (index) {
-              return ComboBoxItem<int>(
-                value: index,
-                child: Text(index.toString().padLeft(2, '0')),
-              );
-            }),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() {
-                  _minute = value;
-                });
-              }
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDayOfWeekSelector() {
-    final days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
-    return Wrap(
-      spacing: 8,
-      children: List.generate(7, (index) {
-        final dayNumber = index + 1;
-        final isSelected = _selectedDaysOfWeek.contains(dayNumber);
-
-        return Padding(
-          padding: const EdgeInsets.only(right: 8, bottom: 8),
-          child: Checkbox(
-            checked: isSelected,
-            onChanged: (value) {
-              setState(() {
-                if (value ?? false) {
-                  _selectedDaysOfWeek.add(dayNumber);
-                } else if (_selectedDaysOfWeek.length > 1) {
-                  _selectedDaysOfWeek.remove(dayNumber);
-                }
-                _selectedDaysOfWeek.sort();
-              });
-            },
-            content: Text(days[index]),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildDayOfMonthSelector() {
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      children: List.generate(31, (index) {
-        final day = index + 1;
-        final isSelected = _selectedDaysOfMonth.contains(day);
-
-        return Padding(
-          padding: const EdgeInsets.only(right: 4, bottom: 4),
-          child: Checkbox(
-            checked: isSelected,
-            onChanged: (value) {
-              setState(() {
-                if (value ?? false) {
-                  _selectedDaysOfMonth.add(day);
-                } else if (_selectedDaysOfMonth.length > 1) {
-                  _selectedDaysOfMonth.remove(day);
-                }
-                _selectedDaysOfMonth.sort();
-              });
-            },
-            content: Text(day.toString()),
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _buildIntervalSelector() {
-    return NumericField(
-      controller: _intervalMinutesController,
-      label: 'Intervalo (minutos)',
-      hint: 'Ex: 60 para cada hora',
-      prefixIcon: FluentIcons.timer,
-      minValue: 1,
-      onChanged: (value) {
-        final minutes = int.tryParse(value) ?? 60;
-        setState(() {
-          _intervalMinutes = minutes;
-        });
-      },
-    );
-  }
-
-  Widget _buildDestinationSelector() {
-    if (_destinations.isEmpty) {
-      final colors = context.colors;
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colors.danger.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colors.danger.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Icon(FluentIcons.warning, color: colors.danger),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Nenhum destino configurado. Configure um destino primeiro.',
-                style: FluentTheme.of(
-                  context,
-                ).typography.caption?.copyWith(color: colors.danger),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Consumer<LicenseProvider>(
-      builder: (context, licenseProvider, _) {
-        final hasGoogleDrive = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.googleDrive,
-        );
-        final hasDropbox = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.dropbox,
-        );
-        final hasNextcloud = licenseProvider.isFeatureUnlocked(
-          LicenseFeatures.nextcloud,
-        );
-
-        bool isBlocked(DestinationType type) {
-          if (type == DestinationType.googleDrive) return !hasGoogleDrive;
-          if (type == DestinationType.dropbox) return !hasDropbox;
-          if (type == DestinationType.nextcloud) return !hasNextcloud;
-          return false;
-        }
-
-        return Column(
-          children: _destinations.map((destination) {
-            final selected = _selectedDestinationIds.contains(destination.id);
-            final blocked = isBlocked(destination.type);
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Icon(_getDestinationIcon(destination.type), size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          destination.name,
-                          style: FluentTheme.of(context).typography.body,
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                blocked
-                                    ? '${_getDestinationTypeName(destination.type)} (Requer licença)'
-                                    : _getDestinationTypeName(destination.type),
-                                style: FluentTheme.of(context)
-                                    .typography
-                                    .caption
-                                    ?.copyWith(
-                                      color: blocked
-                                          ? FluentTheme.of(context)
-                                                .resources
-                                                .controlStrokeColorDefault
-                                                .withValues(alpha: 0.6)
-                                          : null,
-                                    ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (blocked) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                FluentIcons.lock,
-                                size: 14,
-                                color: FluentTheme.of(context)
-                                    .resources
-                                    .controlStrokeColorDefault
-                                    .withValues(alpha: 0.6),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Checkbox(
-                    checked: selected,
-                    onChanged: (value) {
-                      if ((value ?? false) && blocked) {
-                        unawaited(
-                          FluentInfoBarFeedback.showWarning(
-                            context,
-                            message:
-                                'Este destino requer uma licença válida. '
-                                'Acesse Configurações > Licenciamento para mais informações.',
-                          ),
-                        );
-                        return;
-                      }
-                      setState(() {
-                        if (value ?? false) {
-                          _selectedDestinationIds.add(destination.id);
-                        } else {
-                          _selectedDestinationIds.remove(destination.id);
-                        }
-                      });
-                    },
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        );
-      },
-    );
-  }
-
-  String _getDestinationTypeName(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return 'Pasta Local';
-      case DestinationType.ftp:
-        return 'Servidor FTP';
-      case DestinationType.googleDrive:
-        return 'Google Drive';
-      case DestinationType.dropbox:
-        return 'Dropbox';
-      case DestinationType.nextcloud:
-        return 'Nextcloud';
-    }
-  }
-
-  IconData _getDestinationIcon(DestinationType type) {
-    switch (type) {
-      case DestinationType.local:
-        return FluentIcons.folder;
-      case DestinationType.ftp:
-        return FluentIcons.cloud_upload;
-      case DestinationType.googleDrive:
-        return FluentIcons.cloud;
-      case DestinationType.dropbox:
-        return FluentIcons.cloud;
-      case DestinationType.nextcloud:
-        return FluentIcons.cloud;
-    }
   }
 
   Future<void> _selectBackupFolder() async {
@@ -1521,7 +957,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     final effectiveCompressionFormat = _compressBackup
         ? _compressionFormat
         : CompressionFormat.none;
-    // Importante: NAO chamar `_normalizeBackupTypeForDatabase` aqui.
+    // Importante: NAO chamar `normalizeBackupTypeForDatabase` aqui.
     // Esse helper so existe para sanitizar troca de SGBD no dropdown
     // (e em initState para schedules importados). No save, o tipo ja
     // foi escolhido pelo utilizador e qualquer coercao silenciosa

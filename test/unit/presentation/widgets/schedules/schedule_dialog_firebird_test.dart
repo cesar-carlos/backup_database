@@ -373,7 +373,7 @@ void main() {
 
         // O valor inicial do dropdown deve refletir BackupType.differential
         // (a UI seleciona pela string `displayName`). Bug anterior
-        // `_normalizeBackupTypeForDatabase` no initState colapsava
+        // `normalizeBackupTypeForDatabase` no initState colapsava
         // `differential` -> `full` para Firebird.
         expect(find.text('Diferencial'), findsOneWidget);
         // E o titulo do schedule continua o original — confirmacao de
