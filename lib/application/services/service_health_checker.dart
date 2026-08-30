@@ -1,100 +1,65 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:backup_database/application/services/alert_service.dart';
+import 'package:backup_database/application/services/health/backup_freshness_probe.dart';
+import 'package:backup_database/application/services/health/disk_space_probe.dart';
+import 'package:backup_database/application/services/health/health_models.dart';
+import 'package:backup_database/application/services/health/postgres_wal_slot_probe.dart';
+import 'package:backup_database/application/services/health/success_rate_probe.dart';
 import 'package:backup_database/application/services/log_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
-import 'package:backup_database/domain/entities/postgres_config.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
-import 'package:backup_database/infrastructure/external/process/postgres_wal_slot_utils.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 
-enum HealthStatus {
-  healthy,
-
-  warning,
-
-  critical,
-}
-
-class HealthCheckResult {
-  const HealthCheckResult({
-    required this.status,
-    required this.timestamp,
-    this.issues = const [],
-    this.metrics = const {},
-  });
-
-  final HealthStatus status;
-  final DateTime timestamp;
-  final List<HealthIssue> issues;
-  final Map<String, dynamic> metrics;
-
-  @override
-  String toString() {
-    return 'HealthCheckResult(status: $status, issues: ${issues.length}, '
-        'timestamp: $timestamp)';
-  }
-}
-
-class HealthIssue {
-  const HealthIssue({
-    required this.severity,
-    required this.category,
-    required this.message,
-    this.details,
-  });
-
-  final HealthStatus severity;
-  final String category;
-  final String message;
-  final String? details;
-
-  @override
-  String toString() {
-    return 'HealthIssue($severity: $message)';
-  }
-}
+export 'health/health_models.dart';
 
 class ServiceHealthChecker {
   ServiceHealthChecker({
-    required this._backupHistoryRepository,
-    required this._processService,
-    required this._postgresConfigRepository,
+    required IBackupHistoryRepository backupHistoryRepository,
+    required ProcessService processService,
+    required IPostgresConfigRepository postgresConfigRepository,
     this._logService,
     this._alertService,
     this.checkInterval = const Duration(minutes: 30),
     this.maxBackupAge = const Duration(days: 2),
     this.minSuccessRate = 0.7,
     this.minFreeDiskGB = 5.0,
+    List<String> diskCheckPaths = const [],
+  }) : _backupFreshnessProbe = BackupFreshnessProbe(
+         backupHistoryRepository: backupHistoryRepository,
+         maxBackupAge: maxBackupAge,
+       ),
+       _successRateProbe = SuccessRateProbe(
+         backupHistoryRepository: backupHistoryRepository,
+         minSuccessRate: minSuccessRate,
+       ),
+       _diskSpaceProbe = DiskSpaceProbe(
+         processService: processService,
+         diskCheckPaths: diskCheckPaths,
+         minFreeDiskGB: minFreeDiskGB,
+       ),
+       _postgresWalSlotProbe = PostgresWalSlotProbe(
+         processService: processService,
+         postgresConfigRepository: postgresConfigRepository,
+       );
 
-    this._diskCheckPaths = const [],
-  });
-
-  final IBackupHistoryRepository _backupHistoryRepository;
-  final ProcessService _processService;
-  final IPostgresConfigRepository _postgresConfigRepository;
   final LogService? _logService;
   final AlertService? _alertService;
-  final List<String> _diskCheckPaths;
+  final BackupFreshnessProbe _backupFreshnessProbe;
+  final SuccessRateProbe _successRateProbe;
+  final DiskSpaceProbe _diskSpaceProbe;
+  final PostgresWalSlotProbe _postgresWalSlotProbe;
 
   final Duration checkInterval;
-
   final Duration maxBackupAge;
-
   final double minSuccessRate;
-
   final double minFreeDiskGB;
 
   Timer? _checkTimer;
   bool _isRunning = false;
   HealthCheckResult? _lastResult;
 
-  // Backoff / circuit-breaker state
   int _consecutiveErrors = 0;
   int _skipCyclesRemaining = 0;
   static const int _backoffThreshold = 3;
@@ -108,7 +73,8 @@ class ServiceHealthChecker {
 
     _isRunning = true;
     LoggerService.info(
-      '🩺 ServiceHealthChecker iniciado (intervalo: ${checkInterval.inMinutes}min)',
+      '🩺 ServiceHealthChecker iniciado '
+      '(intervalo: ${checkInterval.inMinutes}min)',
     );
 
     unawaited(_performHealthCheck());
@@ -135,7 +101,6 @@ class ServiceHealthChecker {
   }
 
   Future<HealthCheckResult> _performHealthCheck() async {
-    // Circuit-breaker: pular ciclos quando houver falhas consecutivas.
     if (_skipCyclesRemaining > 0) {
       _skipCyclesRemaining--;
       LoggerService.debug(
@@ -163,19 +128,19 @@ class ServiceHealthChecker {
     final timestamp = DateTime.now();
 
     try {
-      final lastBackupResult = await _checkLastBackup(timestamp);
+      final lastBackupResult = await _backupFreshnessProbe.check(timestamp);
       issues.addAll(lastBackupResult.issues);
       metrics.addAll(lastBackupResult.metrics);
 
-      final successRateResult = await _checkSuccessRate();
+      final successRateResult = await _successRateProbe.check();
       issues.addAll(successRateResult.issues);
       metrics.addAll(successRateResult.metrics);
 
-      final diskSpaceResult = await _checkDiskSpace();
+      final diskSpaceResult = await _diskSpaceProbe.check();
       issues.addAll(diskSpaceResult.issues);
       metrics.addAll(diskSpaceResult.metrics);
 
-      final slotHealthResult = await _checkPostgresWalSlots();
+      final slotHealthResult = await _postgresWalSlotProbe.check();
       issues.addAll(slotHealthResult.issues);
       metrics.addAll(slotHealthResult.metrics);
 
@@ -190,7 +155,6 @@ class ServiceHealthChecker {
 
       _lastResult = result;
 
-      // Ciclo bem-sucedido: reset dos contadores de backoff.
       if (_consecutiveErrors > 0) {
         LoggerService.info(
           '🩺 Verificação de saúde recuperada após '
@@ -207,7 +171,6 @@ class ServiceHealthChecker {
     } on Object catch (e, s) {
       _consecutiveErrors++;
 
-      // Calcula quantos ciclos pular (backoff progressivo até o limite).
       final skipCycles = _consecutiveErrors >= _backoffThreshold
           ? (_consecutiveErrors - _backoffThreshold + 1).clamp(
               1,
@@ -233,7 +196,8 @@ class ServiceHealthChecker {
           HealthIssue(
             severity: HealthStatus.critical,
             category: 'system',
-            message: 'Erro ao executar verificação de saúde: $e',
+            message:
+                'Erro ao executar verificação de saúde: ${_issueMessage(e)}',
           ),
         ],
       );
@@ -241,495 +205,6 @@ class ServiceHealthChecker {
       _lastResult = criticalResult;
       return criticalResult;
     }
-  }
-
-  Future<_CheckResult> _checkLastBackup(DateTime now) async {
-    final issues = <HealthIssue>[];
-    final metrics = <String, dynamic>{};
-
-    try {
-      final result = await _backupHistoryRepository.getAll(limit: 10);
-
-      result.fold(
-        (histories) {
-          if (histories.isEmpty) {
-            issues.add(
-              const HealthIssue(
-                severity: HealthStatus.warning,
-                category: 'backup',
-                message: 'Nenhum backup encontrado no histórico',
-              ),
-            );
-            return;
-          }
-
-          final lastBackup = histories.first;
-          final age = now.difference(lastBackup.startedAt);
-
-          metrics['last_backup_age_hours'] = age.inHours;
-          metrics['last_backup_status'] = lastBackup.status.name;
-          metrics['last_backup_date'] = lastBackup.startedAt.toIso8601String();
-
-          if (age > maxBackupAge) {
-            issues.add(
-              HealthIssue(
-                severity: HealthStatus.warning,
-                category: 'backup',
-                message:
-                    'Último backup executado há ${age.inDays} dias '
-                    '(máximo: ${maxBackupAge.inDays} dias)',
-                details: 'Data: ${lastBackup.startedAt}',
-              ),
-            );
-          }
-
-          if (lastBackup.status == BackupStatus.error) {
-            issues.add(
-              HealthIssue(
-                severity: HealthStatus.critical,
-                category: 'backup',
-                message: 'Último backup falhou',
-                details: lastBackup.errorMessage ?? 'Sem detalhes',
-              ),
-            );
-          }
-        },
-        (failure) {
-          issues.add(
-            HealthIssue(
-              severity: HealthStatus.warning,
-              category: 'backup',
-              message:
-                  'Erro ao buscar histórico de backups: ${_issueMessage(failure)}',
-            ),
-          );
-        },
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning('Erro ao verificar último backup', e, s);
-      issues.add(
-        HealthIssue(
-          severity: HealthStatus.warning,
-          category: 'backup',
-          message: 'Exceção ao verificar último backup: $e',
-        ),
-      );
-    }
-
-    return _CheckResult(issues, metrics);
-  }
-
-  Future<_CheckResult> _checkSuccessRate() async {
-    final issues = <HealthIssue>[];
-    final metrics = <String, dynamic>{};
-
-    try {
-      final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
-      final result = await _backupHistoryRepository.getByDateRange(
-        sevenDaysAgo,
-        DateTime.now(),
-      );
-
-      result.fold(
-        (histories) {
-          if (histories.isEmpty) {
-            metrics['success_rate'] = 0.0;
-            return;
-          }
-
-          final successCount = histories
-              .where((h) => h.status == BackupStatus.success)
-              .length;
-          final totalCount = histories.length;
-          final successRate = successCount / totalCount;
-
-          metrics['success_rate'] = successRate;
-          metrics['total_backups_7d'] = totalCount;
-          metrics['success_backups_7d'] = successCount;
-
-          if (successRate < minSuccessRate) {
-            issues.add(
-              HealthIssue(
-                severity: HealthStatus.warning,
-                category: 'backup',
-                message:
-                    'Taxa de sucesso baixa: ${(successRate * 100).toStringAsFixed(1)}% '
-                    '(mínimo: ${(minSuccessRate * 100).toStringAsFixed(0)}%)',
-                details: '$successCount/$totalCount backups bem-sucedidos',
-              ),
-            );
-          }
-        },
-        (failure) {},
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning('Erro ao calcular taxa de sucesso', e, s);
-    }
-
-    return _CheckResult(issues, metrics);
-  }
-
-  Future<_CheckResult> _checkDiskSpace() async {
-    final issues = <HealthIssue>[];
-    final metrics = <String, dynamic>{};
-
-    if (!Platform.isWindows) {
-      metrics['disk_check_performed'] = false;
-      metrics['disk_check_skip_reason'] = 'Not Windows';
-      return _CheckResult(issues, metrics);
-    }
-
-    // S1: paths a checar. Se config não foi fornecida, usa Directory.current
-    // como fallback retrocompat (mas registra em metric para detecção no
-    // monitoring). O ideal é o caller passar paths explícitos:
-    // [appDir, programDataPath, ...activeBackupDestinationPaths].
-    final pathsToCheck = _diskCheckPaths.isNotEmpty
-        ? _diskCheckPaths
-        : <String>[Directory.current.path];
-
-    if (_diskCheckPaths.isEmpty) {
-      metrics['disk_check_used_fallback_cwd'] = true;
-    }
-
-    final perPath = <String, double>{};
-    var anyChecked = false;
-
-    for (final pathToCheck in _uniqueDriveRoots(pathsToCheck)) {
-      try {
-        final result = await _processService.run(
-          executable: 'fsutil',
-          arguments: ['volume', 'diskfree', pathToCheck],
-          timeout: const Duration(seconds: 10),
-        );
-
-        result.fold(
-          (processResult) {
-            if (processResult.exitCode != 0) {
-              LoggerService.warning(
-                'fsutil falhou para $pathToCheck '
-                '(exit ${processResult.exitCode}): ${processResult.stderr}',
-              );
-              return;
-            }
-
-            final freeGB = _parseFsutilFreeBytes(processResult.stdout);
-            if (freeGB == null) return;
-
-            perPath[pathToCheck] = freeGB;
-            anyChecked = true;
-
-            if (freeGB < minFreeDiskGB) {
-              issues.add(
-                HealthIssue(
-                  severity: freeGB < 1.0
-                      ? HealthStatus.critical
-                      : HealthStatus.warning,
-                  category: 'disk',
-                  message:
-                      'Espaço em disco baixo em $pathToCheck: '
-                      '${freeGB.toStringAsFixed(2)} GB livre '
-                      '(mínimo: ${minFreeDiskGB.toStringAsFixed(1)} GB)',
-                  details: 'Diretório verificado: $pathToCheck',
-                ),
-              );
-            } else {
-              LoggerService.debug(
-                'Espaço OK em $pathToCheck: ${freeGB.toStringAsFixed(2)} GB livre',
-              );
-            }
-          },
-          (failure) {
-            LoggerService.warning(
-              'Erro ao executar fsutil para $pathToCheck: '
-              '${_issueMessage(failure)}',
-            );
-          },
-        );
-      } on Object catch (e, s) {
-        LoggerService.warning(
-          'Exceção ao verificar espaço em disco em $pathToCheck',
-          e,
-          s,
-        );
-      }
-    }
-
-    metrics['disk_check_performed'] = anyChecked;
-    metrics['free_disk_gb_per_path'] = perPath;
-    if (perPath.isNotEmpty) {
-      // Métrica legada para retrocompatibilidade com dashboards antigos:
-      // o menor `free_disk_gb` dentre os paths checados.
-      metrics['free_disk_gb'] = perPath.values.reduce((a, b) => a < b ? a : b);
-    }
-
-    return _CheckResult(issues, metrics);
-  }
-
-  /// Reduz uma lista de paths ao conjunto de **drive roots** únicos.
-  /// `fsutil volume diskfree` opera no volume, então checar
-  /// `C:\foo` e `C:\bar` produz a mesma resposta — economiza I/O.
-  Iterable<String> _uniqueDriveRoots(List<String> paths) {
-    final seen = <String>{};
-    final result = <String>[];
-    for (final p in paths) {
-      final root = _extractDriveRoot(p);
-      if (seen.add(root)) {
-        result.add(root);
-      }
-    }
-    return result;
-  }
-
-  String _extractDriveRoot(String path) {
-    if (path.length >= 2 && path[1] == ':') {
-      return '${path[0].toUpperCase()}:\\';
-    }
-    return path;
-  }
-
-  double? _parseFsutilFreeBytes(String output) {
-    final lines = output.split('\n');
-    for (final line in lines) {
-      if (line.contains('Total free bytes')) {
-        final parts = line.split(':');
-        if (parts.length >= 2) {
-          final bytesStr = parts[1].trim().replaceAll(',', '');
-          final totalFreeBytes = int.tryParse(bytesStr);
-          if (totalFreeBytes != null) {
-            return totalFreeBytes / (1024 * 1024 * 1024);
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  Future<_CheckResult> _checkPostgresWalSlots() async {
-    final issues = <HealthIssue>[];
-    final metrics = <String, dynamic>{};
-
-    final enabled = _isWalSlotHealthCheckEnabled();
-    metrics['wal_slot_health_check_enabled'] = enabled;
-    if (!enabled) {
-      return _CheckResult(issues, metrics);
-    }
-
-    final maxLagMb = _slotLagThresholdMb();
-    final maxInactiveHours = _slotInactiveThresholdHours();
-    metrics['wal_slot_max_lag_mb'] = maxLagMb;
-    metrics['wal_slot_max_inactive_hours'] = maxInactiveHours;
-
-    final configsResult = await _postgresConfigRepository.getEnabled();
-    if (configsResult.isError()) {
-      final failure = configsResult.exceptionOrNull();
-      issues.add(
-        HealthIssue(
-          severity: HealthStatus.warning,
-          category: 'postgres_slot',
-          message:
-              'Falha ao carregar configuracoes PostgreSQL para health check de slot: '
-              '${_issueMessage(failure)}',
-        ),
-      );
-      return _CheckResult(issues, metrics);
-    }
-
-    final configs = configsResult.getOrNull()!;
-    var checkedConfigs = 0;
-    var checkedSlots = 0;
-
-    for (final config in configs) {
-      checkedConfigs++;
-      final slotResult = await _queryWalSlotHealth(config);
-
-      slotResult.fold(
-        (slots) {
-          checkedSlots += slots.length;
-          for (final slot in slots) {
-            final lagMb = slot.lagBytes / (1024 * 1024);
-            final inactiveHours = slot.inactiveSeconds != null
-                ? slot.inactiveSeconds! / 3600
-                : null;
-
-            if (lagMb >= maxLagMb) {
-              issues.add(
-                HealthIssue(
-                  severity: lagMb >= (maxLagMb * 2)
-                      ? HealthStatus.critical
-                      : HealthStatus.warning,
-                  category: 'postgres_slot',
-                  message:
-                      'Slot WAL com atraso alto (${lagMb.toStringAsFixed(1)} MB): ${slot.slotName}',
-                  details:
-                      'Config: ${config.name} | Host: ${config.host} | Limite: ${maxLagMb.toStringAsFixed(1)} MB',
-                ),
-              );
-            }
-
-            if (!slot.active && inactiveHours != null) {
-              if (inactiveHours >= maxInactiveHours) {
-                issues.add(
-                  HealthIssue(
-                    severity: inactiveHours >= (maxInactiveHours * 2)
-                        ? HealthStatus.critical
-                        : HealthStatus.warning,
-                    category: 'postgres_slot',
-                    message:
-                        'Slot WAL inativo por ${inactiveHours.toStringAsFixed(1)}h: ${slot.slotName}',
-                    details:
-                        'Config: ${config.name} | Host: ${config.host} | Limite: ${maxInactiveHours.toStringAsFixed(1)}h',
-                  ),
-                );
-              }
-            }
-          }
-        },
-        (failure) {
-          issues.add(
-            HealthIssue(
-              severity: HealthStatus.warning,
-              category: 'postgres_slot',
-              message:
-                  'Falha ao verificar slots WAL em ${config.name}: '
-                  '${_issueMessage(failure)}',
-            ),
-          );
-        },
-      );
-    }
-
-    metrics['wal_slot_checked_configs'] = checkedConfigs;
-    metrics['wal_slot_checked_slots'] = checkedSlots;
-    return _CheckResult(issues, metrics);
-  }
-
-  bool _isWalSlotHealthCheckEnabled() {
-    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_HEALTH_ENABLED'];
-    if (raw == null || raw.trim().isEmpty) {
-      return PostgresWalSlotUtils.isWalSlotEnabled(
-        environment: Platform.environment,
-      );
-    }
-
-    final normalized = raw.trim().toLowerCase();
-    return normalized == '1' ||
-        normalized == 'true' ||
-        normalized == 'yes' ||
-        normalized == 'on';
-  }
-
-  double _slotLagThresholdMb() {
-    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_MAX_LAG_MB'];
-    final parsed = double.tryParse(raw ?? '');
-    if (parsed == null || parsed <= 0) {
-      return 1024;
-    }
-    return parsed;
-  }
-
-  double _slotInactiveThresholdHours() {
-    final raw = Platform.environment['BACKUP_DATABASE_PG_SLOT_INACTIVE_HOURS'];
-    final parsed = double.tryParse(raw ?? '');
-    if (parsed == null || parsed <= 0) {
-      return 24;
-    }
-    return parsed;
-  }
-
-  Future<rd.Result<List<_WalSlotHealthSnapshot>>> _queryWalSlotHealth(
-    PostgresConfig config,
-  ) async {
-    final withInactiveSince = await _runWalSlotHealthQuery(
-      config,
-      includeInactiveSince: true,
-    );
-    if (!withInactiveSince.isError()) {
-      return withInactiveSince;
-    }
-
-    return _runWalSlotHealthQuery(config, includeInactiveSince: false);
-  }
-
-  Future<rd.Result<List<_WalSlotHealthSnapshot>>> _runWalSlotHealthQuery(
-    PostgresConfig config, {
-    required bool includeInactiveSince,
-  }) async {
-    final inactiveExpr = includeInactiveSince
-        ? 'COALESCE(EXTRACT(EPOCH FROM (now() - inactive_since))::bigint, 0)'
-        : '0';
-
-    final sql =
-        'SELECT slot_name, active::text, '
-        'COALESCE(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn), 0)::bigint, '
-        '$inactiveExpr '
-        "FROM pg_replication_slots WHERE slot_type = 'physical';";
-
-    final arguments = <String>[
-      '-h',
-      config.host,
-      '-p',
-      config.portValue.toString(),
-      '-U',
-      config.username,
-      '-d',
-      config.databaseValue,
-      '-t',
-      '-A',
-      '-F',
-      '|',
-      '-c',
-      sql,
-    ];
-
-    final environment = <String, String>{'PGPASSWORD': config.password};
-    final result = await _processService.run(
-      executable: 'psql',
-      arguments: arguments,
-      environment: environment,
-      timeout: const Duration(seconds: 30),
-    );
-
-    return result.fold(
-      (processResult) {
-        if (!processResult.isSuccess) {
-          return rd.Failure(
-            Exception(
-              processResult.stderr.isNotEmpty
-                  ? processResult.stderr
-                  : processResult.stdout,
-            ),
-          );
-        }
-
-        final lines = processResult.stdout
-            .split(RegExp(r'[\r\n]+'))
-            .map((line) => line.trim())
-            .where((line) => line.isNotEmpty)
-            .toList();
-
-        final snapshots = <_WalSlotHealthSnapshot>[];
-        for (final line in lines) {
-          final parts = line.split('|');
-          if (parts.length < 4) {
-            continue;
-          }
-
-          snapshots.add(
-            _WalSlotHealthSnapshot(
-              slotName: parts[0].trim(),
-              active:
-                  parts[1].trim().toLowerCase() == 't' ||
-                  parts[1].trim().toLowerCase() == 'true',
-              lagBytes: int.tryParse(parts[2].trim()) ?? 0,
-              inactiveSeconds: int.tryParse(parts[3].trim()),
-            ),
-          );
-        }
-
-        return rd.Success(snapshots);
-      },
-      (failure) => rd.Failure(Exception(failureUserMessage(failure))),
-    );
   }
 
   Future<void> _publishOperationalAlerts(HealthCheckResult result) async {
@@ -837,27 +312,6 @@ class ServiceHealthChecker {
   bool get isRunning => _isRunning;
 
   String _issueMessage(Object? failure) {
-    return failureUserMessage(failure, fallback: 'Erro desconhecido');
+    return healthIssueMessage(failure);
   }
-}
-
-class _CheckResult {
-  const _CheckResult(this.issues, this.metrics);
-
-  final List<HealthIssue> issues;
-  final Map<String, dynamic> metrics;
-}
-
-class _WalSlotHealthSnapshot {
-  const _WalSlotHealthSnapshot({
-    required this.slotName,
-    required this.active,
-    required this.lagBytes,
-    required this.inactiveSeconds,
-  });
-
-  final String slotName;
-  final bool active;
-  final int lagBytes;
-  final int? inactiveSeconds;
 }
