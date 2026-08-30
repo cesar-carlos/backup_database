@@ -233,7 +233,13 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: 220,
-              child: ComboBox<AppDensity>(
+              child: AppDropdown<AppDensity>(
+                compact: true,
+                label: appLocaleString(
+                  context,
+                  'Densidade das tabelas',
+                  'Table density',
+                ),
                 value: densityProvider.density,
                 items: [
                   ComboBoxItem(

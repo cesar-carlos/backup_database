@@ -332,4 +332,43 @@ class FakeRemoteSchedulesConnectionManager extends ConnectionManager {
       ),
     );
   }
+
+  int getRunLogsCallCount = 0;
+  int getRunErrorDetailsCallCount = 0;
+  rd.Result<RunLogsResult>? runLogsResult;
+  rd.Result<RunErrorDetailsResult>? runErrorDetailsResult;
+
+  @override
+  Future<rd.Result<RunLogsResult>> getRunLogs({
+    required String runId,
+    int? maxLines,
+  }) async {
+    getRunLogsCallCount++;
+    return runLogsResult ??
+        rd.Success(
+          RunLogsResult(
+            runId: runId,
+            lines: const <String>['log-1'],
+            truncated: false,
+            totalLines: 1,
+            serverTimeUtc: DateTime.utc(2026),
+          ),
+        );
+  }
+
+  @override
+  Future<rd.Result<RunErrorDetailsResult>> getRunErrorDetails({
+    required String runId,
+  }) async {
+    getRunErrorDetailsCallCount++;
+    return runErrorDetailsResult ??
+        rd.Success(
+          RunErrorDetailsResult(
+            runId: runId,
+            found: true,
+            serverTimeUtc: DateTime.utc(2026),
+            errorMessage: 'boom',
+          ),
+        );
+  }
 }

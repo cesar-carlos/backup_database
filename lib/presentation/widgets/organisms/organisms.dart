@@ -5,7 +5,6 @@ export 'app_page_state.dart';
 export 'app_section_card.dart';
 export 'database_config_data_grid.dart';
 export 'database_config_dependency_dialog.dart';
-export 'database_config_dialog_shell.dart';
 export 'destination_dependency_dialog.dart';
 export 'message_modal.dart';
 export 'schedule_blocked_deletion_dialog.dart';

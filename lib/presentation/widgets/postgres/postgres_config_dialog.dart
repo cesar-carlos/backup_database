@@ -89,7 +89,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return DatabaseConfigDialogShell(
+    return AppDialogShell(
       constraints: const BoxConstraints(
         minWidth: 600,
         maxWidth: 600,
@@ -117,7 +117,7 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
           ),
         ],
       ),
-      body: Form(
+      content: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -215,9 +215,9 @@ class _PostgresConfigDialogState extends State<PostgresConfigDialog> {
           ],
         ),
       ),
-      dialogActions: [
+      actions: [
         const CancelButton(),
-        ActionButton(
+        AppButton(
           label: appLocaleString(context, 'Testar conexão', 'Test connection'),
           icon: FluentIcons.check_mark,
           onPressed: _testConnection,

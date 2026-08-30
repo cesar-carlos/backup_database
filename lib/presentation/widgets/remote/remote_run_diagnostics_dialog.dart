@@ -1,25 +1,16 @@
 import 'dart:async';
 
+import 'package:backup_database/application/dtos/remote/run_diagnostics_view.dart';
+import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
-import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
-import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
+import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:result_dart/result_dart.dart' as rd;
 
-/// **Organism** — modal que apresenta logs e detalhes de erro de uma
-/// execução remota (`runId`) já existente. Consome os RPCs
-/// `getRunLogs` e `getRunErrorDetails` do `ConnectionManager` (PR de
-/// diagnóstico remoto).
-///
-/// §audit-2026-05-28 wave 3 (P2): essas mensagens já existiam no
-/// protocolo desde a wave 1, mas faltava UI. Operador que precisava
-/// investigar um backup `failed` no servidor remoto não tinha como
-/// — só via SSH/leitura manual de log. Esta dialog é o ponto central.
 class RemoteRunDiagnosticsDialog extends StatefulWidget {
   const RemoteRunDiagnosticsDialog({
-    required this.connectionManager,
+    required this.provider,
     required this.runId,
     this.scheduleName,
     this.includeErrorDetails = true,
@@ -27,7 +18,7 @@ class RemoteRunDiagnosticsDialog extends StatefulWidget {
     super.key,
   });
 
-  final ConnectionManager connectionManager;
+  final RemoteSchedulesProvider provider;
   final String runId;
   final String? scheduleName;
   final bool includeErrorDetails;
@@ -35,7 +26,7 @@ class RemoteRunDiagnosticsDialog extends StatefulWidget {
 
   static Future<void> show(
     BuildContext context, {
-    required ConnectionManager connectionManager,
+    required RemoteSchedulesProvider provider,
     required String runId,
     String? scheduleName,
     bool includeErrorDetails = true,
@@ -44,7 +35,7 @@ class RemoteRunDiagnosticsDialog extends StatefulWidget {
     return showDialog<void>(
       context: context,
       builder: (dialogContext) => RemoteRunDiagnosticsDialog(
-        connectionManager: connectionManager,
+        provider: provider,
         runId: runId,
         scheduleName: scheduleName,
         includeErrorDetails: includeErrorDetails,
@@ -61,10 +52,7 @@ class RemoteRunDiagnosticsDialog extends StatefulWidget {
 class _RemoteRunDiagnosticsDialogState
     extends State<RemoteRunDiagnosticsDialog> {
   bool _isLoading = true;
-  RunLogsResult? _logs;
-  RunErrorDetailsResult? _errorDetails;
-  String? _logsError;
-  String? _errorDetailsError;
+  RunDiagnosticsView? _diagnostics;
 
   @override
   void initState() {
@@ -75,44 +63,20 @@ class _RemoteRunDiagnosticsDialogState
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
-      _logs = null;
-      _errorDetails = null;
-      _logsError = null;
-      _errorDetailsError = null;
+      _diagnostics = null;
     });
 
-    // Dispara as duas chamadas em paralelo — operador raramente quer
-    // ver logs SEM o detalhe do erro, e quase nunca vice-versa.
-    final logsFuture = widget.connectionManager.getRunLogs(
-      runId: widget.runId,
-      maxLines: widget.maxLogLines,
+    final diagnostics = await widget.provider.loadRunDiagnostics(
+      widget.runId,
+      includeErrorDetails: widget.includeErrorDetails,
+      maxLogLines: widget.maxLogLines,
     );
-    final detailsFuture = widget.includeErrorDetails
-        ? widget.connectionManager.getRunErrorDetails(runId: widget.runId)
-        : Future<rd.Result<RunErrorDetailsResult>?>.value();
-
-    final logsResult = await logsFuture;
-    final detailsResult = await detailsFuture;
 
     if (!mounted) return;
     setState(() {
       _isLoading = false;
-      logsResult.fold(
-        (logs) => _logs = logs,
-        (failure) => _logsError = _failureMessage(failure),
-      );
-      if (detailsResult != null) {
-        detailsResult.fold(
-          (details) => _errorDetails = details,
-          (failure) => _errorDetailsError = _failureMessage(failure),
-        );
-      }
+      _diagnostics = diagnostics;
     });
-  }
-
-  String _failureMessage(Object failure) {
-    final str = failure.toString();
-    return str.isEmpty ? 'Erro desconhecido' : str;
   }
 
   Future<void> _copyAllToClipboard() async {
@@ -123,13 +87,13 @@ class _RemoteRunDiagnosticsDialogState
     }
     buffer.writeln();
 
-    final details = _errorDetails;
+    final details = _diagnostics?.errorDetails;
     if (details != null && details.found) {
       buffer.writeln('--- Detalhes do erro ---');
       if (details.errorCode != null) {
         buffer.writeln(
-          'Código: ${details.errorCode!.code} '
-          '(${details.errorCode!.defaultMessage})',
+          'Código: ${details.errorCode} '
+          '(${details.errorCodeMessage ?? ''})',
         );
       }
       if (details.errorMessage != null) {
@@ -145,7 +109,7 @@ class _RemoteRunDiagnosticsDialogState
       buffer.writeln();
     }
 
-    final logs = _logs;
+    final logs = _diagnostics?.logs;
     if (logs != null) {
       buffer.writeln(
         '--- Logs (${logs.lines.length}'
@@ -157,9 +121,7 @@ class _RemoteRunDiagnosticsDialogState
 
     await Clipboard.setData(ClipboardData(text: buffer.toString()));
     if (!mounted) return;
-    unawaited(
-      _showCopiedInfoBar(),
-    );
+    unawaited(_showCopiedInfoBar());
   }
 
   Future<void> _showCopiedInfoBar() async {
@@ -181,9 +143,11 @@ class _RemoteRunDiagnosticsDialogState
 
   @override
   Widget build(BuildContext context) {
-    final hasContent = _errorDetails != null || _logs != null;
-    return ContentDialog(
+    final diagnostics = _diagnostics;
+    final hasContent = diagnostics?.hasContent ?? false;
+    return AppDialogShell(
       constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
+      scrollable: false,
       title: Text(
         widget.scheduleName != null
             ? appLocaleString(
@@ -199,6 +163,7 @@ class _RemoteRunDiagnosticsDialogState
       ),
       content: SizedBox(
         width: double.maxFinite,
+        height: 520,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,15 +181,15 @@ class _RemoteRunDiagnosticsDialogState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _ErrorDetailsSection(
-                            details: _errorDetails,
-                            error: _errorDetailsError,
+                            details: diagnostics?.errorDetails,
+                            error: diagnostics?.errorDetailsError,
                             enabled: widget.includeErrorDetails,
                           ),
                           if (widget.includeErrorDetails)
                             const SizedBox(height: AppSpacing.md),
                           _LogsSection(
-                            logs: _logs,
-                            error: _logsError,
+                            logs: diagnostics?.logs,
+                            error: diagnostics?.logsError,
                           ),
                         ],
                       ),
@@ -234,27 +199,19 @@ class _RemoteRunDiagnosticsDialogState
         ),
       ),
       actions: [
-        Button(
-          onPressed: _isLoading ? null : _load,
-          child: Text(
-            appLocaleString(context, 'Recarregar', 'Reload'),
-          ),
+        AppButton(
+          label: appLocaleString(context, 'Recarregar', 'Reload'),
+          onPressed: _isLoading ? null : () => unawaited(_load()),
         ),
-        Button(
-          onPressed: hasContent && !_isLoading ? _copyAllToClipboard : null,
-          child: Text(
-            appLocaleString(
-              context,
-              'Copiar tudo',
-              'Copy all',
-            ),
-          ),
+        AppButton(
+          label: appLocaleString(context, 'Copiar tudo', 'Copy all'),
+          onPressed: hasContent && !_isLoading
+              ? () => unawaited(_copyAllToClipboard())
+              : null,
         ),
-        FilledButton(
+        AppButton.primary(
+          label: appLocaleString(context, 'Fechar', 'Close'),
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            appLocaleString(context, 'Fechar', 'Close'),
-          ),
         ),
       ],
     );
@@ -268,7 +225,7 @@ class _ErrorDetailsSection extends StatelessWidget {
     required this.enabled,
   });
 
-  final RunErrorDetailsResult? details;
+  final RunDiagnosticsErrorView? details;
   final String? error;
   final bool enabled;
 
@@ -314,11 +271,12 @@ class _ErrorDetailsSection extends StatelessWidget {
                     text: appLocaleString(context, 'Código: ', 'Code: '),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  TextSpan(text: details!.errorCode!.code),
-                  TextSpan(
-                    text: ' — ${details!.errorCode!.defaultMessage}',
-                    style: TextStyle(color: colors.danger),
-                  ),
+                  TextSpan(text: details!.errorCode),
+                  if (details!.errorCodeMessage != null)
+                    TextSpan(
+                      text: ' — ${details!.errorCodeMessage}',
+                      style: TextStyle(color: colors.danger),
+                    ),
                 ],
               ),
             ),
@@ -356,7 +314,7 @@ class _ErrorDetailsSection extends StatelessWidget {
 class _LogsSection extends StatelessWidget {
   const _LogsSection({required this.logs, required this.error});
 
-  final RunLogsResult? logs;
+  final RunDiagnosticsLogsView? logs;
   final String? error;
 
   @override
@@ -445,34 +403,9 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        // §audit-2026-05-28 wave 3: `AppSemanticColors` ainda não tem
-        // variantes "subtle" — usamos opacidade reduzida do `danger`
-        // (~12%) como background tonal seguindo o pattern do Fluent.
-        color: colors.danger.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: SelectableText.rich(
-        TextSpan(
-          style: FluentTheme.of(context).typography.body,
-          children: [
-            TextSpan(
-              text: appLocaleString(context, 'Erro: ', 'Error: '),
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: colors.danger,
-              ),
-            ),
-            TextSpan(
-              text: message,
-              style: TextStyle(color: colors.danger),
-            ),
-          ],
-        ),
-      ),
+    return AppCallout(
+      message: '${appLocaleString(context, 'Erro: ', 'Error: ')}$message',
+      tone: AppCalloutTone.danger,
     );
   }
 }

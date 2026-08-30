@@ -2,20 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/application/dtos/remote/queued_execution_view.dart';
 import 'package:backup_database/application/providers/destination_provider.dart';
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/constants/route_names.dart';
-import 'package:backup_database/core/di/service_locator.dart'
-    as service_locator;
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/database_type_metadata.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:backup_database/infrastructure/protocol/execution_queue_messages.dart';
-import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:backup_database/presentation/utils/integrity_error_modal_helper.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/remote/remote_backup_preflight_dialog.dart';
@@ -465,37 +462,22 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
   ) async {
     if (provider.updatingScheduleId != null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: Text(
-          appLocaleString(
-            context,
-            'Excluir agendamento',
-            'Delete schedule',
-          ),
-        ),
-        content: Text(
-          appLocaleString(
-            context,
-            'Excluir "${schedule.name}" no servidor? Esta ação não pode ser desfeita.',
-            'Delete "${schedule.name}" on the server? This cannot be undone.',
-          ),
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(appLocaleString(context, 'Excluir', 'Delete')),
-          ),
-        ],
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: appLocaleString(
+        context,
+        'Excluir agendamento',
+        'Delete schedule',
       ),
+      message: appLocaleString(
+        context,
+        'Excluir "${schedule.name}" no servidor? Esta ação não pode ser desfeita.',
+        'Delete "${schedule.name}" on the server? This cannot be undone.',
+      ),
+      confirmLabel: appLocaleString(context, 'Excluir', 'Delete'),
     );
 
-    if ((confirmed ?? false) && context.mounted) {
+    if (confirmed && context.mounted) {
       final success = await provider.deleteRemoteSchedule(schedule.id);
       if (context.mounted) {
         if (success) {
@@ -603,27 +585,14 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
     BuildContext context,
     RemoteSchedulesProvider provider,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => ContentDialog(
-        title: const Text('Cancelar backup'),
-        content: const Text(
-          'Deseja cancelar o backup em execução no servidor?',
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Não'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sim, cancelar'),
-          ),
-        ],
-      ),
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: 'Cancelar backup',
+      message: 'Deseja cancelar o backup em execução no servidor?',
+      confirmLabel: 'Sim, cancelar',
     );
 
-    if ((confirmed ?? false) && context.mounted) {
+    if (confirmed && context.mounted) {
       final success = await provider.cancelSchedule();
       if (context.mounted) {
         if (success) {
@@ -660,20 +629,10 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
 
     final destinations = destinationProvider.destinations;
     if (destinations.isEmpty) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => ContentDialog(
-          title: const Text('Destinos após transferir'),
-          content: const Text(
-            'Cadastre destinos em Destinos para vincular aqui.',
-          ),
-          actions: [
-            Button(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+      await MessageModal.showInfo(
+        context,
+        title: 'Destinos após transferir',
+        message: 'Cadastre destinos em Destinos para vincular aqui.',
       );
       return;
     }
@@ -844,7 +803,7 @@ class _RemoteScheduleCreateDialogState
     final texts = WidgetTexts.fromContext(context);
     final showTimeFields = _scheduleType != ScheduleType.interval;
 
-    return ContentDialog(
+    return AppDialogShell(
       title: Text(
         appLocaleString(
           context,
@@ -854,141 +813,143 @@ class _RemoteScheduleCreateDialogState
       ),
       content: SizedBox(
         width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_validationError != null) ...[
-                InfoBar(
-                  title: const Text('Validação'),
-                  content: Text(_validationError!),
-                  severity: InfoBarSeverity.warning,
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              TextBox(
-                controller: _nameController,
-                placeholder: appLocaleString(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_validationError != null) ...[
+              AppCallout(
+                message: _validationError!,
+                tone: AppCalloutTone.warning,
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            AppTextField(
+              controller: _nameController,
+              label: appLocaleString(
+                context,
+                'Nome do agendamento',
+                'Schedule name',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppDropdown<ScheduleType>(
+              label: appLocaleString(context, 'Tipo', 'Type'),
+              placeholder: Text(
+                appLocaleString(context, 'Tipo', 'Type'),
+              ),
+              value: _scheduleType,
+              items: ScheduleType.values
+                  .map(
+                    (type) => ComboBoxItem(
+                      value: type,
+                      child: Text(texts.scheduleTypeName(type)),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _scheduleType = value);
+              },
+            ),
+            if (showTimeFields) ...[
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                appLocaleString(context, 'Horário', 'Time'),
+                style: FluentTheme.of(context).typography.bodyStrong,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(
+                    child: NumberBox(
+                      value: _hour.toDouble(),
+                      min: 0,
+                      max: 23,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _hour = value.round());
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: NumberBox(
+                      value: _minute.toDouble(),
+                      min: 0,
+                      max: 59,
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setState(() => _minute = value.round());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _intervalMinutesController,
+                label: appLocaleString(
                   context,
-                  'Nome do agendamento',
-                  'Schedule name',
+                  'Intervalo (minutos)',
+                  'Interval (minutes)',
+                ),
+              ),
+            ],
+            if (widget.template == null) ...[
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _databaseConfigIdController,
+                label: appLocaleString(
+                  context,
+                  'ID da configuração de banco',
+                  'Database config ID',
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
-              ComboBox<ScheduleType>(
-                placeholder: Text(
-                  appLocaleString(context, 'Tipo', 'Type'),
+              AppDropdown<DatabaseType>(
+                label: appLocaleString(
+                  context,
+                  'Tipo de banco',
+                  'Database type',
                 ),
-                value: _scheduleType,
-                items: ScheduleType.values
+                value: _databaseType,
+                items: DatabaseType.values
                     .map(
                       (type) => ComboBoxItem(
                         value: type,
-                        child: Text(texts.scheduleTypeName(type)),
+                        child: Text(
+                          DatabaseTypeMetadata.of(type).chipLabel,
+                        ),
                       ),
                     )
                     .toList(),
                 onChanged: (value) {
                   if (value == null) return;
-                  setState(() => _scheduleType = value);
+                  setState(() => _databaseType = value);
                 },
               ),
-              if (showTimeFields) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  appLocaleString(context, 'Horário', 'Time'),
-                  style: FluentTheme.of(context).typography.bodyStrong,
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _backupFolderController,
+                label: appLocaleString(
+                  context,
+                  'Pasta de backup no servidor',
+                  'Backup folder on server',
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  children: [
-                    Expanded(
-                      child: NumberBox(
-                        value: _hour.toDouble(),
-                        min: 0,
-                        max: 23,
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _hour = value.round());
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: NumberBox(
-                        value: _minute.toDouble(),
-                        min: 0,
-                        max: 59,
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _minute = value.round());
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ] else ...[
-                const SizedBox(height: AppSpacing.md),
-                TextBox(
-                  controller: _intervalMinutesController,
-                  placeholder: appLocaleString(
-                    context,
-                    'Intervalo (minutos)',
-                    'Interval (minutes)',
-                  ),
-                ),
-              ],
-              if (widget.template == null) ...[
-                const SizedBox(height: AppSpacing.md),
-                TextBox(
-                  controller: _databaseConfigIdController,
-                  placeholder: appLocaleString(
-                    context,
-                    'ID da configuração de banco',
-                    'Database config ID',
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                ComboBox<DatabaseType>(
-                  value: _databaseType,
-                  items: DatabaseType.values
-                      .map(
-                        (type) => ComboBoxItem(
-                          value: type,
-                          child: Text(
-                            DatabaseTypeMetadata.of(type).chipLabel,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setState(() => _databaseType = value);
-                  },
-                ),
-                const SizedBox(height: AppSpacing.md),
-                TextBox(
-                  controller: _backupFolderController,
-                  placeholder: appLocaleString(
-                    context,
-                    'Pasta de backup no servidor',
-                    'Backup folder on server',
-                  ),
-                ),
-              ],
+              ),
             ],
-          ),
+          ],
         ),
       ),
       actions: [
-        Button(
+        CancelButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(appLocaleString(context, 'Cancelar', 'Cancel')),
         ),
-        FilledButton(
+        AppButton.primary(
+          label: appLocaleString(context, 'Criar', 'Create'),
           onPressed: _submit,
-          child: Text(appLocaleString(context, 'Criar', 'Create')),
         ),
       ],
     );
@@ -1023,7 +984,7 @@ class _TransferDestinationsDialogState
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
       title: const Text('Destinos após transferir'),
       content: SizedBox(
         width: 400,
@@ -1036,7 +997,7 @@ class _TransferDestinationsDialogState
               'enviar também para:',
               style: FluentTheme.of(context).typography.body,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             ...widget.destinations.map(
               (d) => Checkbox(
                 checked: _selectedIds.contains(d.id),
@@ -1062,13 +1023,11 @@ class _TransferDestinationsDialogState
         ),
       ),
       actions: [
-        Button(
+        CancelButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
         ),
-        FilledButton(
+        SaveButton(
           onPressed: () => Navigator.of(context).pop(_selectedIds),
-          child: const Text('Salvar'),
         ),
       ],
     );
@@ -1176,55 +1135,32 @@ class _BackupProgressCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                FilledButton(
-                  onPressed: onCancel,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(FluentIcons.cancel, size: 16),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        appLocaleString(
-                          context,
-                          'Cancelar backup',
-                          'Cancel backup',
-                        ),
-                      ),
-                    ],
+                AppButton.primary(
+                  label: appLocaleString(
+                    context,
+                    'Cancelar backup',
+                    'Cancel backup',
                   ),
+                  leading: const Icon(FluentIcons.cancel),
+                  onPressed: onCancel,
                 ),
-                // §audit-2026-05-28 wave 3 (P2): botão de diagnóstico
-                // remoto. O ConnectionManager já tinha os RPCs
-                // (`getRunLogs`, `getRunErrorDetails`) desde a wave 1,
-                // mas faltava entrada na UI — operador que precisava
-                // investigar um run em execução / `failed` no servidor
-                // remoto não tinha como fazê-lo sem SSH.
-                Button(
+                AppButton.icon(
+                  icon: FluentIcons.diagnostic,
+                  label: appLocaleString(
+                    context,
+                    'Diagnóstico',
+                    'Diagnostics',
+                  ),
                   onPressed: provider.activeRunId == null
                       ? null
                       : () => unawaited(
                           RemoteRunDiagnosticsDialog.show(
                             context,
-                            connectionManager: service_locator
-                                .getIt<ConnectionManager>(),
+                            provider: provider,
                             runId: provider.activeRunId!,
                             scheduleName: schedule.name,
                           ),
                         ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(FluentIcons.diagnostic, size: 16),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        appLocaleString(
-                          context,
-                          'Diagnóstico',
-                          'Diagnostics',
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
@@ -1267,8 +1203,9 @@ class _ServerExecutionQueueCard extends StatelessWidget {
                     style: FluentTheme.of(context).typography.subtitle,
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(FluentIcons.refresh),
+                AppIconButton(
+                  label: appLocaleString(context, 'Atualizar', 'Refresh'),
+                  icon: FluentIcons.refresh,
                   onPressed: provider.isLoadingExecutionQueue
                       ? null
                       : () => unawaited(provider.loadExecutionQueue()),
@@ -1354,7 +1291,7 @@ class _QueuedExecutionRow extends StatelessWidget {
     required this.onCancel,
   });
 
-  final QueuedExecution item;
+  final QueuedExecutionView item;
   final String scheduleLabel;
   final VoidCallback onCancel;
 
@@ -1394,11 +1331,9 @@ class _QueuedExecutionRow extends StatelessWidget {
               ],
             ),
           ),
-          Button(
+          AppButton(
+            label: appLocaleString(context, 'Cancelar', 'Cancel'),
             onPressed: onCancel,
-            child: Text(
-              appLocaleString(context, 'Cancelar', 'Cancel'),
-            ),
           ),
         ],
       ),

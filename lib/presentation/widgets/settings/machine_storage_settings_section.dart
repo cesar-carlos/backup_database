@@ -551,7 +551,13 @@ class _MachineStorageSettingsSectionState
                           'Selecionar perfil Windows com bases de dados legadas',
                           'Select Windows profile with legacy databases',
                         ),
-                        child: ComboBox<String>(
+                        child: AppDropdown<String>(
+                          compact: true,
+                          label: appLocaleString(
+                            context,
+                            'Selecionar perfil Windows com bases de dados legadas',
+                            'Select Windows profile with legacy databases',
+                          ),
                           value: _selectedOtherProfileLegacyPath,
                           items: _detectedOtherProfileLegacyPaths.map((
                             String path,

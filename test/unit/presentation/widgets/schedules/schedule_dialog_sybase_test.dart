@@ -22,6 +22,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
+import '../../../../helpers/pump_desktop.dart';
 import '../../../helpers/mock_repositories.dart';
 
 void main() {
@@ -197,8 +198,7 @@ void main() {
   );
 
   Future<void> openBackupTypeDropdown(WidgetTester tester) async {
-    await tester.binding.setSurfaceSize(const Size(1920, 1080));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await pumpDesktopSurface(tester);
     await tester.pumpAndSettle();
     final combo = find.byType(ComboBox<BackupType>);
     expect(combo, findsOneWidget);

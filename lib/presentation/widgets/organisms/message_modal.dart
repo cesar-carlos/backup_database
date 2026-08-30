@@ -4,7 +4,6 @@ import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
-import 'package:backup_database/presentation/widgets/molecules/action_button.dart';
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
@@ -140,7 +139,7 @@ class MessageModal extends StatelessWidget {
             CancelButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
             ),
-            ActionButton(
+            AppButton(
               label: confirmLabel,
               icon: confirmIcon,
               onPressed: () => Navigator.of(dialogContext).pop(true),
@@ -339,7 +338,7 @@ class _MessageModalInputConfirmState extends State<_MessageModalInputConfirm> {
         CancelButton(
           onPressed: () => Navigator.of(context).pop(),
         ),
-        ActionButton(
+        AppButton(
           label: widget.confirmLabel,
           icon: widget.confirmIcon,
           onPressed: canConfirm

@@ -20,43 +20,38 @@ class _ServerSettingsPageState extends State<ServerSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldPage(
-      header: const PageHeader(title: Text('Configurações do Servidor')),
-      content: Column(
-        children: [
-          Expanded(
-            child: TabView(
-              currentIndex: _selectedTabIndex,
-              onChanged: (index) {
-                setState(() => _selectedTabIndex = index);
-              },
-              tabs: [
-                Tab(
-                  icon: const Icon(FluentIcons.lock),
-                  text: const Text('Credenciais de Acesso'),
-                  body: _CredentialsTab(
-                    onNewCredential: () => _showCredentialDialog(context, null),
-                    onEditCredential: (c) => _showCredentialDialog(context, c),
-                    onConfirmDelete: _confirmDeleteCredential,
-                  ),
-                ),
-                Tab(
-                  icon: const Icon(FluentIcons.people),
-                  text: const Text('Clientes Conectados'),
-                  body: const Padding(
-                    padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
-                    child: ConnectedClientsList(),
-                  ),
-                ),
-                Tab(
-                  icon: const Icon(FluentIcons.history),
-                  text: const Text('Log de Conexões'),
-                  body: const Padding(
-                    padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
-                    child: ConnectionLogsList(),
-                  ),
-                ),
-              ],
+    return AppPageScaffold(
+      title: 'Configurações do Servidor',
+      bodyPadding: EdgeInsets.zero,
+      body: TabView(
+        currentIndex: _selectedTabIndex,
+        onChanged: (index) {
+          setState(() => _selectedTabIndex = index);
+        },
+        tabs: [
+          Tab(
+            icon: const Icon(FluentIcons.lock),
+            text: const Text('Credenciais de Acesso'),
+            body: _CredentialsTab(
+              onNewCredential: () => _showCredentialDialog(context, null),
+              onEditCredential: (c) => _showCredentialDialog(context, c),
+              onConfirmDelete: _confirmDeleteCredential,
+            ),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.people),
+            text: const Text('Clientes Conectados'),
+            body: const Padding(
+              padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
+              child: ConnectedClientsList(),
+            ),
+          ),
+          Tab(
+            icon: const Icon(FluentIcons.history),
+            text: const Text('Log de Conexões'),
+            body: const Padding(
+              padding: EdgeInsets.fromLTRB(24, 6, 24, 24),
+              child: ConnectionLogsList(),
             ),
           ),
         ],

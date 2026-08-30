@@ -1,5 +1,6 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
+import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 const double _headerContentGap = 6;
@@ -10,6 +11,7 @@ class AppPageAction {
     this.icon,
     this.onPressed,
     this.isPrimary = false,
+    this.iconOnly = false,
     this.key,
   });
 
@@ -18,6 +20,7 @@ class AppPageAction {
   final IconData? icon;
   final VoidCallback? onPressed;
   final bool isPrimary;
+  final bool iconOnly;
 }
 
 /// **Organism** - standard management-page scaffold with aligned actions and
@@ -28,6 +31,7 @@ class AppPageScaffold extends StatelessWidget {
     required this.body,
     super.key,
     this.actions = const <AppPageAction>[],
+    this.commandBar,
     this.bodyPadding = const EdgeInsets.fromLTRB(
       AppSpacing.lg,
       _headerContentGap,
@@ -40,17 +44,20 @@ class AppPageScaffold extends StatelessWidget {
   final String title;
   final Widget body;
   final List<AppPageAction> actions;
+  final Widget? commandBar;
   final EdgeInsetsGeometry bodyPadding;
   final Widget? headerBottom;
 
   @override
   Widget build(BuildContext context) {
+    final resolvedCommandBar =
+        commandBar ??
+        (actions.isEmpty ? null : _AppPageActionBar(actions: actions));
+
     return ScaffoldPage(
       header: PageHeader(
         title: Text(title),
-        commandBar: actions.isEmpty
-            ? null
-            : _AppPageActionBar(actions: actions),
+        commandBar: resolvedCommandBar,
       ),
       content: Padding(
         padding: bodyPadding,
@@ -103,6 +110,15 @@ class _AppPageActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (action.iconOnly) {
+      return AppIconButton(
+        key: action.key,
+        label: action.label,
+        icon: action.icon ?? FluentIcons.refresh,
+        onPressed: action.onPressed,
+      );
+    }
+
     if (action.isPrimary) {
       return AppButton.primary(
         key: action.key,

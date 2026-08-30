@@ -6,7 +6,6 @@ import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
-import 'package:backup_database/infrastructure/protocol/database_config_messages.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/remote/remote_database_config_edit_dialog.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -44,11 +43,11 @@ class _RemoteDatabaseConfigsPageState extends State<RemoteDatabaseConfigsPage> {
         .isFirebirdSupported;
 
     final availableTypes = [
-      for (final type in RemoteDatabaseType.values)
-        if (type != RemoteDatabaseType.firebird || firebirdSupported) type,
+      for (final type in RemoteDbKind.values)
+        if (type != RemoteDbKind.firebird || firebirdSupported) type,
     ];
 
-    final selectedType = await showDialog<RemoteDatabaseType>(
+    final selectedType = await showDialog<RemoteDbKind>(
       context: context,
       builder: (dialogContext) => _DatabaseTypePickerDialog(
         availableTypes: availableTypes,
@@ -181,26 +180,20 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
               ],
             ),
           ),
-          Tooltip(
-            message: _l(context, 'Editar', 'Edit'),
-            child: IconButton(
-              icon: const Icon(FluentIcons.edit),
-              onPressed: busy ? null : () => unawaited(_onEdit(context)),
-            ),
+          AppIconButton(
+            label: _l(context, 'Editar', 'Edit'),
+            icon: FluentIcons.edit,
+            onPressed: busy ? null : () => unawaited(_onEdit(context)),
           ),
-          Tooltip(
-            message: _l(context, 'Testar conexão', 'Test connection'),
-            child: IconButton(
-              icon: const Icon(FluentIcons.plug_connected),
-              onPressed: busy ? null : () => unawaited(_onTest(context)),
-            ),
+          AppIconButton(
+            label: _l(context, 'Testar conexão', 'Test connection'),
+            icon: FluentIcons.plug_connected,
+            onPressed: busy ? null : () => unawaited(_onTest(context)),
           ),
-          Tooltip(
-            message: _l(context, 'Excluir', 'Delete'),
-            child: IconButton(
-              icon: Icon(FluentIcons.delete, color: context.colors.danger),
-              onPressed: busy ? null : () => unawaited(_onDelete(context)),
-            ),
+          AppIconButton(
+            label: _l(context, 'Excluir', 'Delete'),
+            icon: FluentIcons.delete,
+            onPressed: busy ? null : () => unawaited(_onDelete(context)),
           ),
         ],
       ),
@@ -233,30 +226,17 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
   }
 
   Future<void> _onDelete(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => ContentDialog(
-        title: Text(_l(dialogContext, 'Confirmar exclusão', 'Confirm delete')),
-        content: Text(
-          _l(
-            dialogContext,
-            'Excluir "${entry.name}" no servidor?',
-            'Delete "${entry.name}" on the server?',
-          ),
-        ),
-        actions: [
-          Button(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(_l(dialogContext, 'Cancelar', 'Cancel')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(_l(dialogContext, 'Excluir', 'Delete')),
-          ),
-        ],
+    final confirmed = await MessageModal.showConfirm(
+      context,
+      title: _l(context, 'Confirmar exclusão', 'Confirm delete'),
+      message: _l(
+        context,
+        'Excluir "${entry.name}" no servidor?',
+        'Delete "${entry.name}" on the server?',
       ),
+      confirmLabel: _l(context, 'Excluir', 'Delete'),
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!confirmed || !context.mounted) return;
     final ok = await context.read<RemoteDatabaseConfigProvider>().deleteConfig(
       entry,
     );
@@ -271,11 +251,11 @@ class _RemoteDatabaseConfigTile extends StatelessWidget {
 class _DatabaseTypePickerDialog extends StatelessWidget {
   const _DatabaseTypePickerDialog({required this.availableTypes});
 
-  final List<RemoteDatabaseType> availableTypes;
+  final List<RemoteDbKind> availableTypes;
 
   @override
   Widget build(BuildContext context) {
-    return ContentDialog(
+    return AppDialogShell(
       title: Text(_l(context, 'Escolha o SGBD', 'Choose the database engine')),
       content: SizedBox(
         width: 360,
@@ -284,14 +264,9 @@ class _DatabaseTypePickerDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             for (final type in availableTypes) ...[
-              Button(
+              AppButton(
+                label: remoteDatabaseTypeLabel(type),
                 onPressed: () => Navigator.of(context).pop(type),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.xs,
-                  ),
-                  child: Text(remoteDatabaseTypeLabel(type)),
-                ),
               ),
               const SizedBox(height: AppSpacing.xs),
             ],
@@ -299,9 +274,8 @@ class _DatabaseTypePickerDialog extends StatelessWidget {
         ),
       ),
       actions: [
-        Button(
+        CancelButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(_l(context, 'Cancelar', 'Cancel')),
         ),
       ],
     );

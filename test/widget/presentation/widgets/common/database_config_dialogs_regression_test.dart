@@ -8,7 +8,7 @@ import 'package:backup_database/domain/services/i_postgres_backup_service.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog.dart';
-import 'package:backup_database/presentation/widgets/organisms/database_config_dialog_shell.dart';
+import 'package:backup_database/presentation/widgets/organisms/app_dialog_shell.dart';
 import 'package:backup_database/presentation/widgets/postgres/postgres_config_dialog.dart';
 import 'package:backup_database/presentation/widgets/sql_server/sql_server_config_dialog.dart';
 import 'package:backup_database/presentation/widgets/sybase/sybase_config_dialog.dart';
@@ -139,7 +139,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
+      expect(find.byType(AppDialogShell), findsOneWidget);
       expect(find.text('New SQL Server configuration'), findsOneWidget);
       expect(find.text('Authentication type'), findsOneWidget);
       expect(find.text('Server name (Engine Name)'), findsNothing);
@@ -157,7 +157,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
+      expect(find.byType(AppDialogShell), findsOneWidget);
       expect(find.text('New PostgreSQL configuration'), findsOneWidget);
       expect(find.text('Host'), findsOneWidget);
       expect(find.text('Authentication type'), findsNothing);
@@ -175,7 +175,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
+      expect(find.byType(AppDialogShell), findsOneWidget);
       expect(find.text('New Sybase configuration'), findsOneWidget);
       expect(find.text('Server name (Engine Name)'), findsOneWidget);
       expect(find.text('Authentication type'), findsNothing);
@@ -193,7 +193,7 @@ void main() {
         ),
       );
 
-      expect(find.byType(DatabaseConfigDialogShell), findsOneWidget);
+      expect(find.byType(AppDialogShell), findsOneWidget);
       expect(find.text('New Firebird configuration'), findsOneWidget);
       expect(find.text('Database file (.fdb)'), findsOneWidget);
       expect(find.text('Authentication type'), findsNothing);

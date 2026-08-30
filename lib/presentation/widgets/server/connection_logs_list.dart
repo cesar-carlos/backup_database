@@ -131,9 +131,10 @@ class _ConnectionLogsContent extends StatelessWidget {
           children: [
             SizedBox(
               width: 200,
-              child: ComboBox<ConnectionLogFilter>(
+              child: AppDropdown<ConnectionLogFilter>(
+                compact: true,
+                label: appLocaleString(context, 'Filtrar', 'Filter'),
                 value: provider.filter,
-                isExpanded: true,
                 placeholder: Text(
                   appLocaleString(context, 'Filtrar', 'Filter'),
                 ),

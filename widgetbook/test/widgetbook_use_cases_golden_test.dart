@@ -35,6 +35,10 @@ bool _includeComponent(String componentName) {
     'MessageModal',
     'EmptyState',
     'SectionHeaderWithStatusBadges',
+    'AppCallout',
+    'AppIconButton',
+    'HostPortFields',
+    'LabeledToggle',
   }.contains(componentName);
 }
 

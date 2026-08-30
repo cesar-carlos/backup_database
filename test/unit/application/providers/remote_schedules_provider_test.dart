@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/application/dtos/remote/remote_preflight_view.dart';
 import 'package:backup_database/application/providers/remote_schedules_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart' as di;
 import 'package:backup_database/core/logging/socket_logger_service.dart';
@@ -162,7 +163,7 @@ void main() {
       final result = await provider.runPreflightForSchedule();
 
       expect(result.action, RemotePreflightUiAction.proceed);
-      expect(result.preflight?.status, PreflightStatus.passed);
+      expect(result.preflight?.status, RemotePreflightStatus.passed);
       expect(connectionManager.validatePreflightCallCount, 1);
     });
 
@@ -549,5 +550,35 @@ void main() {
 
       connectionManager.remoteBackupCompleter!.complete(const rd.Success(''));
     });
+  });
+
+  group('RemoteSchedulesProvider.loadRunDiagnostics', () {
+    test(
+      'should map logs and error details from the connection manager',
+      () async {
+        final view = await provider.loadRunDiagnostics('run-diag-1');
+
+        expect(connectionManager.getRunLogsCallCount, 1);
+        expect(connectionManager.getRunErrorDetailsCallCount, 1);
+        expect(view.logs?.lines, ['log-1']);
+        expect(view.errorDetails?.errorMessage, 'boom');
+        expect(view.logsError, isNull);
+        expect(view.errorDetailsError, isNull);
+      },
+    );
+
+    test(
+      'should skip error details when includeErrorDetails is false',
+      () async {
+        final view = await provider.loadRunDiagnostics(
+          'run-diag-2',
+          includeErrorDetails: false,
+        );
+
+        expect(connectionManager.getRunLogsCallCount, 1);
+        expect(connectionManager.getRunErrorDetailsCallCount, 0);
+        expect(view.errorDetails, isNull);
+      },
+    );
   });
 }

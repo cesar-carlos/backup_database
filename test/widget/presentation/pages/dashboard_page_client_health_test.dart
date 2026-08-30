@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:backup_database/application/providers/dashboard_provider.dart';
+import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/server_connection_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/di/service_locator.dart' as di;
@@ -22,6 +23,7 @@ import 'package:provider/provider.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 import '../../../helpers/fake_remote_schedules_connection_manager.dart';
+import '../../../helpers/stub_license_provider.dart';
 
 class _MockServerConnectionRepository extends Mock
     implements IServerConnectionRepository {}
@@ -151,6 +153,9 @@ void main() {
               ),
               ChangeNotifierProvider<DashboardProvider>.value(
                 value: dashboardProvider,
+              ),
+              ChangeNotifierProvider<LicenseProvider>.value(
+                value: stubLicenseProvider(),
               ),
             ],
             child: const DashboardPage(),

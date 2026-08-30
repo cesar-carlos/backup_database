@@ -43,15 +43,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final isClientMode = currentAppMode == AppMode.client;
 
-    return ScaffoldPage(
-      header: const PageHeader(title: Text('Painel')),
-      content: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.sm,
-          AppSpacing.lg,
-          AppSpacing.lg,
-        ),
+    return AppPageScaffold(
+      title: 'Painel',
+      body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -106,9 +100,10 @@ class _DashboardPageState extends State<DashboardPage> {
                             style: FluentTheme.of(context).typography.subtitle,
                           ),
                           const SizedBox(height: 4),
-                          ComboBox<String>(
+                          AppDropdown<String>(
+                            label: 'Servidor Remoto',
+                            compact: true,
                             placeholder: const Text('Selecione um servidor'),
-                            isExpanded: true,
                             items: connections
                                 .map(
                                   (conn) => ComboBoxItem<String>(
@@ -122,10 +117,8 @@ class _DashboardPageState extends State<DashboardPage> {
                               if (value == null) return;
                               setState(() => _selectedConnectionId = value);
 
-                              // Connect to selected server
                               await connProvider.connectTo(value);
 
-                              // Refresh dashboard metrics
                               if (!context.mounted) return;
                               unawaited(
                                 context.read<DashboardProvider>().refresh(),
