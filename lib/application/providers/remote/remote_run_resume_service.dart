@@ -14,12 +14,10 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class RemoteRunResumeService {
   RemoteRunResumeService({
-    required ConnectionManager connectionManager,
-    required RemoteSchedulesRunSession session,
-    required RemoteScheduleExecutionCoordinator execution,
-  }) : _connectionManager = connectionManager,
-       _session = session,
-       _execution = execution;
+    required this._connectionManager,
+    required this._session,
+    required this._execution,
+  });
 
   final ConnectionManager _connectionManager;
   final RemoteSchedulesRunSession _session;

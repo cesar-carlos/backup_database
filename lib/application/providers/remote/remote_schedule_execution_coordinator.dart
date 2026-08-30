@@ -16,20 +16,14 @@ typedef EnsureServerHealthyForBackup = Future<bool> Function();
 
 class RemoteScheduleExecutionCoordinator {
   RemoteScheduleExecutionCoordinator({
-    required ConnectionManager connectionManager,
-    required RemoteSchedulesRunSession session,
-    required PendingRemoteRunStore pendingRunStore,
-    required TempDirectoryService tempDirectoryService,
-    required EnsureServerHealthyForBackup ensureServerHealthy,
-    required Future<void> Function() loadExecutionQueue,
-    RemoteFileTransferProvider? transferProvider,
-  }) : _connectionManager = connectionManager,
-       _session = session,
-       _pendingRunStore = pendingRunStore,
-       _tempDirectoryService = tempDirectoryService,
-       _ensureServerHealthy = ensureServerHealthy,
-       _loadExecutionQueue = loadExecutionQueue,
-       _transferProvider = transferProvider;
+    required this._connectionManager,
+    required this._session,
+    required this._pendingRunStore,
+    required this._tempDirectoryService,
+    required this._ensureServerHealthy,
+    required this._loadExecutionQueue,
+    this._transferProvider,
+  });
 
   final ConnectionManager _connectionManager;
   final RemoteSchedulesRunSession _session;
