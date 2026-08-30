@@ -1,10 +1,11 @@
-# Golden tests do envelope JSON do protocolo (M6.1)
+# Golden tests do envelope JSON do protocolo
 
 Estes testes travam o **contrato JSON** de cada `MessageType` critico
 contra uma fixture commitada. Servem como rede de seguranca para
-mudancas no protocolo socket.
+mudancas no protocolo socket. Contrato vivo:
+[`docs/onboarding/execucao_remota.md`](../../../docs/onboarding/execucao_remota.md).
 
-## Por que existem (M6.1 do plano)
+## Por que existem
 
 - Detectar mudanca acidental de campo (`scheduleId` -> `schedule_id`).
 - Detectar mudanca acidental de estrutura (nesting diferente, wrap em
@@ -64,7 +65,7 @@ Adicionar fixture sempre que:
   separada para variantes com/sem o campo, igual ao padrao
   `*_v1_legacy.golden.json` x `*_v2_with_run_id.golden.json`).
 - Mudanca de wire format que precisa de matriz de compat (ex.: novo
-  envelope REST-like com `statusCode`, ver M4.1/M4.2 do plano).
+  envelope REST-like com `statusCode`).
 
 ## Quando NAO adicionar fixture
 
@@ -74,33 +75,28 @@ Adicionar fixture sempre que:
   (`createAuthRequest` tem `ts` baseado em `DateTime.now()` - golden
   exigiria refatoracao para injetar relogio).
 
-## Cobertura vs `MessageType` (R-11)
+## Cobertura vs `MessageType`
 
-O enum em `lib/infrastructure/protocol/message_types.dart` tem **113**
-valores. Os goldens cobrem **38 tipos** via factories testadas (58 casos
-incluindo variantes v1/v2 e envelopes de erro).
+O enum em `lib/infrastructure/protocol/message_types.dart` tem **70**
+valores (o mais recente e `backupCancelled`). Os goldens cobrem um
+subconjunto via factories testadas (inclui variantes v1/v2 e envelopes
+de erro).
 
-| Area | Coberto nos goldens | Fora do escopo (P2+) |
+| Area | Coberto nos goldens | Fora do escopo atual |
 | --- | --- | --- |
 | Auth | `authResponse` | `authRequest` (`ts` dinamico), `authChallenge` |
 | Schedule legado | `listSchedules`, `scheduleList`, `updateSchedule`, `scheduleUpdated`, `executeSchedule`, `cancelSchedule`, `scheduleCancelled` | — |
-| Schedule CRUD PR-2 | `createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`, `scheduleMutationResponse` | — |
-| Backup stream | `backupProgress`, `backupStep`, `backupComplete`, `backupFailed` | `backupQueued`, `backupDequeued`, `backupStarted` |
+| Schedule CRUD | `createSchedule`, `deleteSchedule`, `pauseSchedule`, `resumeSchedule`, `scheduleMutationResponse` | — |
+| Backup stream | `backupProgress`, `backupStep`, `backupComplete`, `backupFailed` | `backupQueued`, `backupDequeued`, `backupStarted`, `backupCancelled` |
 | Execucao remota | `startBackup*`, `cancelBackup*`, `executionStatus*`, `executionQueue*` | `cancelQueuedBackup*`, diagnostico (`getRun*`, `cleanupStaging*`) |
 | Ops / sessao | `metrics*`, `health*`, `session*`, `preflight*`, `capabilities*`, `testDatabaseConnection*` | `heartbeat`, `disconnect` |
 | Arquivos | — | `listFiles`, `fileList`, `fileTransfer*`, `fileAck` |
 | DB config remoto | `listDatabaseConfigs*`, `create/deleteDatabaseConfig*`, `databaseConfigMutationResponse` | `updateDatabaseConfigRequest` (shape igual ao create) |
 
-Novos goldens P1 (R-11): `schedule_list_one_item`, `update_schedule_request`,
-`schedule_updated`, `schedule_mutation_response_created`, `backup_step_v2_with_run_id`.
+## Relacao com o contrato
 
-## Relacao com o plano
-
-- **M6.1**: este arquivo e a entrega inicial.
-- **M6.4**: golden tests para envelope completo (entrega futura, junto
-  com PR-1 quando o envelope `statusCode/success/data/error` for
-  introduzido).
-- **M2.3**: variantes `*_v1_legacy` x `*_v2_with_run_id` validam
-  backward compat ja entregue.
-- **M1.3**: quando `protocolVersion` for formalizado, fixtures separadas
-  por versao serao adicionadas aqui.
+- Envelope `statusCode`/`success`/`data`/`error` ja e o formato atual
+  (nao e entrega futura).
+- Variantes `*_v1_legacy` x `*_v2_with_run_id` validam backward compat.
+- `protocolVersion` logico atual e `2`; bump exige atualizar fixtures
+  e `docs/onboarding/execucao_remota.md`.

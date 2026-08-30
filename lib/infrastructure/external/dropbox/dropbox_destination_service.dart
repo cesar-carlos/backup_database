@@ -1,32 +1,52 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
-import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
-import 'package:backup_database/core/utils/http_error_helpers.dart';
-import 'package:backup_database/core/utils/integrity_failure_messages.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
-import 'package:backup_database/core/utils/sybase_backup_path_suffix.dart';
 import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_dropbox_destination_service.dart';
 import 'package:backup_database/domain/services/upload_progress_callback.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_client.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
-import 'package:dio/dio.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_errors.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_folder_ops.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_resumable_uploader.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_retention.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_simple_uploader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class DropboxDestinationService implements IDropboxDestinationService {
-  DropboxDestinationService(this._authService);
-  final DropboxAuthService _authService;
-  Dio? _cachedDio;
-  String? _cachedAccessToken;
+  factory DropboxDestinationService(DropboxAuthService authService) {
+    final authClient = DropboxAuthClient(authService);
+    return DropboxDestinationService._(
+      authClient,
+      DropboxFolderOps(authClient),
+      const DropboxSimpleUploader(),
+      const DropboxResumableUploader(),
+      DropboxRetention(authClient),
+    );
+  }
+
+  DropboxDestinationService._(
+    this._authClient,
+    this._folderOps,
+    this._simpleUploader,
+    this._resumableUploader,
+    this._retention,
+  );
+
+  final DropboxAuthClient _authClient;
+  final DropboxFolderOps _folderOps;
+  final DropboxSimpleUploader _simpleUploader;
+  final DropboxResumableUploader _resumableUploader;
+  final DropboxRetention _retention;
 
   @override
   Future<rd.Result<DropboxUploadResult>> upload({
@@ -53,7 +73,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
           ? '/${config.folderName}'
           : '${config.folderPath}/${config.folderName}';
 
-      final mainFolderResult = await _getOrCreateFolder(mainFolderPath);
+      final mainFolderResult = await _folderOps.getOrCreateFolder(
+        mainFolderPath,
+      );
       if (mainFolderResult.isError()) {
         return rd.Failure(mainFolderResult.exceptionOrNull()!);
       }
@@ -61,7 +83,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final dateFolderPath = '$mainFolderPath/$dateFolder';
-      final dateFolderResult = await _getOrCreateFolder(dateFolderPath);
+      final dateFolderResult = await _folderOps.getOrCreateFolder(
+        dateFolderPath,
+      );
       if (dateFolderResult.isError()) {
         return rd.Failure(dateFolderResult.exceptionOrNull()!);
       }
@@ -75,7 +99,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
       UploadCancellation.throwIfCancelled(isCancelled);
       final filePath = '$dateFolderPath/$fileName';
 
-      await _deleteFileIfExists(filePath);
+      await _folderOps.deleteFileIfExists(filePath);
 
       final useResumableUpload =
           fileSize >= AppConstants.dropboxSimpleUploadLimit;
@@ -84,8 +108,8 @@ class DropboxDestinationService implements IDropboxDestinationService {
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
         UploadCancellation.throwIfCancelled(isCancelled);
         try {
-          final result = await _executeWithTokenRefresh(() async {
-            final dioResult = await _getAuthenticatedDio();
+          final result = await _authClient.executeWithTokenRefresh(() async {
+            final dioResult = await _authClient.getAuthenticatedDio();
             if (dioResult.isError()) {
               throw dioResult.exceptionOrNull()!;
             }
@@ -93,21 +117,20 @@ class DropboxDestinationService implements IDropboxDestinationService {
             final dio = dioResult.getOrNull()!;
 
             final uploadResult = useResumableUpload
-                ? await _uploadResumable(
-                    dio,
-                    sourceFile,
-                    filePath,
-                    fileSize,
-                    onProgress,
-                    isCancelled,
+                ? await _resumableUploader.upload(
+                    dio: dio,
+                    sourceFile: sourceFile,
+                    filePath: filePath,
+                    fileSize: fileSize,
+                    onProgress: onProgress,
+                    isCancelled: isCancelled,
                   )
-                : await _uploadSimple(
-                    dio,
-                    sourceFile,
-                    filePath,
-                    fileSize,
-                    onProgress,
-                    isCancelled,
+                : await _simpleUploader.upload(
+                    dio: dio,
+                    sourceFile: sourceFile,
+                    filePath: filePath,
+                    onProgress: onProgress,
+                    isCancelled: isCancelled,
                   );
 
             if (uploadResult.containsKey('size')) {
@@ -207,7 +230,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
       }
       return rd.Failure(
         DropboxFailure(
-          message: _getDropboxErrorMessage(lastError),
+          message: DropboxErrors.describe(lastError),
           originalError: lastError,
         ),
       );
@@ -221,615 +244,23 @@ class DropboxDestinationService implements IDropboxDestinationService {
         return rd.Failure(e);
       }
       return rd.Failure(
-        DropboxFailure(message: _getDropboxErrorMessage(e), originalError: e),
-      );
-    }
-  }
-
-  Future<Map<String, dynamic>> _uploadSimple(
-    Dio dio,
-    File sourceFile,
-    String filePath,
-    int fileSize,
-    UploadProgressCallback? onProgress,
-    bool Function()? isCancelled,
-  ) async {
-    UploadCancellation.throwIfCancelled(isCancelled);
-    final contentDio = Dio(
-      BaseOptions(
-        baseUrl: AppConstants.dropboxContentBaseUrl,
-        connectTimeout: AppConstants.httpTimeout,
-        receiveTimeout: AppConstants.httpTimeout,
-        headers: dio.options.headers,
-      ),
-    );
-
-    try {
-      final response = await contentDio.post(
-        '/2/files/upload',
-        data: sourceFile.openRead(),
-        onSendProgress: onProgress != null
-            ? (sent, total) {
-                if (total > 0) {
-                  onProgress(sent / total);
-                }
-              }
-            : null,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Dropbox-API-Arg':
-                '{"path": "$filePath", "mode": "add", "autorename": true}',
-          },
-        ),
-      );
-
-      return response.data as Map<String, dynamic>;
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 409) {
-        final errorData = e.response?.data as Map<String, dynamic>?;
-        final error = errorData?['error'] as Map<String, dynamic>?;
-        final errorTag = error?['.tag'] as String?;
-
-        if (errorTag == 'path/conflict') {
-          final response = await contentDio.post(
-            '/2/files/upload',
-            data: sourceFile.openRead(),
-            onSendProgress: onProgress != null
-                ? (sent, total) {
-                    if (total > 0) {
-                      onProgress(sent / total);
-                    }
-                  }
-                : null,
-            options: Options(
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'Dropbox-API-Arg': '{"path": "$filePath", "mode": "overwrite"}',
-              },
-            ),
-          );
-
-          return response.data as Map<String, dynamic>;
-        }
-      }
-      rethrow;
-    }
-  }
-
-  /// Upload em chunks via Dropbox `upload_session`.
-  ///
-  /// **Reescrito**: a versão anterior usava `fileStream.take(N).toList()`
-  /// num loop, mas (1) `take` conta eventos do stream, não bytes, e
-  /// (2) o stream de `openRead()` é single-subscription e fecha após o
-  /// primeiro `take().toList()`. Resultado: a partir da 2ª iteração o
-  /// stream estava fechado e o upload nunca completava para arquivos
-  /// > 150 MB. Substituído por `RandomAccessFile.readInto` lendo a
-  /// janela `[offset, offset+chunkSize)` em cada iteração.
-  Future<Map<String, dynamic>> _uploadResumable(
-    Dio dio,
-    File sourceFile,
-    String filePath,
-    int fileSize,
-    UploadProgressCallback? onProgress,
-    bool Function()? isCancelled,
-  ) async {
-    UploadCancellation.throwIfCancelled(isCancelled);
-    const dropboxChunkSize = UploadChunkConstants.dropboxResumableChunkSize;
-
-    final contentDio = Dio(
-      BaseOptions(
-        baseUrl: AppConstants.dropboxContentBaseUrl,
-        connectTimeout: AppConstants.httpTimeout,
-        receiveTimeout: AppConstants.httpTimeout,
-        headers: dio.options.headers,
-      ),
-    );
-
-    final raf = await sourceFile.open();
-    try {
-      String? sessionId;
-      var offset = 0;
-      Map<String, dynamic>? lastResponseData;
-
-      while (offset < fileSize) {
-        UploadCancellation.throwIfCancelled(isCancelled);
-
-        final remaining = fileSize - offset;
-        final bytesToRead = remaining < dropboxChunkSize
-            ? remaining
-            : dropboxChunkSize;
-        final buffer = Uint8List(bytesToRead);
-        var totalRead = 0;
-        while (totalRead < bytesToRead) {
-          final n = await raf.readInto(buffer, totalRead, bytesToRead);
-          if (n <= 0) {
-            throw StateError(
-              'Leitura interrompida em $offset+$totalRead/$bytesToRead bytes '
-              '(arquivo encolheu durante upload?)',
-            );
-          }
-          totalRead += n;
-        }
-
-        final isFirst = offset == 0;
-        final isLast = offset + bytesToRead == fileSize;
-        final bytesUploadedBefore = offset;
-        final progressCallback = onProgress == null
-            ? null
-            : (int sent, int total) {
-                if (fileSize > 0) {
-                  onProgress((bytesUploadedBefore + sent) / fileSize);
-                }
-              };
-
-        if (isFirst && isLast) {
-          // Arquivo cabe num único chunk dentro do limite resumable
-          // (fileSize >= dropboxSimpleUploadLimit mas <= chunk size).
-          // Sobe start + finish numa só chamada usando `close: true`
-          // + finish separado — Dropbox exige finish para criar o
-          // arquivo final.
-          final startResponse = await contentDio.post(
-            '/2/files/upload_session/start',
-            data: buffer,
-            onSendProgress: progressCallback,
-            options: Options(
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'Dropbox-API-Arg': '{"close": true}',
-              },
-            ),
-          );
-          sessionId =
-              (startResponse.data as Map<String, dynamic>)['session_id']
-                  as String;
-          offset += bytesToRead;
-          lastResponseData = await _finishUploadSession(
-            contentDio: contentDio,
-            sessionId: sessionId,
-            offset: offset,
-            filePath: filePath,
-            fileSize: fileSize,
-            bytesUploadedBefore: offset,
-            onProgress: onProgress,
-          );
-        } else if (isFirst) {
-          final response = await contentDio.post(
-            '/2/files/upload_session/start',
-            data: buffer,
-            onSendProgress: progressCallback,
-            options: Options(
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'Dropbox-API-Arg': '{"close": false}',
-              },
-            ),
-          );
-          sessionId =
-              (response.data as Map<String, dynamic>)['session_id'] as String;
-          offset += bytesToRead;
-        } else if (!isLast) {
-          await contentDio.post(
-            '/2/files/upload_session/append_v2',
-            data: buffer,
-            onSendProgress: progressCallback,
-            options: Options(
-              headers: {
-                'Content-Type': 'application/octet-stream',
-                'Dropbox-API-Arg':
-                    '{"cursor": {"session_id": "$sessionId", "offset": $offset}, "close": false}',
-              },
-            ),
-          );
-          offset += bytesToRead;
-        } else {
-          // Último chunk + finish em uma só chamada
-          lastResponseData = await _finishUploadSession(
-            contentDio: contentDio,
-            sessionId: sessionId!,
-            offset: offset,
-            filePath: filePath,
-            fileSize: fileSize,
-            bytesUploadedBefore: bytesUploadedBefore,
-            onProgress: onProgress,
-            chunkData: buffer,
-          );
-          offset += bytesToRead;
-        }
-      }
-
-      if (lastResponseData == null) {
-        throw const DropboxFailure(
-          message: 'Upload resumable Dropbox encerrou sem resposta de finish.',
-        );
-      }
-      return lastResponseData;
-    } finally {
-      try {
-        await raf.close();
-      } on Object catch (e, s) {
-        LoggerService.debug('Dropbox RAF close: $e', e, s);
-      }
-    }
-  }
-
-  /// Faz o `upload_session/finish` (com retry `mode: overwrite` quando
-  /// Dropbox responde `path/conflict`).
-  Future<Map<String, dynamic>> _finishUploadSession({
-    required Dio contentDio,
-    required String sessionId,
-    required int offset,
-    required String filePath,
-    required int fileSize,
-    required int bytesUploadedBefore,
-    required UploadProgressCallback? onProgress,
-    Uint8List? chunkData,
-  }) async {
-    final body = chunkData ?? Uint8List(0);
-    final progressCallback = onProgress == null
-        ? null
-        : (int sent, int total) {
-            if (fileSize > 0) {
-              onProgress((bytesUploadedBefore + sent) / fileSize);
-            }
-          };
-
-    final commitOffset = chunkData == null ? offset : offset;
-
-    Future<Map<String, dynamic>> doFinish({required bool overwrite}) async {
-      final mode = overwrite ? '"overwrite"' : '"add", "autorename": true';
-      final response = await contentDio.post(
-        '/2/files/upload_session/finish',
-        data: body,
-        onSendProgress: progressCallback,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'Dropbox-API-Arg':
-                '{"cursor": {"session_id": "$sessionId", "offset": $commitOffset}, '
-                '"commit": {"path": "$filePath", "mode": $mode}}',
-          },
-        ),
-      );
-      return response.data as Map<String, dynamic>;
-    }
-
-    try {
-      return await doFinish(overwrite: false);
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 409) {
-        final errorData = e.response?.data as Map<String, dynamic>?;
-        final error = errorData?['error'] as Map<String, dynamic>?;
-        final errorTag = error?['.tag'] as String?;
-        if (errorTag == 'path/conflict') {
-          return doFinish(overwrite: true);
-        }
-      }
-      rethrow;
-    }
-  }
-
-  /// Mapeia uma exceção do upload Dropbox para mensagem amigável.
-  ///
-  /// Mesma estratégia em camadas do FTP/Drive: integridade → tipo
-  /// (`TimeoutException`/`SocketException`/`DioException.statusCode`) →
-  /// heurística por substring com word‑boundary em códigos HTTP.
-  @visibleForTesting
-  static String getDropboxErrorMessage(Object? e) {
-    final integrity = IntegrityFailureMessages.tryDescribe(
-      e,
-      serviceName: 'Dropbox',
-    );
-    if (integrity != null) return integrity;
-    if (e is TimeoutException) {
-      return 'Tempo limite excedido ao enviar para o Dropbox.\n'
-          'Para arquivos grandes, o upload pode levar vários minutos.\n'
-          'Tente novamente ou verifique sua conexão.';
-    }
-    if (e is SocketException) {
-      return 'Erro de conexão com o Dropbox.\n'
-          'Verifique sua conexão com a internet.\n'
-          'Detalhes: ${e.message}';
-    }
-    if (e is DioException) {
-      final code = e.response?.statusCode;
-      final fromStatus = code == null ? null : _dropboxMessageByStatus(code);
-      if (fromStatus != null) return fromStatus;
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.sendTimeout ||
-          e.type == DioExceptionType.receiveTimeout) {
-        return 'Tempo limite excedido ao enviar para o Dropbox.\n'
-            'Para arquivos grandes, o upload pode levar vários minutos.';
-      }
-    }
-
-    final errorStr = e?.toString().toLowerCase() ?? '';
-
-    final statusMatch = HttpErrorHelpers.firstHttpStatusIn(errorStr, const [
-      401,
-      403,
-      409,
-      507,
-    ]);
-    if (statusMatch != null) {
-      final fromStatus = _dropboxMessageByStatus(statusMatch);
-      if (fromStatus != null) return fromStatus;
-    }
-    if (errorStr.contains('unauthorized')) {
-      return 'Sessão do Dropbox expirada.\n'
-          'Faça login novamente nas configurações.';
-    }
-    if (errorStr.contains('forbidden')) {
-      return 'Sem permissão para acessar o Dropbox.\n'
-          'Verifique se as permissões foram concedidas.';
-    }
-    if (errorStr.contains('path/conflict') ||
-        errorStr.contains('insufficient_storage')) {
-      // Casos específicos do Dropbox que viajam fora do statusCode.
-      if (errorStr.contains('insufficient_storage')) {
-        return _dropboxMessageByStatus(507)!;
-      }
-      return _dropboxMessageByStatus(409)!;
-    }
-    if (errorStr.contains('network') || errorStr.contains('connection')) {
-      return 'Erro de conexão com o Dropbox.\n'
-          'Verifique sua conexão com a internet.';
-    }
-    if (errorStr.contains('timeout')) {
-      return 'Tempo limite excedido ao enviar para o Dropbox.\n'
-          'Para arquivos grandes, o upload pode levar vários minutos.';
-    }
-
-    return 'Erro no upload para o Dropbox após várias tentativas.\n'
-        'Detalhes: $e';
-  }
-
-  String _getDropboxErrorMessage(Object? e) => getDropboxErrorMessage(e);
-
-  static String? _dropboxMessageByStatus(int status) {
-    switch (status) {
-      case 401:
-        return 'Sessão do Dropbox expirada.\n'
-            'Faça login novamente nas configurações.';
-      case 403:
-        return 'Sem permissão para acessar o Dropbox.\n'
-            'Verifique se as permissões foram concedidas.';
-      case 409:
-        return 'Arquivo ou pasta já existe no Dropbox.\n'
-            'O sistema tentará sobrescrever o arquivo automaticamente na próxima tentativa.';
-      case 507:
-        return 'Limite de armazenamento do Dropbox atingido.\n'
-            'Libere espaço ou faça upgrade do plano.';
-      default:
-        return null;
-    }
-  }
-
-  Future<rd.Result<void>> _getOrCreateFolder(String folderPath) async {
-    try {
-      final dioResult = await _getAuthenticatedDio();
-      if (dioResult.isError()) {
-        return rd.Failure(dioResult.exceptionOrNull()!);
-      }
-
-      final dio = dioResult.getOrNull()!;
-
-      try {
-        final response = await dio.post(
-          '/2/files/get_metadata',
-          data: {'path': folderPath},
-        );
-
-        final metadata = response.data as Map<String, dynamic>?;
-        final tag = metadata?['.tag'] as String?;
-
-        if (tag == 'folder') {
-          return const rd.Success(());
-        } else if (tag == 'file') {
-          return rd.Failure(
-            DropboxFailure(
-              message:
-                  'Caminho existe mas é um arquivo, não uma pasta: $folderPath',
-            ),
-          );
-        }
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 404) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag != 'path_lookup/not_found') {
-            rethrow;
-          }
-        } else if (e.response?.statusCode == 409) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path/conflict' ||
-              errorTag == 'path/conflict/folder') {
-            return const rd.Success(());
-          } else if (errorTag == 'path/conflict/file') {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Caminho existe mas é um arquivo, não uma pasta: $folderPath',
-              ),
-            );
-          } else {
-            return const rd.Success(());
-          }
-        } else if (e.response?.statusCode == 401) {
-          _cachedDio = null;
-          _cachedAccessToken = null;
-          final refreshResult = await _authService.signInSilently();
-          if (refreshResult.isError()) {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Sessão expirada. Faça login novamente nas configurações.',
-                originalError: e,
-              ),
-            );
-          }
-          return await _getOrCreateFolder(folderPath);
-        } else {
-          return rd.Failure(
-            DropboxFailure(
-              message: 'Erro ao verificar pasta: ${e.response?.statusCode}',
-              originalError: e,
-            ),
-          );
-        }
-      }
-
-      try {
-        await dio.post(
-          '/2/files/create_folder_v2',
-          data: {'path': folderPath, 'autorename': false},
-        );
-        return const rd.Success(());
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 409) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path/conflict' ||
-              errorTag == 'path/conflict/folder' ||
-              errorTag == 'path/conflict/file') {
-            return const rd.Success(());
-          }
-        }
-
-        if (e.response?.statusCode == 401) {
-          _cachedDio = null;
-          _cachedAccessToken = null;
-          final refreshResult = await _authService.signInSilently();
-          if (refreshResult.isError()) {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Sessão expirada. Faça login novamente nas configurações.',
-                originalError: e,
-              ),
-            );
-          }
-          return await _getOrCreateFolder(folderPath);
-        }
-
-        return rd.Failure(
-          DropboxFailure(
-            message: 'Erro ao criar pasta: ${e.response?.statusCode}',
-            originalError: e,
-          ),
-        );
-      }
-    } on Object catch (e) {
-      if (e is DropboxFailure) {
-        return rd.Failure(e);
-      }
-
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('409') || errorStr.contains('conflict')) {
-        return const rd.Success(());
-      }
-
-      return rd.Failure(
         DropboxFailure(
-          message: 'Erro inesperado ao criar pasta: $e',
+          message: DropboxErrors.describe(e),
           originalError: e,
         ),
       );
     }
   }
 
-  Future<void> _deleteFileIfExists(String filePath) async {
-    try {
-      final dioResult = await _getAuthenticatedDio();
-      if (dioResult.isError()) {
-        return;
-      }
-
-      final dio = dioResult.getOrNull()!;
-
-      try {
-        await dio.post('/2/files/delete_v2', data: {'path': filePath});
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 409) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path_lookup/not_found' ||
-              errorTag == 'path/conflict' ||
-              errorTag == 'path/conflict/file' ||
-              errorTag == 'path/conflict/folder') {
-            return;
-          }
-        } else if (e.response?.statusCode == 404) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path_lookup/not_found') {
-            return;
-          }
-        }
-      }
-    } on Object catch (e, s) {
-      LoggerService.error(
-        'Falha ao remover arquivo existente no Dropbox: $filePath',
-        e,
-        s,
-      );
-    }
-  }
-
-  Future<bool> _folderHasProtectedFile(
-    Dio dio,
-    String folderPath,
-    Set<String> protectedShortIds,
-  ) async {
-    if (protectedShortIds.isEmpty) return false;
-
-    try {
-      final entries = await _executeWithTokenRefresh(() async {
-        final response = await dio.post(
-          '/2/files/list_folder',
-          data: {'path': folderPath},
-        );
-        final data = response.data as Map<String, dynamic>?;
-        return data?['entries'] as List<dynamic>? ?? [];
-      });
-
-      for (final entry in entries) {
-        final entryData = entry as Map<String, dynamic>;
-        final tag = entryData['.tag'] as String?;
-        if (tag != 'file') continue;
-
-        final name = entryData['name'] as String?;
-        if (name != null &&
-            SybaseBackupPathSuffix.isPathProtected(name, protectedShortIds)) {
-          return true;
-        }
-      }
-    } on Object catch (e, s) {
-      LoggerService.debug(
-        'Erro ao listar pasta Dropbox: $folderPath — $e',
-        s,
-      );
-    }
-    return false;
-  }
+  @visibleForTesting
+  static String getDropboxErrorMessage(Object? e) => DropboxErrors.describe(e);
 
   @override
   Future<rd.Result<bool>> testConnection(
     DropboxDestinationConfig config,
   ) async {
     try {
-      final dioResult = await _getAuthenticatedDio();
+      final dioResult = await _authClient.getAuthenticatedDio();
       if (dioResult.isError()) {
         return rd.Failure(dioResult.exceptionOrNull()!);
       }
@@ -839,7 +270,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
           ? '/${config.folderName}'
           : '${config.folderPath}/${config.folderName}';
 
-      await _executeWithTokenRefresh(() async {
+      await _authClient.executeWithTokenRefresh(() async {
         final response = await dio.post(
           '/2/files/get_metadata',
           data: {'path': mainFolderPath},
@@ -852,7 +283,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
       LoggerService.error('Erro ao testar conexão com Dropbox', e, s);
       return rd.Failure(
         DropboxFailure(
-          message: _getDropboxErrorMessage(e),
+          message: DropboxErrors.describe(e),
           originalError: e,
         ),
       );
@@ -862,175 +293,7 @@ class DropboxDestinationService implements IDropboxDestinationService {
   @override
   Future<rd.Result<int>> cleanOldBackups({
     required DropboxDestinationConfig config,
-  }) async {
-    try {
-      final dioResult = await _getAuthenticatedDio();
-      if (dioResult.isError()) {
-        return rd.Failure(dioResult.exceptionOrNull()!);
-      }
-
-      final mainFolderPath = config.folderPath.isEmpty
-          ? '/${config.folderName}'
-          : '${config.folderPath}/${config.folderName}';
-
-      final cutoffDate = DateTime.now().subtract(
-        Duration(days: config.retentionDays),
-      );
-
-      final dio = dioResult.getOrNull()!;
-
-      final folders = await _executeWithTokenRefresh(() async {
-        final response = await dio.post(
-          '/2/files/list_folder',
-          data: {'path': mainFolderPath},
-        );
-
-        final data = response.data as Map<String, dynamic>;
-        return data['entries'] as List<dynamic>? ?? [];
-      });
-
-      var deletedCount = 0;
-      for (final folder in folders) {
-        final folderData = folder as Map<String, dynamic>;
-        final folderName = folderData['name'] as String?;
-        final folderPath =
-            folderData['path_display'] as String? ??
-            folderData['path_lower'] as String?;
-
-        if (folderName == null || folderPath == null) continue;
-
-        try {
-          final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
-          if (folderDate.isBefore(cutoffDate)) {
-            final hasProtectedFile = await _folderHasProtectedFile(
-              dio,
-              folderPath,
-              config.protectedBackupIdShortPrefixes,
-            );
-            if (hasProtectedFile) {
-              LoggerService.debug(
-                'Pasta Dropbox protegida (retenção Sybase): $folderName',
-              );
-              continue;
-            }
-
-            await _executeWithTokenRefresh(() async {
-              await dio.post('/2/files/delete_v2', data: {'path': folderPath});
-            });
-            deletedCount++;
-          }
-        } on Object catch (e, s) {
-          LoggerService.error(
-            'Falha ao remover pasta antiga do Dropbox: $folderPath',
-            e,
-            s,
-          );
-        }
-      }
-
-      return rd.Success(deletedCount);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao limpar backups Dropbox', e, stackTrace);
-      return rd.Failure(
-        DropboxFailure(
-          message: 'Erro ao limpar backups Dropbox: $e',
-          originalError: e,
-        ),
-      );
-    }
-  }
-
-  Future<rd.Result<Dio>> _getAuthenticatedDio() async {
-    try {
-      final authResult = await _authService.signInSilently();
-      if (authResult.isError()) {
-        final newAuthResult = await _authService.signIn();
-        if (newAuthResult.isError()) {
-          return rd.Failure(newAuthResult.exceptionOrNull()!);
-        }
-        final token = newAuthResult.getOrNull()!.accessToken;
-        _cachedDio = _createDio(token);
-        _cachedAccessToken = token;
-        return rd.Success(_cachedDio!);
-      }
-
-      final token = authResult.getOrNull()!.accessToken;
-
-      if (_cachedAccessToken != token) {
-        _cachedDio = _createDio(token);
-        _cachedAccessToken = token;
-      }
-
-      return rd.Success(_cachedDio!);
-    } on Object catch (e, stackTrace) {
-      LoggerService.error(
-        'Erro ao obter cliente autenticado Dropbox',
-        e,
-        stackTrace,
-      );
-      return rd.Failure(
-        DropboxFailure(
-          message: 'Erro ao obter cliente autenticado: $e',
-          originalError: e,
-        ),
-      );
-    }
-  }
-
-  Dio _createDio(String accessToken) {
-    return Dio(
-      BaseOptions(
-        baseUrl: AppConstants.dropboxApiBaseUrl,
-        connectTimeout: AppConstants.httpTimeout,
-        receiveTimeout: AppConstants.httpTimeout,
-        headers: {'Authorization': 'Bearer $accessToken'},
-      ),
-    );
-  }
-
-  Future<T> _executeWithTokenRefresh<T>(Future<T> Function() operation) async {
-    var attempts = 0;
-    const maxAttempts = 2;
-
-    while (attempts < maxAttempts) {
-      try {
-        return await operation();
-      } on Object catch (e) {
-        if (_isUnauthorizedError(e) && attempts < maxAttempts - 1) {
-          _cachedDio = null;
-          _cachedAccessToken = null;
-
-          final refreshResult = await _authService.signInSilently();
-          if (refreshResult.isError()) {
-            throw DropboxFailure(
-              message:
-                  'Sessão expirada. Faça login novamente nas configurações.',
-              originalError: e,
-            );
-          }
-
-          attempts++;
-          continue;
-        }
-
-        rethrow;
-      }
-    }
-
-    throw const DropboxFailure(
-      message: 'Número máximo de tentativas excedido ao autenticar no Dropbox.',
-    );
-  }
-
-  /// Verifica se a exceção representa um erro `401 Unauthorized`. Prioriza
-  /// `DioException.response.statusCode` (tipo nativo) antes de cair na
-  /// heurística por substring com word‑boundary (delegada a
-  /// `HttpErrorHelpers.matchesUnauthorizedHeuristic`, compartilhada
-  /// com `GoogleDriveDestinationService`).
-  static bool _isUnauthorizedError(Object e) {
-    if (e is DioException && e.response?.statusCode == 401) return true;
-    return HttpErrorHelpers.matchesUnauthorizedHeuristic(
-      e.toString().toLowerCase(),
-    );
+  }) {
+    return _retention.cleanOldBackups(config: config);
   }
 }

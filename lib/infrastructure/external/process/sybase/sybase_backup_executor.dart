@@ -1,0 +1,911 @@
+import 'dart:io';
+
+import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/backup_artifact_utils.dart';
+import 'package:backup_database/core/utils/backup_size_calculator.dart';
+import 'package:backup_database/core/utils/byte_format.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/tool_path_help.dart';
+import 'package:backup_database/domain/entities/backup_metrics.dart';
+import 'package:backup_database/domain/entities/backup_type.dart';
+import 'package:backup_database/domain/entities/sybase_backup_options.dart';
+import 'package:backup_database/domain/entities/sybase_config.dart';
+import 'package:backup_database/domain/entities/verify_policy.dart';
+import 'package:backup_database/domain/services/backup_execution_result.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart'
+    as ps;
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_cli_runner.dart';
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_failure_message.dart';
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_verification_runner.dart';
+import 'package:backup_database/infrastructure/external/process/sybase_connection_strategy_cache.dart';
+import 'package:path/path.dart' as p;
+import 'package:result_dart/result_dart.dart' as rd;
+
+class SybaseBackupExecutor {
+  SybaseBackupExecutor({
+    required this._cliRunner,
+    required this._strategyCache,
+    required this._verificationRunner,
+  });
+
+  final SybaseCliRunner _cliRunner;
+  final SybaseConnectionStrategyCache _strategyCache;
+  final SybaseVerificationRunner _verificationRunner;
+
+  Future<rd.Result<BackupExecutionResult>> executeBackupCore({
+    required SybaseConfig config,
+    required String outputDirectory,
+    BackupType backupType = BackupType.full,
+    String? customFileName,
+    String? dbbackupPath,
+    bool truncateLog = true,
+    bool verifyAfterBackup = false,
+    VerifyPolicy verifyPolicy = VerifyPolicy.bestEffort,
+    Duration? backupTimeout,
+    Duration? verifyTimeout,
+    SybaseBackupOptions? sybaseBackupOptions,
+    String? cancelTag,
+  }) async {
+    final options = sybaseBackupOptions ?? SybaseBackupOptions.safeDefaults;
+
+    // C7: validação early-return das opções (CHECKPOINT LOG AUTO exige
+    // server-side, blockSize dentro dos limites). Antes dessa checagem,
+    // um schedule inválido só falhava no momento do disparo com erro
+    // críptico do dbisql/dbbackup.
+    final validation = options.validate();
+    if (!validation.isValid) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Opções de backup Sybase inválidas: ${validation.errorMessage}',
+        ),
+      );
+    }
+
+    final effectiveLogMode = options.effectiveLogMode(truncateLog: truncateLog);
+    // Tag canônica vinda do orchestrator (geralmente `backup-<historyId>`).
+    // Quando ausente, mantemos o comportamento legado baseado em `config.id`.
+    final effectiveCancelTag = cancelTag ?? 'backup-${config.id}';
+    final verifyCancelTag = cancelTag ?? 'verify-${config.id}';
+    try {
+      LoggerService.info(
+        'Iniciando backup Sybase: ${config.serverName} (Tipo: ${backupType.displayName})',
+      );
+
+      if (backupType == BackupType.log) {
+        LoggerService.debug(
+          'Modo de log: ${effectiveLogMode.name}',
+        );
+      }
+
+      final outputDir = Directory(outputDirectory);
+      if (!await outputDir.exists()) {
+        await outputDir.create(recursive: true);
+      }
+
+      final effectiveType = backupType == BackupType.fullSingle
+          ? BackupType.full
+          : backupType == BackupType.differential
+          ? BackupType.log
+          : backupType;
+
+      // M3: substitui também `.` (microssegundos) para evitar nomes de
+      // diretório como `mydb_log_2026-05-27T09-26-11.123456` que alguns
+      // utilitários no Windows interpretam como tendo extensão.
+      final timestamp = DateTime.now().toIso8601String().replaceAll(
+        RegExp('[:.]'),
+        '-',
+      );
+      final typeSlug = effectiveType.name;
+
+      // Agora todos os tipos (inclusive FULL) recebem timestamp único no
+      // diretório de destino. Anteriormente backups full reusavam o mesmo
+      // diretório (`<dbName>`), o que sobrescrevia o backup anterior antes
+      // do upload para destinations e quebrava a cadeia de retenção.
+      final folderName =
+          customFileName ??
+          '${config.databaseNameValue}_${typeSlug}_$timestamp';
+      final backupPath = p.join(outputDirectory, folderName);
+
+      final executable = dbbackupPath ?? 'dbbackup';
+
+      final databaseName = config.databaseNameValue;
+
+      final backupStopwatch = Stopwatch()..start();
+      rd.Result<ps.ProcessResult>? result;
+      var lastError = '';
+
+      LoggerService.info('Tentando backup via comando SQL BACKUP DATABASE...');
+
+      final backupDir = Directory(backupPath);
+      if (!await backupDir.exists()) {
+        await backupDir.create(recursive: true);
+      }
+
+      // Escapa tanto separadores Windows (`\` → `\\`) quanto aspas
+      // simples (`'` → `''`) para evitar quebra do SQL gerado ou
+      // injection quando o path contiver `'` (caminhos com nome de
+      // pasta entre aspas).
+      final escapedBackupPath = backupPath
+          .replaceAll(r'\', r'\\')
+          .replaceAll("'", "''");
+
+      // Lista única de estratégias dbisql (nome + conn). Substitui o par
+      // `dbisqlConnections` + `_dbisqlStrategyNames` que vivia em locais
+      // distintos e exigia manter a ordem em sincronia manualmente.
+      final dbisqlStrategies = buildDbisqlStrategies(config, databaseName);
+
+      final cacheKey = effectiveType.name;
+      final cached = _strategyCache.get(config.id, cacheKey);
+
+      var sqlBackupSuccess = false;
+      // Índices sempre 0-based internamente. O `+1` aparece só nas
+      // mensagens de log/strings.
+      var dbisqlStrategyIndex = -1;
+      var dbbackupStrategyIndex = -1;
+
+      final connectionStrategies = _buildDbbackupStrategies(
+        config,
+        databaseName,
+      );
+
+      // Se a estratégia que funcionou da última vez foi dbbackup, tentamos
+      // ela primeiro. As ferramentas SA recebem argumentos via arquivo
+      // (`@<file>`) com permissão restrita, mantendo a senha fora do
+      // tasklist/cmdline do processo filho.
+      if (cached != null &&
+          cached.method == SybaseConnectionMethod.dbbackup &&
+          cached.strategyIndex < connectionStrategies.length) {
+        final strategy = connectionStrategies[cached.strategyIndex];
+        LoggerService.debug(
+          'Tentando estratégia cacheada dbbackup ${cached.strategyIndex + 1}',
+        );
+        final args = _buildDbbackupArgs(
+          options: options,
+          effectiveType: effectiveType,
+          effectiveLogMode: effectiveLogMode,
+          connectionString: strategy.conn,
+          backupPath: backupPath,
+        );
+
+        result = await _cliRunner.runWithCredentials(
+          executable: executable,
+          arguments: args,
+          timeout: backupTimeout ?? const Duration(hours: 2),
+          tag: effectiveCancelTag,
+        );
+
+        result.fold(
+          (processResult) {
+            if (processResult.isSuccess) {
+              sqlBackupSuccess = true;
+              dbbackupStrategyIndex = cached.strategyIndex;
+              LoggerService.info(
+                'Backup bem-sucedido com estratégia cacheada dbbackup '
+                '${cached.strategyIndex + 1}',
+              );
+            } else {
+              lastError = processResult.stderr;
+              _strategyCache.invalidate(config.id, cacheKey);
+            }
+          },
+          (_) => _strategyCache.invalidate(config.id, cacheKey),
+        );
+      }
+
+      if (cached != null &&
+          cached.method == SybaseConnectionMethod.dbisql &&
+          cached.strategyIndex < dbisqlStrategies.length) {
+        final connStr = dbisqlStrategies[cached.strategyIndex].conn;
+        LoggerService.debug(
+          'Tentando estratégia cacheada dbisql ${cached.strategyIndex + 1}',
+        );
+
+        final backupSql = _buildBackupSql(
+          effectiveType,
+          escapedBackupPath,
+          effectiveLogMode,
+          options,
+        );
+        if (backupSql != null) {
+          result = await _cliRunner.runWithCredentials(
+            executable: 'dbisql',
+            arguments: ['-c', connStr, '-nogui', backupSql],
+            timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
+          );
+
+          result.fold(
+            (processResult) {
+              if (processResult.isSuccess) {
+                sqlBackupSuccess = true;
+                dbisqlStrategyIndex = cached.strategyIndex;
+                LoggerService.info(
+                  'Backup SQL bem-sucedido com estratégia cacheada '
+                  '${cached.strategyIndex + 1}',
+                );
+              } else {
+                lastError = processResult.stderr;
+                _strategyCache.invalidate(config.id, cacheKey);
+              }
+            },
+            (_) => _strategyCache.invalidate(config.id, cacheKey),
+          );
+        }
+      }
+
+      if (!sqlBackupSuccess) {
+        for (var i = 0; i < dbisqlStrategies.length; i++) {
+          final connStr = dbisqlStrategies[i].conn;
+          dbisqlStrategyIndex = i;
+          LoggerService.debug(
+            'Tentando dbisql com estratégia '
+            '${i + 1}/${dbisqlStrategies.length}',
+          );
+
+          final backupSql = _buildBackupSql(
+            effectiveType,
+            escapedBackupPath,
+            effectiveLogMode,
+            options,
+          );
+          if (backupSql == null) {
+            await BackupArtifactUtils.safeDeletePartial(backupPath);
+            return const rd.Failure(
+              BackupFailure(
+                message:
+                    'Sybase SQL Anywhere não suporta tipos convertidos. '
+                    'Use o tipo de backup nativo correspondente.',
+              ),
+            );
+          }
+
+          final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
+
+          result = await _cliRunner.runWithCredentials(
+            executable: 'dbisql',
+            arguments: dbisqlArgs,
+            timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
+          );
+
+          result.fold(
+            (processResult) {
+              if (processResult.isSuccess) {
+                sqlBackupSuccess = true;
+                LoggerService.info(
+                  'Backup SQL bem-sucedido com estratégia ${i + 1}',
+                );
+              } else {
+                lastError = processResult.stderr;
+                LoggerService.debug('dbisql falhou: ${processResult.stderr}');
+              }
+            },
+            (failure) {
+              lastError = sybaseFailureMessage(failure);
+            },
+          );
+
+          if (sqlBackupSuccess) break;
+        }
+      }
+
+      if (!sqlBackupSuccess) {
+        LoggerService.info('Backup SQL falhou, tentando dbbackup...');
+
+        for (var i = 0; i < connectionStrategies.length; i++) {
+          final strategy = connectionStrategies[i];
+          LoggerService.debug('Tentando dbbackup: ${strategy.name}');
+
+          final args = _buildDbbackupArgs(
+            options: options,
+            effectiveType: effectiveType,
+            effectiveLogMode: effectiveLogMode,
+            connectionString: strategy.conn,
+            backupPath: backupPath,
+          );
+
+          result = await _cliRunner.runWithCredentials(
+            executable: executable,
+            arguments: args,
+            timeout: backupTimeout ?? const Duration(hours: 2),
+            tag: effectiveCancelTag,
+          );
+
+          var success = false;
+          result.fold(
+            (processResult) {
+              if (processResult.isSuccess) {
+                success = true;
+                dbbackupStrategyIndex = i;
+                LoggerService.info(
+                  'Backup bem-sucedido com: ${strategy.name}',
+                );
+              } else {
+                lastError = processResult.stderr;
+                LoggerService.debug(
+                  'Estratégia "${strategy.name}" falhou: ${processResult.stderr}',
+                );
+              }
+            },
+            (failure) {
+              lastError = sybaseFailureMessage(failure);
+            },
+          );
+
+          if (success) break;
+        }
+      }
+
+      backupStopwatch.stop();
+
+      if (result == null) {
+        await BackupArtifactUtils.safeDeletePartial(backupPath);
+        final message = _buildNoStrategyWorkedMessage(lastError, config);
+        return rd.Failure(BackupFailure(message: message));
+      }
+
+      return result.fold((processResult) async {
+        if (processResult.isSuccess) {
+          if (sqlBackupSuccess) {
+            _strategyCache.put(
+              config.id,
+              cacheKey,
+              SybaseConnectionMethod.dbisql,
+              dbisqlStrategyIndex,
+            );
+          } else if (dbbackupStrategyIndex >= 0) {
+            _strategyCache.put(
+              config.id,
+              cacheKey,
+              SybaseConnectionMethod.dbbackup,
+              dbbackupStrategyIndex,
+            );
+          }
+        }
+
+        if (!processResult.isSuccess) {
+          LoggerService.error(
+            'Backup Sybase falhou após todas as tentativas',
+            Exception(
+              'Exit Code: ${processResult.exitCode}\n'
+              'STDOUT: ${processResult.stdout}\n'
+              'STDERR: ${processResult.stderr}',
+            ),
+          );
+
+          final errorMessage = _buildProcessResultErrorMessage(
+            processResult,
+            config,
+            databaseName,
+          );
+
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+
+          return rd.Failure(BackupFailure(message: errorMessage));
+        }
+
+        var totalSize = 0;
+        var actualBackupPath = backupPath;
+
+        final backupDir = Directory(backupPath);
+        final backupFile = File(backupPath);
+
+        var backupFound = false;
+        for (var i = 0; i < 10; i++) {
+          if (await backupDir.exists()) {
+            final dirBytes = await _sumFileLengthsInDirectory(backupDir);
+            if (dirBytes > 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 200));
+              final dirBytes2 = await _sumFileLengthsInDirectory(backupDir);
+              if (dirBytes2 == dirBytes) {
+                totalSize = dirBytes;
+                backupFound = true;
+                break;
+              }
+            }
+          }
+
+          if (!backupFound && await backupFile.exists()) {
+            final ready = await BackupArtifactUtils.waitForStableFile(
+              backupFile,
+            );
+            if (ready) {
+              totalSize = await backupFile.length();
+              backupFound = true;
+              break;
+            }
+          }
+
+          if (!backupFound && i < 9) {
+            await Future<void>.delayed(const Duration(milliseconds: 500));
+          }
+        }
+
+        if (!backupFound) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+          return rd.Failure(
+            BackupFailure(
+              message: _buildBackupNotCreatedMessage(backupPath),
+            ),
+          );
+        }
+
+        if (totalSize == 0) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+          return rd.Failure(
+            BackupFailure(
+              message: _buildBackupEmptyMessage(backupPath),
+            ),
+          );
+        }
+
+        if (effectiveType == BackupType.log && await backupDir.exists()) {
+          final resolvedLogFiles = await _findLogFiles(backupDir);
+          if (resolvedLogFiles.isNotEmpty) {
+            // Quando há vários arquivos de log no diretório, expomos o mais
+            // recente como `actualBackupPath` (compatibilidade) mas somamos
+            // todos os tamanhos para refletir o total real do backup.
+            actualBackupPath = resolvedLogFiles.first.path;
+            var sum = 0;
+            for (final file in resolvedLogFiles) {
+              sum += await file.length();
+            }
+            if (sum > 0) {
+              totalSize = sum;
+            }
+          }
+        }
+
+        final resolvedBackupFile = File(actualBackupPath);
+        if (effectiveType == BackupType.log &&
+            await resolvedBackupFile.exists()) {
+          LoggerService.debug(
+            'Aguardando arquivo de log ser liberado pelo Sybase...',
+          );
+
+          var fileAccessible = false;
+          for (var attempt = 0; attempt < 5; attempt++) {
+            try {
+              final randomAccessFile = await resolvedBackupFile.open();
+              await randomAccessFile.close();
+              fileAccessible = true;
+              LoggerService.debug('Arquivo de log está acessível');
+              break;
+            } on Object catch (e) {
+              if (attempt < 4) {
+                LoggerService.debug(
+                  'Arquivo de log ainda em uso, aguardando... (tentativa ${attempt + 1}/5)',
+                );
+                await Future.delayed(const Duration(seconds: 1));
+              } else {
+                LoggerService.warning(
+                  'Arquivo de log pode ainda estar em uso, mas continuando...',
+                );
+              }
+            }
+          }
+
+          if (fileAccessible) {
+            await Future.delayed(const Duration(milliseconds: 500));
+          }
+        }
+
+        LoggerService.info(
+          'Backup Sybase concluído: $actualBackupPath (${ByteFormat.format(totalSize)})',
+        );
+
+        final verification = await _verificationRunner.runVerification(
+          config: config,
+          actualBackupPath: actualBackupPath,
+          effectiveType: effectiveType,
+          verifyAfterBackup: verifyAfterBackup,
+          verifyPolicy: verifyPolicy,
+          verifyTimeout: verifyTimeout,
+          verifyCancelTag: verifyCancelTag,
+        );
+
+        final strictFailure = verification.strictFailureMessage;
+        if (strictFailure != null) {
+          await BackupArtifactUtils.safeDeletePartial(backupPath);
+          return rd.Failure(BackupFailure(message: strictFailure));
+        }
+
+        final backupDuration = backupStopwatch.elapsed;
+        final verifyDuration = verification.duration;
+        final totalDuration = backupDuration + verifyDuration;
+
+        final verifyPolicyLabel = _resolveVerifyPolicyLabel(
+          verifyAfterBackup: verifyAfterBackup,
+          effectiveType: effectiveType,
+          verifySuccess: verification.success,
+          verificationMethodUsed: verification.methodUsed,
+        );
+
+        final sybaseOptionsJson = _buildSybaseOptionsJson(
+          options: options,
+          verifyPolicyLabel: verifyPolicyLabel,
+          dbbackupStrategyIndex: dbbackupStrategyIndex,
+          dbisqlStrategyIndex: dbisqlStrategyIndex,
+          dbbackupStrategies: connectionStrategies,
+          dbisqlStrategies: dbisqlStrategies,
+        );
+
+        final metrics = BackupMetrics(
+          totalDuration: totalDuration,
+          backupDuration: backupDuration,
+          verifyDuration: verifyDuration,
+          backupSizeBytes: totalSize,
+          backupSpeedMbPerSec: ByteFormat.speedMbPerSec(
+            totalSize,
+            backupDuration.inSeconds,
+          ),
+          backupType: effectiveType.name,
+          flags: BackupFlags(
+            // Sybase SQL Anywhere não tem conceito equivalente ao
+            // `STOP_ON_ERROR` do SQL Server. Reportar `true` antes era
+            // copy/paste enganoso — agora reportamos `false` para
+            // sinalizar "N/A" (mesmo tratamento aplicado ao Postgres
+            // no AUDIT-12). Idem `compression`, `stripingCount=1`,
+            // `withChecksum`: Sybase não emite manifest com CRC nem
+            // suporta striping nativo neste fluxo.
+            compression: false,
+            verifyPolicy: verifyPolicyLabel,
+            stripingCount: 1,
+            withChecksum: false,
+            stopOnError: false,
+          ),
+          sybaseOptions: sybaseOptionsJson,
+        );
+
+        return rd.Success(
+          BackupExecutionResult(
+            backupPath: actualBackupPath,
+            fileSize: totalSize,
+            duration: totalDuration,
+            databaseName: config.databaseNameValue,
+            metrics: metrics,
+          ),
+        );
+      }, rd.Failure.new);
+    } on Object catch (e, stackTrace) {
+      LoggerService.error('Erro ao executar backup Sybase', e, stackTrace);
+      return rd.Failure(
+        BackupFailure(
+          message: 'Erro ao executar backup Sybase: $e',
+          originalError: e,
+        ),
+      );
+    }
+  }
+
+  /// Resolve a etiqueta exibida em `flags.verifyPolicy` /
+  /// `sybaseOptions.verificationMethod` na ordem: `none`,
+  /// `log_unavailable`, método usado (dbvalid/dbverify) ou `dbvalid_falhou`.
+  static String _resolveVerifyPolicyLabel({
+    required bool verifyAfterBackup,
+    required BackupType effectiveType,
+    required bool verifySuccess,
+    required String verificationMethodUsed,
+  }) {
+    if (!verifyAfterBackup) return 'none';
+    if (effectiveType == BackupType.log) return 'log_unavailable';
+    return verifySuccess ? verificationMethodUsed : 'dbvalid_falhou';
+  }
+
+  /// Monta o mapa `sybaseOptions` que vai para `BackupMetrics`, embutindo
+  /// `verificationMethod`, `backupMethod` e `connectionStrategy`.
+  Map<String, dynamic> _buildSybaseOptionsJson({
+    required SybaseBackupOptions options,
+    required String verifyPolicyLabel,
+    required int dbbackupStrategyIndex,
+    required int dbisqlStrategyIndex,
+    required List<SybaseConnectionStrategy> dbbackupStrategies,
+    required List<SybaseConnectionStrategy> dbisqlStrategies,
+  }) {
+    final json = Map<String, dynamic>.from(options.toJson());
+    json['verificationMethod'] = verifyPolicyLabel;
+    if (dbbackupStrategyIndex >= 0) {
+      json['backupMethod'] = 'dbbackup';
+      json['connectionStrategy'] =
+          dbbackupStrategies[dbbackupStrategyIndex].name;
+    } else {
+      json['backupMethod'] = 'dbisql';
+      json['connectionStrategy'] =
+          dbisqlStrategyIndex >= 0 &&
+              dbisqlStrategyIndex < dbisqlStrategies.length
+          ? dbisqlStrategies[dbisqlStrategyIndex].name
+          : 'dbisql #${dbisqlStrategyIndex + 1}';
+    }
+    return json;
+  }
+
+  /// Monta a lista de argumentos do `dbbackup` para uma dada estratégia.
+  /// Centralizado para eliminar duplicação entre cache hit e fallback loop.
+  List<String> _buildDbbackupArgs({
+    required SybaseBackupOptions options,
+    required BackupType effectiveType,
+    required SybaseLogBackupMode effectiveLogMode,
+    required String connectionString,
+    required String backupPath,
+  }) {
+    final args = <String>[];
+    if (options.serverSide) args.add('-s');
+    if (options.blockSize != null) {
+      args.addAll(['-b', options.blockSize.toString()]);
+    }
+    if (effectiveType == BackupType.log) {
+      args.addAll(_buildDbbackupLogArgs(effectiveLogMode));
+    }
+    args.addAll(['-c', connectionString, '-y', backupPath]);
+    return args;
+  }
+
+  /// Constrói lista de estratégias dbisql na ordem cronológica de tentativa.
+  ///
+  /// A ordem aqui define o índice usado pelo cache (`SybaseConnectionStrategyCache`)
+  /// e o `connectionStrategy` reportado em `BackupMetrics.sybaseOptions`.
+  static List<SybaseConnectionStrategy> buildDbisqlStrategies(
+    SybaseConfig config,
+    String databaseName,
+  ) {
+    return [
+      SybaseConnectionStrategy(
+        name: 'ENG+DBN (serverName + databaseName)',
+        conn:
+            'ENG=${config.serverName};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      SybaseConnectionStrategy(
+        name: 'Apenas ENG por serverName',
+        conn:
+            'ENG=${config.serverName};'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      SybaseConnectionStrategy(
+        name: 'ENG+DBN (databaseName como ambos)',
+        conn:
+            'ENG=$databaseName;DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+    ];
+  }
+
+  static List<SybaseConnectionStrategy> _buildDbbackupStrategies(
+    SybaseConfig config,
+    String databaseName,
+  ) {
+    return [
+      SybaseConnectionStrategy(
+        name: 'ENG+DBN (serverName + databaseName)',
+        conn:
+            'ENG=${config.serverName};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      SybaseConnectionStrategy(
+        name: 'ENG+DBN (databaseName como ambos)',
+        conn:
+            'ENG=$databaseName;DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      SybaseConnectionStrategy(
+        name: 'Apenas ENG por serverName',
+        conn:
+            'ENG=${config.serverName};'
+            'UID=${config.username};PWD=${config.password}',
+      ),
+      SybaseConnectionStrategy(
+        name: 'Conexão via TCPIP',
+        conn:
+            'HOST=localhost:${config.port};DBN=$databaseName;'
+            'UID=${config.username};PWD=${config.password};LINKS=TCPIP',
+      ),
+    ];
+  }
+
+  /// Detecta se a mensagem de erro indica que `dbisql` ou `dbbackup`
+  /// está fora do PATH. Antes esta heurística procurava só pela
+  /// string PT-BR
+  /// `'não encontrado no PATH do sistema'`, perdendo stderr em inglês
+  /// como `'dbisql' is not recognized as an internal or external command`
+  /// — caindo no fallback genérico em vez de mostrar a mensagem rica do
+  /// `ToolPathHelp`. Agora delegamos ao matcher centralizado (mesmo
+  /// usado por Postgres / Firebird / SQL Server).
+  static bool looksLikeToolNotFound(String errorLower) {
+    return ToolPathHelp.isToolNotFoundError(errorLower, 'dbisql') ||
+        ToolPathHelp.isToolNotFoundError(errorLower, 'dbbackup');
+  }
+
+  String _buildNoStrategyWorkedMessage(String lastError, SybaseConfig config) {
+    final lower = lastError.toLowerCase();
+    // 1) Quando a mensagem já foi traduzida pelo `ToolPathHelp.buildMessage`
+    //    upstream (contém os marcadores típicos), só anexa contexto.
+    if (lower.contains('path_setup') || lower.contains('instruções')) {
+      return 'Nenhuma estratégia de backup funcionou.\n\n$lastError';
+    }
+    // 2) Quando o stderr cru indica binário fora do PATH (PT/EN/PS),
+    //    substitui pela mensagem orientada do `ToolPathHelp` para
+    //    a ferramenta detectada.
+    if (looksLikeToolNotFound(lower)) {
+      final missingTool = ToolPathHelp.isToolNotFoundError(lower, 'dbbackup')
+          ? 'dbbackup'
+          : 'dbisql';
+      return ToolPathHelp.buildMessage(missingTool);
+    }
+    return 'Nenhuma estratégia de backup funcionou. Último erro: $lastError\n\n'
+        'AÇÕES RECOMENDADAS:\n'
+        '1. Verifique na página de configuração se dbisql e dbbackup estão '
+        'disponíveis (ícone verde)\n'
+        '2. Confirme Engine Name e DBN (geralmente o nome do arquivo .db)\n'
+        '3. Verifique se o servidor Sybase está rodando\n'
+        '4. Confirme usuário e senha';
+  }
+
+  String _buildProcessResultErrorMessage(
+    ps.ProcessResult processResult,
+    SybaseConfig config,
+    String databaseName,
+  ) {
+    final stderr = processResult.stderr.toLowerCase();
+    final combined = '${processResult.stdout}\n${processResult.stderr}'
+        .toLowerCase();
+
+    // Stderr indicando binário fora do PATH (PT/EN/PowerShell) — antes
+    // caia no fallback genérico de "Erro ao executar backup (Exit Code:
+    // 9009)". Agora reportamos a mensagem orientada do `ToolPathHelp`
+    // (paridade com `_buildNoStrategyWorkedMessage` após AUDIT-13).
+    if (looksLikeToolNotFound(combined)) {
+      final missingTool =
+          ToolPathHelp.isToolNotFoundError(
+            combined,
+            'dbbackup',
+          )
+          ? 'dbbackup'
+          : 'dbisql';
+      return ToolPathHelp.buildMessage(missingTool);
+    }
+
+    if (stderr.contains('already in use')) {
+      return 'O banco de dados está em uso e não foi possível conectar. '
+          'Verifique se o nome do servidor (Engine Name) está correto. '
+          'Geralmente é o nome do arquivo .db sem extensão (ex: "Data7").';
+    }
+    if (stderr.contains('server not found') ||
+        stderr.contains('unable to connect') ||
+        combined.contains('connection refused') ||
+        combined.contains('connection timed out')) {
+      return 'Não foi possível encontrar/conectar ao servidor Sybase.\n\n'
+          'Verifique:\n'
+          '1. Se o servidor Sybase está rodando\n'
+          '2. Se a porta ${config.port} está correta\n'
+          '3. Se o Engine Name (${config.serverName}) está correto\n'
+          '4. Se o DBN ($databaseName) está correto';
+    }
+    if (stderr.contains('permission denied') ||
+        stderr.contains('access denied')) {
+      return 'Permissão negada.\n\n'
+          'Verifique se o usuário tem permissão para fazer backup do banco.';
+    }
+    if (stderr.contains('invalid user') || stderr.contains('login failed')) {
+      return 'Usuário ou senha inválidos. Verifique as credenciais na configuração.';
+    }
+    if (combined.contains('disk full') ||
+        combined.contains('no space') ||
+        combined.contains('insufficient') ||
+        combined.contains('not enough space')) {
+      return 'Espaço em disco insuficiente no destino do backup.\n\n'
+          'Libere espaço ou escolha outro diretório.';
+    }
+    if (stderr.contains('path not found') ||
+        stderr.contains('file not found') ||
+        stderr.contains('cannot find') ||
+        stderr.contains('directory')) {
+      return 'Caminho de destino inválido ou inacessível.\n\n'
+          'Verifique se o diretório existe e tem permissão de escrita.';
+    }
+
+    return 'Erro ao executar backup (Exit Code: ${processResult.exitCode})\n'
+        '${processResult.stderr}';
+  }
+
+  String _buildBackupNotCreatedMessage(String backupPath) {
+    return 'Backup não foi criado em: $backupPath\n\n'
+        'AÇÕES RECOMENDADAS:\n'
+        '1. Verifique se o diretório existe e tem permissão de escrita\n'
+        '2. Confirme se há espaço em disco suficiente\n'
+        '3. Verifique os logs para detalhes do erro';
+  }
+
+  String _buildBackupEmptyMessage(String backupPath) {
+    return 'Backup foi criado mas está vazio em: $backupPath\n\n'
+        'Isso pode indicar falha no comando ou caminho incorreto. '
+        'Verifique os logs para detalhes.';
+  }
+
+  static List<String> _buildDbbackupLogArgs(SybaseLogBackupMode mode) {
+    switch (mode) {
+      case SybaseLogBackupMode.truncate:
+        return ['-t', '-x'];
+      case SybaseLogBackupMode.rename:
+        return ['-t', '-r'];
+      case SybaseLogBackupMode.only:
+        return ['-t'];
+    }
+  }
+
+  String? _buildBackupSql(
+    BackupType effectiveType,
+    String escapedBackupPath,
+    SybaseLogBackupMode logMode,
+    SybaseBackupOptions options,
+  ) {
+    switch (effectiveType) {
+      case BackupType.full:
+      case BackupType.fullSingle:
+        final base = "BACKUP DATABASE DIRECTORY '$escapedBackupPath'";
+        final checkpointClause = options.buildCheckpointLogClause();
+        final autoTuneClause = options.buildAutoTuneWritersClause();
+        return base + checkpointClause + autoTuneClause;
+      case BackupType.log:
+        final logClause = switch (logMode) {
+          SybaseLogBackupMode.truncate => 'TRANSACTION LOG TRUNCATE',
+          SybaseLogBackupMode.only => 'TRANSACTION LOG ONLY',
+          SybaseLogBackupMode.rename => 'TRANSACTION LOG RENAME',
+        };
+        final autoTuneClause = options.buildAutoTuneWritersClause();
+        return "BACKUP DATABASE DIRECTORY '$escapedBackupPath' $logClause$autoTuneClause";
+      case BackupType.differential:
+      case BackupType.convertedDifferential:
+      case BackupType.convertedFullSingle:
+      case BackupType.convertedLog:
+        return null;
+    }
+  }
+
+  Future<int> _sumFileLengthsInDirectory(Directory dir) =>
+      BackupSizeCalculator.sumBytesInDirectoryShallow(dir);
+
+  /// Retorna a lista de arquivos de log encontrados no diretório de backup,
+  /// ordenados pelo mais recente primeiro. Quando não há candidatos `.trn`
+  /// ou `.log`, retorna todos os arquivos do diretório (também ordenados),
+  /// preservando o comportamento anterior de fallback.
+  ///
+  /// A7: a ordenação consulta `stat()` async em vez de `statSync()` no
+  /// comparador (que executava bloqueante ~N·log(N) vezes em diretórios
+  /// com muitos arquivos, em filesystems lentos / network shares).
+  Future<List<File>> _findLogFiles(Directory backupDir) async {
+    try {
+      final entities = await backupDir.list().toList();
+      final files = entities.whereType<File>().toList();
+      if (files.isEmpty) return const [];
+
+      final pairs = await Future.wait(
+        files.map((f) async => (f, await f.stat())),
+      );
+      pairs.sort((a, b) => b.$2.modified.compareTo(a.$2.modified));
+      final sorted = pairs.map((pair) => pair.$1).toList();
+
+      final logCandidates = sorted.where((f) {
+        final ext = p.extension(f.path).toLowerCase();
+        return ext == '.trn' || ext == '.log';
+      }).toList();
+
+      if (logCandidates.isNotEmpty) return logCandidates;
+      return sorted;
+    } on Object catch (_) {
+      return const [];
+    }
+  }
+}
+
+/// Par (nome, conn-string) de uma estratégia de conexão Sybase.
+///
+/// Substitui o par desalinhado `dbisqlConnections` (`List<String>`) +
+/// `_dbisqlStrategyNames` (`List<String>`), garantindo que adicionar uma
+/// nova estratégia exige editar **um único lugar**.
+class SybaseConnectionStrategy {
+  const SybaseConnectionStrategy({required this.name, required this.conn});
+
+  final String name;
+  final String conn;
+}

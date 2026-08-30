@@ -1,5 +1,9 @@
 # Analise da Implementacao Sybase SQL Anywhere
 
+> Referencia operacional das CLIs (observado em 2026-03-24). Arquitetura
+> generica: `docs/onboarding/adicionar_sgbd.md`. Protocolo remoto:
+> `docs/onboarding/execucao_remota.md`.
+
 Atualizado em: 2026-03-24
 
 ## Resumo executivo

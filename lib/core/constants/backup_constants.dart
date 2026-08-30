@@ -28,9 +28,9 @@ class BackupConstants {
   /// Limite de execucoes concorrentes de backup no servidor.
   ///
   /// Ratificado em PR-6 como permanente para `v1` da API remota (ver
-  /// `docs/notes/execucao_remota_backlog_2026-05-27.md` — secao "Itens fora
-  /// do escopo"). Mudar este valor exige ADR + revisao da fila e do mutex
-  /// em `SchedulerService`.
+  /// `docs/onboarding/execucao_remota.md` — secao "Fora do contrato atual").
+  /// Mudar este valor exige ADR + revisao da fila e do mutex em
+  /// `SchedulerService`.
   static const int maxConcurrentBackups = 1;
 
   /// Watchdog: tempo maximo sem `backupProgress` antes do scheduler

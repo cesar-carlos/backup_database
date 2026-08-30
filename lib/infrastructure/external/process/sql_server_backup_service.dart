@@ -15,147 +15,15 @@ import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sql_server_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
     as ps;
+import 'package:backup_database/infrastructure/external/process/sql_server/sql_server_cli_runner.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
-import 'package:result_dart/result_dart.dart' show unit;
 
 class SqlServerBackupService implements ISqlServerBackupService {
-  SqlServerBackupService(this._processService);
-  final ps.ProcessService _processService;
+  SqlServerBackupService(ps.ProcessService processService)
+    : _cliRunner = SqlServerCliRunner(processService);
 
-  List<String> _baseSqlcmdArgs(SqlServerConfig config) {
-    final args = <String>[
-      '-S',
-      '${config.server},${config.portValue}',
-      '-d',
-      config.databaseValue,
-      '-b',
-      '-r',
-      '1',
-    ];
-
-    if (config.useWindowsAuth || config.username.isEmpty) {
-      args.add('-E');
-    } else {
-      args.addAll(['-U', config.username]);
-    }
-
-    return args;
-  }
-
-  Map<String, String>? _sqlcmdEnvironment(SqlServerConfig config) {
-    if (config.useWindowsAuth || config.username.isEmpty) {
-      return null;
-    }
-    return {'SQLCMDPASSWORD': config.password};
-  }
-
-  /// Escapa o conteúdo de um identificador delimitado por colchetes
-  /// (`[<identifier>]`) duplicando colchetes de fechamento.
-  String _escapeSqlIdentifier(String value) => value.replaceAll(']', ']]');
-
-  /// Escapa o conteúdo de um literal string T-SQL (`N'...'`) duplicando
-  /// aspas simples. Sem este escape, um nome de banco contendo `'` quebra
-  /// o SQL gerado e potencialmente vira vetor de injection.
-  String _escapeSqlString(String value) => value.replaceAll("'", "''");
-
-  /// Verifica o recovery model do banco antes de um backup de log.
-  ///
-  /// Retorna:
-  /// - [rd.Success] quando o modo é `FULL`/`BULK_LOGGED` **ou** quando o
-  ///   `sqlcmd` rodou com sucesso mas o `SELECT` voltou vazio (parsing
-  ///   inconclusivo — tratado como best-effort para não bloquear
-  ///   schedules cujo banco não retorna `recovery_model_desc` em
-  ///   versões/configurações específicas).
-  /// - [rd.Failure] quando o modo é `SIMPLE` **ou** quando a execução do
-  ///   `sqlcmd` falhou (rede, credencial, timeout, exit code ≠ 0). Antes
-  ///   o caminho de falha era "fail-open" (assumia FULL e prosseguia
-  ///   com o `BACKUP LOG`), que então falhava mais tarde com mensagem
-  ///   menos clara para o usuário.
-  Future<rd.Result<void>> _checkRecoveryModel(SqlServerConfig config) async {
-    const query =
-        'SELECT recovery_model_desc FROM sys.databases WHERE name = DB_NAME()';
-    final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
-    final result = await _processService.run(
-      executable: 'sqlcmd',
-      arguments: args,
-      environment: _sqlcmdEnvironment(config),
-      timeout: const Duration(seconds: 10),
-    );
-
-    return result.fold(
-      (processResult) {
-        if (!processResult.isSuccess) {
-          final stderr = processResult.stderr.trim();
-          return rd.Failure(
-            ValidationFailure(
-              message:
-                  'Não foi possível verificar o recovery model do banco antes '
-                  'do backup de log (sqlcmd exit code '
-                  '${processResult.exitCode}). Verifique credenciais, rede e '
-                  'permissões do usuário SQL Server.\n'
-                  '${stderr.isEmpty ? "" : "Detalhes: $stderr"}',
-            ),
-          );
-        }
-        final model = processResult.stdout.trim().toUpperCase();
-        if (model.isEmpty) {
-          // Inconclusive — best-effort: deixa o BACKUP LOG decidir.
-          LoggerService.warning(
-            'Recovery model check inconclusivo (sqlcmd OK mas stdout vazio). '
-            'Prosseguindo com BACKUP LOG (best-effort).',
-          );
-          return const rd.Success(unit);
-        }
-        if (model.contains('SIMPLE')) {
-          return const rd.Failure(
-            ValidationFailure(
-              message:
-                  'Backup de log de transações não permitido: banco em modo '
-                  'SIMPLE. Altere para FULL ou BULK_LOGGED.',
-            ),
-          );
-        }
-        return const rd.Success(unit);
-      },
-      (failure) => rd.Failure(
-        ValidationFailure(
-          message:
-              'Não foi possível verificar o recovery model do banco antes '
-              'do backup de log: ${failure is Failure ? failure.message : failure}',
-          originalError: failure,
-        ),
-      ),
-    );
-  }
-
-  /// Detecta a presença de mensagens de erro reais de SQL Server / sqlcmd
-  /// na saída combinada. O matching é mais restrito do que um simples
-  /// `contains('error')` para evitar falsos positivos com `RAISERROR(...)`
-  /// informativos que mencionam apenas a palavra "msg".
-  ///
-  /// Nota: `sqlcmd -b` já retorna exit code != 0 em erros reais, portanto
-  /// esta função serve como sinal redundante para detectar regressões raras
-  /// (ex.: erros de severidade alta com exit code 0 em algumas builds).
-  bool _hasSqlcmdErrorOutput(String combinedOutputLower) {
-    // Erros do servidor SQL costumam vir como
-    // "Msg 3013, Level 16, State 1, Server <name>, Line N".
-    // Exigimos os três marcadores juntos para reduzir falso positivo.
-    final msgPattern = RegExp(r'\bmsg\s+\d+\b');
-    // Antes: r'\blevel\s+1[6-9]|\blevel\s+2[0-5]\b' — sem `\b` na
-    // primeira alternativa, casava "level 169" e "level 1900". Agora
-    // exige fronteira de palavra após a faixa numérica.
-    final levelPattern = RegExp(r'\blevel\s+(1[6-9]|2[0-5])\b');
-    if (msgPattern.hasMatch(combinedOutputLower) &&
-        levelPattern.hasMatch(combinedOutputLower)) {
-      return true;
-    }
-
-    // Erros cliente-side do sqlcmd começam com "Sqlcmd: Error:".
-    if (combinedOutputLower.contains('sqlcmd: error')) return true;
-
-    return false;
-  }
+  final SqlServerCliRunner _cliRunner;
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -228,7 +96,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
       }
 
       if (backupType == BackupType.log) {
-        final preCheckResult = await _checkRecoveryModel(config);
+        final preCheckResult = await _cliRunner.checkRecoveryModel(config);
         if (preCheckResult.isError()) {
           final failure = preCheckResult.exceptionOrNull()!;
           return rd.Failure(
@@ -273,18 +141,22 @@ class SqlServerBackupService implements ISqlServerBackupService {
       // somando todos os arquivos.
       final backupPath = backupPaths.first;
 
-      final escapedDbName = _escapeSqlIdentifier(config.databaseValue);
+      final escapedDbName = _cliRunner.escapeSqlIdentifier(
+        config.databaseValue,
+      );
       // O nome do banco também aparece dentro de literais N'...' (cláusula
       // NAME). Aplicamos o escape de string T-SQL para evitar SQL malformado
       // ou injection caso o nome contenha aspas simples.
-      final escapedDbForLiteral = _escapeSqlString(config.databaseValue);
+      final escapedDbForLiteral = _cliRunner.escapeSqlString(
+        config.databaseValue,
+      );
 
       // Constrói a lista de cláusulas `TO DISK = N'...'` separadas por
       // vírgula (T-SQL aceita até 64 stripes; o options já limita a 4).
       final toDiskClause = backupPaths
           .map(
             (path) =>
-                "TO DISK = N'${_escapeSqlString(path.replaceAll(r'\', '/'))}'",
+                "TO DISK = N'${_cliRunner.escapeSqlString(path.replaceAll(r'\', '/'))}'",
           )
           .join(', ');
 
@@ -335,13 +207,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
           );
       }
 
-      final arguments = [..._baseSqlcmdArgs(config), '-Q', query];
-
       final stopwatch = Stopwatch()..start();
-      final result = await _processService.run(
-        executable: 'sqlcmd',
-        arguments: arguments,
-        environment: _sqlcmdEnvironment(config),
+      final result = await _cliRunner.run(
+        config: config,
+        extraArguments: ['-Q', query],
         timeout: backupTimeout ?? const Duration(hours: 2),
         tag: effectiveCancelTag,
       );
@@ -353,7 +222,7 @@ class SqlServerBackupService implements ISqlServerBackupService {
         final stderr = processResult.stderr;
 
         final outputLower = (stdout + stderr).toLowerCase();
-        if (_hasSqlcmdErrorOutput(outputLower)) {
+        if (_cliRunner.hasSqlcmdErrorOutput(outputLower)) {
           LoggerService.error(
             'Backup SQL Server falhou (mensagem de erro detectada)',
             Exception(
@@ -465,26 +334,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
           verifyStopwatch.start();
           // Para backups com striping, RESTORE VERIFYONLY exige TODOS os
           // stripes na mesma ordem em que foram gerados.
-          final fromDiskClause = backupPaths
-              .map(
-                (path) =>
-                    "FROM DISK = N'${_escapeSqlString(path.replaceAll(r'\', '/'))}'",
-              )
-              .join(', ');
-          final verifyQuery = enableChecksum
-              ? 'RESTORE VERIFYONLY $fromDiskClause WITH CHECKSUM'
-              : 'RESTORE VERIFYONLY $fromDiskClause';
-
-          final verifyArguments = [
-            ..._baseSqlcmdArgs(config),
-            '-Q',
-            verifyQuery,
-          ];
-
-          final verifyResult = await _processService.run(
-            executable: 'sqlcmd',
-            arguments: verifyArguments,
-            environment: _sqlcmdEnvironment(config),
+          final verifyResult = await _cliRunner.verifyBackup(
+            config: config,
+            backupPaths: backupPaths,
+            enableChecksum: enableChecksum,
             timeout: verifyTimeout ?? const Duration(minutes: 30),
             tag: verifyCancelTag,
           );
@@ -581,12 +434,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
     try {
       const query = 'SELECT @@VERSION';
 
-      final arguments = [..._baseSqlcmdArgs(config), '-Q', query, '-t', '5'];
-
-      final result = await _processService.run(
-        executable: 'sqlcmd',
-        arguments: arguments,
-        environment: _sqlcmdEnvironment(config),
+      final result = await _cliRunner.run(
+        config: config,
+        extraArguments: ['-Q', query, '-t', '5'],
         timeout: const Duration(seconds: 10),
       );
 
@@ -610,21 +460,9 @@ class SqlServerBackupService implements ISqlServerBackupService {
       const query =
           "SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb') ORDER BY name";
 
-      final arguments = [
-        ..._baseSqlcmdArgs(config),
-        '-Q',
-        query,
-        '-h',
-        '-1',
-        '-W',
-        '-t',
-        '10',
-      ];
-
-      final result = await _processService.run(
-        executable: 'sqlcmd',
-        arguments: arguments,
-        environment: _sqlcmdEnvironment(config),
+      final result = await _cliRunner.run(
+        config: config,
+        extraArguments: ['-Q', query, '-h', '-1', '-W', '-t', '10'],
         timeout: timeout ?? const Duration(seconds: 15),
       );
 
@@ -669,12 +507,10 @@ class SqlServerBackupService implements ISqlServerBackupService {
     const query =
         'SELECT CAST(SUM(CAST(size AS BIGINT)) * 8192 AS BIGINT) AS bytes '
         'FROM sys.master_files WHERE database_id = DB_ID()';
-    final args = [..._baseSqlcmdArgs(config), '-Q', query, '-h', '-1', '-W'];
 
-    final result = await _processService.run(
-      executable: 'sqlcmd',
-      arguments: args,
-      environment: _sqlcmdEnvironment(config),
+    final result = await _cliRunner.run(
+      config: config,
+      extraArguments: ['-Q', query, '-h', '-1', '-W'],
       timeout: timeout ?? const Duration(seconds: 15),
     );
 

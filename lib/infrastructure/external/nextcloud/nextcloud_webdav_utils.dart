@@ -28,6 +28,25 @@ class NextcloudWebdavUtils {
     return trimmed;
   }
 
+  static String joinRemote(String left, String right) {
+    final l = left.endsWith('/') ? left.substring(0, left.length - 1) : left;
+    final r = right.startsWith('/') ? right.substring(1) : right;
+    if (l.isEmpty) return '/$r';
+    if (r.isEmpty) return l;
+    return '$l/$r';
+  }
+
+  static String buildBaseFolderPath({
+    required String remotePath,
+    required String folderName,
+  }) {
+    final normalizedRemote = normalizeRemotePath(remotePath);
+    if (normalizedRemote == '/') {
+      return '/$folderName';
+    }
+    return joinRemote(normalizedRemote, folderName);
+  }
+
   static String encodeWebDavPath(String path) {
     final segments = path.split('/').where((s) => s.isNotEmpty).toList();
     final encoded = segments.map(Uri.encodeComponent).join('/');

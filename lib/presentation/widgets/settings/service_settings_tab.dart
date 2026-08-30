@@ -13,12 +13,14 @@ import 'package:backup_database/domain/repositories/i_user_preferences_repositor
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_actions_section.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_compatibility_section.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_error_section.dart';
+import 'package:backup_database/presentation/widgets/settings/service/service_info_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_local_schedule_timer_section.dart';
-import 'package:backup_database/presentation/widgets/settings/service/service_primary_action.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_status_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_uac_waiting_banner.dart';
 import 'package:backup_database/presentation/widgets/settings/service/windows_service_uac.dart';
-import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -225,10 +227,20 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               ),
               if (provider.error != null) ...[
                 AppSpacing.gapLg,
-                _buildErrorSection(context, provider),
+                ServiceErrorSection(provider: provider),
               ],
               AppSpacing.gapLg,
-              _buildActionsSection(context, provider, serviceUiOk),
+              ServiceActionsSection(
+                provider: provider,
+                serviceActionsEnabled: serviceUiOk,
+                onRefresh: () => unawaited(provider.checkStatus()),
+                onInstall: () => unawaited(_installService(context, provider)),
+                onStart: () => unawaited(_startService(context, provider)),
+                onRestart: () => unawaited(_restartService(context, provider)),
+                onStop: () => unawaited(_stopService(context, provider)),
+                onUninstall: () =>
+                    unawaited(_uninstallService(context, provider)),
+              ),
               AppSpacing.gapLg,
               ServiceLocalScheduleTimerSection(
                 isLoading: _isLoadingScheduleTimerPref,
@@ -239,217 +251,27 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               ),
 
               AppSpacing.gapLg,
-              _buildInfoSection(context),
+              ServiceInfoSection(
+                onCopyLogPath: () => unawaited(
+                  _copyPath('${AppConstants.windowsServiceLogPath}\\'),
+                ),
+                onOpenLogFolder: () => unawaited(
+                  _openParentDirectory(
+                    '${AppConstants.windowsServiceLogPath}\\app.log',
+                  ),
+                ),
+              ),
               AppSpacing.gapLg,
-              _buildCompatibilitySection(context, features),
+              ServiceCompatibilitySection(
+                diagnostics: features.diagnosticSummary(),
+                onCopyDiagnostics: () => unawaited(
+                  _copyCompatibilityDiagnostics(features.diagnosticSummary()),
+                ),
+              ),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildCompatibilitySection(
-    BuildContext context,
-    FeatureAvailabilityService features,
-  ) {
-    final diagnostics = features.diagnosticSummary();
-    return AppSectionCard(
-      title: appLocaleString(
-        context,
-        'Diagnóstico de compatibilidade',
-        'Compatibility diagnostics',
-      ),
-      description: appLocaleString(
-        context,
-        'Snapshot técnico do ambiente Windows para suporte.',
-        'Technical Windows environment snapshot for support.',
-      ),
-      child: Expander(
-        header: Text(
-          appLocaleString(
-            context,
-            'Ver diagnóstico detalhado',
-            'View detailed diagnostics',
-          ),
-        ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SettingsTechnicalItem(
-              title: appLocaleString(
-                context,
-                'Snapshot atual',
-                'Current snapshot',
-              ),
-              value: diagnostics,
-              description: appLocaleString(
-                context,
-                'Resumo técnico usado em troubleshooting.',
-                'Technical summary used in troubleshooting.',
-              ),
-              onCopy: () =>
-                  unawaited(_copyCompatibilityDiagnostics(diagnostics)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorSection(
-    BuildContext context,
-    WindowsServiceProvider provider,
-  ) {
-    return AppSectionCard(
-      title: appLocaleString(context, 'Falha recente', 'Recent failure'),
-      description: appLocaleString(
-        context,
-        'Último erro retornado ao consultar ou operar o serviço.',
-        'Latest error returned while querying or operating the service.',
-      ),
-      child: InfoBar(
-        title: Text(appLocaleString(context, 'Erro', 'Error')),
-        content: SelectableText(provider.error!),
-        severity: InfoBarSeverity.error,
-        isLong: true,
-      ),
-    );
-  }
-
-  Widget _buildActionsSection(
-    BuildContext context,
-    WindowsServiceProvider provider,
-    bool serviceActionsEnabled,
-  ) {
-    final actionsDisabled = !serviceActionsEnabled || provider.isLoading;
-
-    return AppSectionCard(
-      title: appLocaleString(context, 'Ações', 'Actions'),
-      description: appLocaleString(
-        context,
-        'Ações operacionais do serviço com prioridade para o fluxo principal.',
-        'Operational service actions with emphasis on the primary flow.',
-      ),
-      child: Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.sm,
-        children: [
-          ServicePrimaryAction(
-            provider: provider,
-            actionsDisabled: actionsDisabled,
-            serviceActionsEnabled: serviceActionsEnabled,
-            onRefresh: () => unawaited(provider.checkStatus()),
-            onInstall: () => unawaited(_installService(context, provider)),
-            onStart: () => unawaited(_startService(context, provider)),
-            onRestart: () => unawaited(_restartService(context, provider)),
-          ),
-          if (serviceActionsEnabled)
-            AppButton(
-              label: appLocaleString(
-                context,
-                'Atualizar status',
-                'Refresh status',
-              ),
-              onPressed: provider.isLoading
-                  ? null
-                  : () => unawaited(provider.checkStatus()),
-            ),
-          if (provider.isRunning)
-            AppButton(
-              label: appLocaleString(context, 'Parar', 'Stop'),
-              onPressed: actionsDisabled
-                  ? null
-                  : () => unawaited(_stopService(context, provider)),
-            ),
-          if (provider.isInstalled)
-            AppButton(
-              label: appLocaleString(
-                context,
-                'Remover serviço',
-                'Remove service',
-              ),
-              onPressed: actionsDisabled
-                  ? null
-                  : () => unawaited(_uninstallService(context, provider)),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoSection(BuildContext context) {
-    return AppSectionCard(
-      title: appLocaleString(context, 'Informações', 'Information'),
-      description: appLocaleString(
-        context,
-        'Referências operacionais do modo serviço em formato compacto.',
-        'Operational service-mode references in a compact layout.',
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              SettingsFactTile(
-                label: appLocaleString(
-                  context,
-                  'Execução',
-                  'Execution',
-                ),
-                value: appLocaleString(
-                  context,
-                  'Sem usuário logado',
-                  'Without logged-in user',
-                ),
-                caption: appLocaleString(
-                  context,
-                  'Backups continuam mesmo sem sessão aberta.',
-                  'Backups keep running without an open session.',
-                ),
-              ),
-              SettingsFactTile(
-                label: appLocaleString(
-                  context,
-                  'Inicialização',
-                  'Startup',
-                ),
-                value: appLocaleString(
-                  context,
-                  'Automática com o Windows',
-                  'Automatic with Windows',
-                ),
-                caption: appLocaleString(
-                  context,
-                  'Quando o serviço está instalado e habilitado.',
-                  'When the service is installed and enabled.',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          SettingsTechnicalItem(
-            title: appLocaleString(context, 'Logs do serviço', 'Service logs'),
-            value: '${AppConstants.windowsServiceLogPath}\\',
-            description: appLocaleString(
-              context,
-              'Diretório padrão de logs do Windows Service.',
-              'Default Windows Service log directory.',
-            ),
-            onCopy: () => unawaited(
-              _copyPath('${AppConstants.windowsServiceLogPath}\\'),
-            ),
-            onOpen: () => unawaited(
-              _openParentDirectory(
-                '${AppConstants.windowsServiceLogPath}\\app.log',
-              ),
-            ),
-            openTooltip: appLocaleString(context, 'Abrir pasta', 'Open folder'),
-          ),
-        ],
-      ),
     );
   }
 

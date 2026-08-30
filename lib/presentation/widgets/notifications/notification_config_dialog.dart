@@ -1,13 +1,16 @@
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
-import 'package:backup_database/core/compatibility/feature_disable_reason.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
-import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_attach_log_section.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_dialog_section.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_identification_section.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_quick_test_section.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_server_section.dart';
+import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_smtp_authentication_section.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:uuid/uuid.dart';
 import 'package:zard/zard.dart';
@@ -587,7 +590,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DialogSection(
+                NotificationDialogSection(
                   title: appLocaleString(
                     context,
                     'Identificação',
@@ -598,7 +601,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                     'Nome interno da configuração e conta remetente usada pela operação.',
                     'Internal configuration name and sender account used by the operation.',
                   ),
-                  child: _IdentificationSection(
+                  child: NotificationIdentificationSection(
                     configNameController: _configNameController,
                     emailController: _emailController,
                     configNameValidator: _validateConfigName,
@@ -606,7 +609,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _DialogSection(
+                NotificationDialogSection(
                   title: appLocaleString(
                     context,
                     'Servidor SMTP',
@@ -617,7 +620,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                     'Defina endpoint, porta e credenciais da conexão SMTP.',
                     'Define endpoint, port, and SMTP connection credentials.',
                   ),
-                  child: _ServerSection(
+                  child: NotificationServerSection(
                     smtpServerController: _smtpServerController,
                     smtpPortController: _smtpPortController,
                     passwordController: _passwordController,
@@ -627,7 +630,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _DialogSection(
+                NotificationDialogSection(
                   title: appLocaleString(
                     context,
                     'Autenticação',
@@ -638,7 +641,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                     'Escolha entre senha SMTP tradicional ou conexão OAuth com o provedor.',
                     'Choose between traditional SMTP password or OAuth-based provider authentication.',
                   ),
-                  child: _SmtpAuthenticationSection(
+                  child: NotificationSmtpAuthenticationSection(
                     authMode: _authMode,
                     isBusy: _isConnectingOAuth,
                     oauthAccountEmail: _oauthAccountEmail,
@@ -667,7 +670,7 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _DialogSection(
+                NotificationDialogSection(
                   title: appLocaleString(
                     context,
                     'Teste rápido',
@@ -678,20 +681,20 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
                     'Opcionalmente informe um destinatário padrão para validar o envio antes de salvar.',
                     'Optionally provide a default recipient to validate delivery before saving.',
                   ),
-                  child: _QuickTestSection(
+                  child: NotificationQuickTestSection(
                     recipientEmailController: _recipientEmailController,
                     recipientEmailValidator: _validateRecipientEmail,
                   ),
                 ),
                 const SizedBox(height: 20),
-                _DialogSection(
+                NotificationDialogSection(
                   title: appLocaleString(context, 'Anexos', 'Attachments'),
                   description: appLocaleString(
                     context,
                     'Controle se os e-mails devem incluir logs detalhados da execução.',
                     'Control whether outgoing e-mails should include detailed execution logs.',
                   ),
-                  child: _AttachLogSection(
+                  child: NotificationAttachLogSection(
                     attachLog: _attachLog,
                     onAttachLogChanged: (value) {
                       setState(() {
@@ -741,401 +744,6 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
           isEditing: _isEditing,
         ),
       ],
-    );
-  }
-}
-
-class _DialogSection extends StatelessWidget {
-  const _DialogSection({
-    required this.title,
-    required this.description,
-    required this.child,
-  });
-
-  final String title;
-  final String description;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = FluentTheme.of(context);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: theme.typography.subtitle?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(description, style: theme.typography.caption),
-        const SizedBox(height: 16),
-        child,
-      ],
-    );
-  }
-}
-
-class _IdentificationSection extends StatelessWidget {
-  const _IdentificationSection({
-    required this.configNameController,
-    required this.emailController,
-    required this.configNameValidator,
-    required this.emailValidator,
-  });
-
-  final TextEditingController configNameController;
-  final TextEditingController emailController;
-  final String? Function(String?) configNameValidator;
-  final String? Function(String?) emailValidator;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppTextField(
-          controller: configNameController,
-          label: appLocaleString(
-            context,
-            'Nome da configuração',
-            'Configuration name',
-          ),
-          hint: appLocaleString(context, 'SMTP principal', 'Primary SMTP'),
-          validator: configNameValidator,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: emailController,
-          label: appLocaleString(
-            context,
-            'E-mail da conta SMTP',
-            'SMTP account e-mail',
-          ),
-          keyboardType: TextInputType.emailAddress,
-          hint: appLocaleString(
-            context,
-            'seu-email@exemplo.com',
-            'your-email@example.com',
-          ),
-          validator: emailValidator,
-        ),
-      ],
-    );
-  }
-}
-
-class _ServerSection extends StatelessWidget {
-  const _ServerSection({
-    required this.smtpServerController,
-    required this.smtpPortController,
-    required this.passwordController,
-    required this.smtpServerValidator,
-    required this.passwordValidator,
-    required this.authMode,
-  });
-
-  final TextEditingController smtpServerController;
-  final TextEditingController smtpPortController;
-  final TextEditingController passwordController;
-  final String? Function(String?) smtpServerValidator;
-  final String? Function(String?) passwordValidator;
-  final SmtpAuthMode authMode;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppTextField(
-          controller: smtpServerController,
-          label: appLocaleString(context, 'Servidor SMTP', 'SMTP server'),
-          hint: appLocaleString(
-            context,
-            'smtp.exemplo.com',
-            'smtp.example.com',
-          ),
-          validator: smtpServerValidator,
-        ),
-        const SizedBox(height: 16),
-        NumericField(
-          controller: smtpPortController,
-          label: appLocaleString(context, 'Porta', 'Port'),
-          hint: '587',
-          prefixIcon: FluentIcons.number_field,
-          minValue: 1,
-          maxValue: 65535,
-        ),
-        const SizedBox(height: 16),
-        PasswordField(
-          controller: passwordController,
-          label: appLocaleString(context, 'Senha SMTP', 'SMTP password'),
-          hint: appLocaleString(
-            context,
-            'Senha da conta de envio',
-            'Password for the sending account',
-          ),
-          validator: passwordValidator,
-          enabled: authMode == SmtpAuthMode.password,
-        ),
-      ],
-    );
-  }
-}
-
-class _QuickTestSection extends StatelessWidget {
-  const _QuickTestSection({
-    required this.recipientEmailController,
-    required this.recipientEmailValidator,
-  });
-
-  final TextEditingController recipientEmailController;
-  final String? Function(String?) recipientEmailValidator;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppTextField(
-      controller: recipientEmailController,
-      label: appLocaleString(
-        context,
-        'E-mail de destino (opcional para teste)',
-        'Destination e-mail (optional for test)',
-      ),
-      keyboardType: TextInputType.emailAddress,
-      hint: appLocaleString(
-        context,
-        'destino@exemplo.com',
-        'recipient@example.com',
-      ),
-      validator: recipientEmailValidator,
-    );
-  }
-}
-
-class _SmtpAuthenticationSection extends StatelessWidget {
-  const _SmtpAuthenticationSection({
-    required this.authMode,
-    required this.isBusy,
-    required this.oauthAccountEmail,
-    required this.oauthConnectedAt,
-    required this.oauthModesAvailable,
-    required this.oauthUnavailableReason,
-    required this.onAuthModeChanged,
-    required this.onConnect,
-    required this.onReconnect,
-    required this.onDisconnect,
-  });
-
-  final SmtpAuthMode authMode;
-  final bool isBusy;
-  final String? oauthAccountEmail;
-  final DateTime? oauthConnectedAt;
-  final bool oauthModesAvailable;
-  final FeatureDisableReason? oauthUnavailableReason;
-  final ValueChanged<SmtpAuthMode> onAuthModeChanged;
-  final Future<void> Function() onConnect;
-  final Future<void> Function() onReconnect;
-  final Future<void> Function() onDisconnect;
-
-  @override
-  Widget build(BuildContext context) {
-    final isOAuth = authMode.isOAuth;
-    final isConnected = oauthAccountEmail?.trim().isNotEmpty ?? false;
-    final connectedAt = oauthConnectedAt?.toLocal();
-    final captionStyle = FluentTheme.of(context).typography.caption;
-    final outline = context.colors.outline;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!oauthModesAvailable) ...[
-          InfoBar(
-            title: Text(
-              appLocaleString(
-                context,
-                'OAuth SMTP',
-                'SMTP OAuth',
-              ),
-            ),
-            content: Text(
-              localizeCompatibilityReason(
-                context,
-                reason: oauthUnavailableReason,
-                fallbackPt: 'Não disponível nesta versão do Windows.',
-                fallbackEn: 'Not available on this Windows version.',
-              ),
-            ),
-            severity: InfoBarSeverity.warning,
-            isLong: true,
-          ),
-          const SizedBox(height: 12),
-        ],
-        AppDropdown<SmtpAuthMode>(
-          label: appLocaleString(
-            context,
-            'Modo de autenticação',
-            'Authentication mode',
-          ),
-          value: authMode,
-          items: [
-            ComboBoxItem(
-              value: SmtpAuthMode.password,
-              child: Text(
-                appLocaleString(context, 'Senha SMTP', 'SMTP password'),
-              ),
-            ),
-            if (oauthModesAvailable) ...[
-              const ComboBoxItem(
-                value: SmtpAuthMode.oauthGoogle,
-                child: Text('Google OAuth2'),
-              ),
-              const ComboBoxItem(
-                value: SmtpAuthMode.oauthMicrosoft,
-                child: Text('Microsoft OAuth2'),
-              ),
-            ],
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              onAuthModeChanged(value);
-            }
-          },
-        ),
-        if (isOAuth) ...[
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: outline.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: outline.withValues(alpha: 0.22)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isConnected
-                      ? appLocaleString(
-                          context,
-                          'Conta conectada: $oauthAccountEmail',
-                          'Account connected: $oauthAccountEmail',
-                        )
-                      : appLocaleString(
-                          context,
-                          'Nenhuma conta OAuth conectada',
-                          'No OAuth account connected',
-                        ),
-                ),
-                if (connectedAt != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    appLocaleString(
-                      context,
-                      'Conectado em: $connectedAt',
-                      'Connected at: $connectedAt',
-                    ),
-                    style: captionStyle,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Button(
-                onPressed: isBusy ? null : onConnect,
-                child: Text(
-                  isBusy
-                      ? appLocaleString(
-                          context,
-                          'Conectando...',
-                          'Connecting...',
-                        )
-                      : appLocaleString(context, 'Conectar', 'Connect'),
-                ),
-              ),
-              Button(
-                onPressed: isBusy ? null : onReconnect,
-                child: Text(
-                  appLocaleString(context, 'Reconectar', 'Reconnect'),
-                ),
-              ),
-              Button(
-                onPressed: isBusy ? null : onDisconnect,
-                child: Text(
-                  appLocaleString(context, 'Desconectar', 'Disconnect'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _AttachLogSection extends StatelessWidget {
-  const _AttachLogSection({
-    required this.attachLog,
-    required this.onAttachLogChanged,
-  });
-
-  final bool attachLog;
-  final ValueChanged<bool> onAttachLogChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final captionStyle = FluentTheme.of(context).typography.caption;
-    final outline = context.colors.outline;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: outline.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: outline.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  appLocaleString(
-                    context,
-                    'Incluir detalhamento/logs no e-mail',
-                    'Include details/logs in e-mail',
-                  ),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  appLocaleString(
-                    context,
-                    'Útil para suporte e investigação de falhas em campo.',
-                    'Useful for support and field failure investigation.',
-                  ),
-                  style: captionStyle,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          ToggleSwitch(
-            checked: attachLog,
-            onChanged: onAttachLogChanged,
-          ),
-        ],
-      ),
     );
   }
 }

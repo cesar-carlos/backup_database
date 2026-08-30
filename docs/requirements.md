@@ -86,5 +86,7 @@ isql -?
 
 - [`path_setup.md`](path_setup.md)
 - [`install/installation_guide.md`](install/installation_guide.md)
+- [`onboarding/execucao_remota.md`](onboarding/execucao_remota.md)
+- [`analise_implementacao_sql_server.md`](analise_implementacao_sql_server.md)
 - [`analise_implementacao_postgresql.md`](analise_implementacao_postgresql.md)
 - [`analise_implementacao_sybase.md`](analise_implementacao_sybase.md)

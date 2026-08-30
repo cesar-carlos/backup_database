@@ -188,6 +188,7 @@ C:\ProgramData\BackupDatabase\
 - [Indice da pasta docs](docs/README.md)
 - [ADRs](docs/adr/README.md)
 - [Visao geral da arquitetura](docs/onboarding/architecture_overview.md)
+- [Execucao remota / protocolo](docs/onboarding/execucao_remota.md)
 - [Adicionar um novo SGBD](docs/onboarding/adicionar_sgbd.md)
 - [Design system](docs/onboarding/design_system.md)
 

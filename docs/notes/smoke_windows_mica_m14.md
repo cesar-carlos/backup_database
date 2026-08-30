@@ -1,6 +1,6 @@
 # Smoke manual — M14 (Mica e accent do sistema)
 
-Referência: **ADR-013**, plano de refatoração (M14).
+Referência: **ADR-013**. Plano historico: `archive/plano_refatoracao_e_melhorias_2026-04-19.md` (M14).
 
 **Objetivo:** confirmar que a janela principal e as definições se comportam bem em
 Windows 10 (sem Mica visível ou degradado) e Windows 11 (Mica ativo), sem crash no arranque.
@@ -35,11 +35,10 @@ permissão para alterar definições da app.
 - Contraste de texto principal legível em todos os cenários (WCAG smoke visual).
 - Com Mica desligado, UI permanece utilizável (sem dependência de transparência).
 
-## Evidência (marcar no plano)
+## Evidência
 
 - Data, máquina (build SO), versão da app.
 - Capturas opcionais: Win11 Mica on/off, accent sistema on/off.
-- Marcar `[x]` em `plano_refatoracao_e_melhorias_2026-04-19.md` (M14) após A–G.
 
 ## Automatizado no CI
 
