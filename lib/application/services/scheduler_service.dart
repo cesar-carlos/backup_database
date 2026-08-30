@@ -437,7 +437,6 @@ class SchedulerService implements ISchedulerService {
       'executionOrigin: ${executionOrigin.name})',
     );
 
-    String? tempBackupPath;
     // Elevado para o escopo externo para que o `catch` no fim do método
     // possa atualizar o histórico para `error` caso uma exceção
     // pós-`executeBackup` (staging/upload/notify) caia no catch sem ter
@@ -449,487 +448,30 @@ class SchedulerService implements ISchedulerService {
     final effectiveRunId = runId ?? '${schedule.id}_${const Uuid().v4()}';
 
     try {
-      _licensePolicyService.setRunContext(effectiveRunId);
-      LogContext.setContext(runId: effectiveRunId, scheduleId: schedule.id);
-
-      // Garante que o BackupProgressProvider está em estado "running" para
-      // que `setCurrentHistoryId` (chamado pelo orchestrator) consiga
-      // publicar o historyId. Sem isso, o botão Cancelar do
-      // BackupProgressDialog ficaria permanentemente desabilitado quando
-      // o backup foi iniciado pela UI local. Retorno `false` é benigno —
-      // significa que outro caller (ex.: socket handler) já reservou o
-      // slot, o que é o comportamento desejado.
-      _progressNotifier.tryStartBackup(schedule.name);
-      _progressNotifier.setCurrentBackupName(schedule.name);
-
-      final canceledAtStart = await _failIfCancellationRequested(
+      final prepared = await _prepareScheduledBackupContext(
         schedule: schedule,
+        isRemoteCommand: isRemoteCommand,
+        effectiveRunId: effectiveRunId,
+        onHistoryCreated: (history) {
+          backupHistoryRef = history;
+        },
       );
-      if (canceledAtStart != null) {
-        return canceledAtStart;
+      if (prepared.isError()) {
+        return rd.Failure(prepared.exceptionOrNull()!);
       }
+      final context = prepared.getOrNull()!;
 
-      late final List<BackupDestination> destinations;
-      if (isRemoteCommand) {
-        // ADR-001: destinos do servidor nao sao usados no fluxo
-        // server-first; validacao/lookup ignorados para permitir
-        // execucao remota mesmo com IDs obsoletos.
-        destinations = const <BackupDestination>[];
-      } else {
-        destinations = await _getDestinations(schedule.destinationIds);
-        if (destinations.length != schedule.destinationIds.length) {
-          final foundIds = destinations.map((d) => d.id).toSet();
-          final missingIds = schedule.destinationIds
-              .where((id) => !foundIds.contains(id))
-              .toList();
-
-          final errorMessage =
-              'Destinos vinculados ao agendamento nao foram encontrados: '
-              '${missingIds.join(", ")}';
-          LoggerService.error(errorMessage);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
+      final uploadResult = await _uploadScheduledBackupDestinations(context);
+      if (uploadResult.isError()) {
+        return rd.Failure(uploadResult.exceptionOrNull()!);
       }
+      final uploadDuration = uploadResult.getOrNull()!;
 
-      if (schedule.backupFolder.isEmpty) {
-        final errorMessage =
-            'Pasta de backup não configurada para o agendamento: '
-            '${schedule.name}';
-        LoggerService.error(errorMessage);
-        return rd.Failure(ValidationFailure(message: errorMessage));
-      }
-
-      final backupDir = Directory(schedule.backupFolder);
-      if (!await backupDir.exists()) {
-        try {
-          await backupDir.create(recursive: true);
-        } on Object catch (e) {
-          final errorMessage =
-              'Erro ao criar pasta de backup: ${schedule.backupFolder}';
-          LoggerService.error(errorMessage, e);
-          return rd.Failure(ValidationFailure(message: errorMessage));
-        }
-      }
-
-      final hasPermission = await _checkWritePermission(backupDir);
-      if (!hasPermission) {
-        final errorMessage =
-            'Sem permissão de escrita na pasta de backup: '
-            '${schedule.backupFolder}';
-        LoggerService.error(errorMessage);
-        return rd.Failure(ValidationFailure(message: errorMessage));
-      }
-
-      // A validação de espaço livre vive agora dentro do
-      // BackupOrchestratorService._estimateRequiredSpaceBytes (usa
-      // tamanho real do banco × safetyFactor). Antes existia uma
-      // checagem duplicada aqui com mínimo fixo de 500 MB que dava
-      // false-positive em bancos grandes (passava no scheduler e
-      // falhava no orchestrator).
-
-      final outputDirectory = backupDir.path;
-      LoggerService.info(
-        'Usando pasta temporária de backup: $outputDirectory',
+      final finalizeResult = await _finalizeScheduledBackup(
+        context: context,
+        uploadDuration: uploadDuration,
       );
-
-      if (outputDirectory.isEmpty) {
-        final errorMessage =
-            'Caminho de saída do backup está vazio para o agendamento: '
-            '${schedule.name}';
-        LoggerService.error(errorMessage);
-        return rd.Failure(ValidationFailure(message: errorMessage));
-      }
-
-      final policyResult = await _licensePolicyService
-          .validateExecutionCapabilities(schedule, destinations);
-      if (policyResult.isError()) {
-        final failure = policyResult.exceptionOrNull()!;
-        LoggerService.error(
-          'Execução bloqueada por licença: ${_failureMessage(failure)}',
-          failure,
-        );
-        return rd.Failure(failure);
-      }
-
-      final backupResult = await _backupOrchestratorService.executeBackup(
-        schedule: schedule,
-        outputDirectory: outputDirectory,
-        notifyOnComplete: !isRemoteCommand,
-      );
-
-      if (backupResult.isError()) {
-        final error = backupResult.exceptionOrNull()!;
-        _safeFailBackup(_failureMessage(error));
-        return rd.Failure(error);
-      }
-
-      final backupHistory = backupResult.getOrNull()!;
-      backupHistoryRef = backupHistory;
-      tempBackupPath = backupHistory.backupPath;
-      // Registra o mapeamento scheduleId → historyId para que
-      // `cancelExecution` consiga matar o processo do SGBD imediatamente
-      // via `IBackupCancellationService.cancelByHistoryId`.
-      _runningHistoryIds[schedule.id] = backupHistory.id;
-
-      final canceledAfterBackup = await _failIfCancellationRequested(
-        schedule: schedule,
-        backupHistory: backupHistory,
-      );
-      if (canceledAfterBackup != null) {
-        return canceledAfterBackup;
-      }
-
-      final missingArtifactResultBefore = await _failIfArtifactMissing(
-        backupHistory,
-      );
-      if (missingArtifactResultBefore != null) {
-        return missingArtifactResultBefore;
-      }
-
-      final hasDestinations = destinations.isNotEmpty;
-      // Remoto: sem upload para destinos, mas ainda exigimos artefato
-      // "arquivo unico" para o staging/download pelo cliente.
-      final mustEnforceFileArtifact = hasDestinations || isRemoteCommand;
-
-      if (mustEnforceFileArtifact) {
-        final artifactType = await FileSystemEntity.type(
-          backupHistory.backupPath,
-        );
-        if (artifactType == FileSystemEntityType.directory) {
-          const errorMessage =
-              'O backup resultou em uma pasta; os destinos configurados '
-              'esperam um arquivo único. Ative compactação no agendamento ou '
-              'remova os destinos até haver suporte a envio de pastas.';
-          LoggerService.error(errorMessage);
-          return _failScheduledBackupAfterArtifactError(
-            backupHistory: backupHistory,
-            errorMessage: errorMessage,
-            logStep: LogStepConstants.backupDirectoryUploadNotSupported,
-            failure: const ValidationFailure(message: errorMessage),
-          );
-        }
-      }
-
-      late final Duration uploadDuration;
-      if (!isRemoteCommand) {
-        if (hasDestinations) {
-          _safeUpdateProgress(
-            step: 'Enviando para destino',
-            message: 'Enviando para destinos...',
-            progress: 0.85,
-          );
-        }
-
-        final uploadErrors = <String>[];
-        var hasCriticalUploadError = false;
-
-        final canceledBeforeUpload = await _failIfCancellationRequested(
-          schedule: schedule,
-          backupHistory: backupHistory,
-        );
-        if (canceledBeforeUpload != null) {
-          return canceledBeforeUpload;
-        }
-
-        final missingArtifactResultBeforeUpload = await _failIfArtifactMissing(
-          backupHistory,
-        );
-        if (missingArtifactResultBeforeUpload != null) {
-          return missingArtifactResultBeforeUpload;
-        }
-
-        final uploadStopwatch = Stopwatch()..start();
-        final backupIdForPath = schedule.databaseType == DatabaseType.sybase
-            ? backupHistory.id
-            : null;
-        // Aplica timeout global ao ciclo de upload para evitar que destinos
-        // travados (FTP lento, Drive offline) mantenham o backup pendurado
-        // indefinidamente. Em timeout, simulamos failures para todas as
-        // destinations não confirmadas e seguimos o fluxo de erro.
-        List<rd.Result<void>> sendResults;
-        var uploadTimedOut = false;
-        try {
-          sendResults = await _destinationOrchestrator
-              .uploadToAllDestinations(
-                sourceFilePath: backupHistory.backupPath,
-                destinations: destinations,
-                isCancelled: () =>
-                    uploadTimedOut ||
-                    _cancelRequestedSchedules.contains(schedule.id),
-                backupId: backupIdForPath,
-                onProgress: _createThrottledUploadProgressCallback(
-                  destinations.length,
-                ),
-              )
-              .timeout(_uploadTimeout);
-        } on TimeoutException {
-          uploadTimedOut = true;
-          LoggerService.error(
-            'Upload para destinos excedeu o timeout de '
-            '${_uploadTimeout.inMinutes} minutos para ${schedule.name}',
-          );
-          sendResults = List.generate(
-            destinations.length,
-            (_) => rd.Failure(
-              BackupFailure(
-                message:
-                    'Upload excedeu timeout de ${_uploadTimeout.inMinutes} '
-                    'minutos. Verifique conectividade ou aumente '
-                    'uploadTimeout no scheduler.',
-                code: FailureCodes.uploadFailed,
-              ),
-            ),
-          );
-        }
-        uploadStopwatch.stop();
-        uploadDuration = uploadStopwatch.elapsed;
-        _metricsCollector?.recordHistogram(
-          ObservabilityMetrics.destinationUploadDurationMs,
-          uploadDuration.inMilliseconds.toDouble(),
-        );
-
-        _safeUpdateProgress(
-          step: 'Enviando para destino',
-          message: 'Upload para destinos concluído.',
-          progress: 0.95,
-        );
-
-        for (var index = 0; index < sendResults.length; index++) {
-          final destination = destinations[index];
-          final sendResult = sendResults[index];
-          sendResult.fold((_) {}, (failure) {
-            _metricsCollector?.incrementCounter(
-              ObservabilityMetrics.destinationUploadFailureTotal,
-            );
-            final errorMessage =
-                'Falha ao enviar para ${destination.name}: '
-                '${_failureMessage(failure)}';
-            uploadErrors.add(errorMessage);
-            LoggerService.error(errorMessage, failure);
-            hasCriticalUploadError = true;
-          });
-        }
-
-        if (hasCriticalUploadError) {
-          final errorMessage = uploadErrors.join('\n');
-          final finishedAt = DateTime.now();
-          final failedHistory = backupHistory.copyWith(
-            status: BackupStatus.error,
-            errorMessage:
-                'Backup concluído na pasta temporária, mas falhou ao enviar '
-                'para destinos:\n$errorMessage',
-            finishedAt: finishedAt,
-            durationSeconds: finishedAt
-                .difference(backupHistory.startedAt)
-                .inSeconds,
-          );
-          final updateResult = await _backupHistoryRepository
-              .updateHistoryAndLogIfRunning(
-                history: failedHistory,
-                logStep: LogStepConstants.uploadFailed,
-                logLevel: LogLevel.error,
-                logMessage:
-                    'Falha ao enviar backup para destinos:\n$errorMessage',
-              );
-          updateResult.fold(
-            (_) {},
-            (e) =>
-                LoggerService.warning('Erro ao atualizar histórico e log: $e'),
-          );
-
-          final notifyResult = await _notificationService.notifyBackupComplete(
-            failedHistory,
-          );
-          notifyResult.fold(
-            (sent) {
-              if (sent) {
-                LoggerService.info('Notificação de erro enviada por email');
-              } else {
-                LoggerService.warning(
-                  'Notificação de erro não foi enviada '
-                  '(email desabilitado ou configuração inválida)',
-                );
-              }
-            },
-            (failure) {
-              LoggerService.error(
-                'Erro ao enviar notificação por email',
-                failure,
-              );
-            },
-          );
-
-          final failure = BackupFailure(
-            message: 'Falha ao enviar backup para destinos:\n$errorMessage',
-            code: FailureCodes.uploadFailed,
-          );
-          LoggerService.error(
-            'Backup marcado como erro devido a falhas no upload',
-            failure,
-          );
-
-          _safeFailBackup(errorMessage);
-          return rd.Failure(failure);
-        }
-
-        if (uploadErrors.isNotEmpty) {
-          final warningMessage =
-              'O backup foi concluído, mas houve avisos:\n\n'
-              '${uploadErrors.join('\n')}';
-
-          await _notificationService.sendWarning(
-            databaseName: schedule.name,
-            message: warningMessage,
-          );
-        }
-
-        if (hasDestinations) {
-          LoggerService.info(
-            'Uploads para destinos concluídos, enviando notificação por e-mail',
-          );
-        }
-        await _notificationService.notifyBackupComplete(backupHistory);
-      } else {
-        uploadDuration = Duration.zero;
-        LoggerService.info(
-          'Origem remota: upload para destinos finais e e-mail de '
-          'conclusao do servidor ignorados (ADR-001).',
-        );
-      }
-
-      // Copiar para staging ANTES de deletar o arquivo temporário
-      // para que o cliente possa baixar o arquivo
-      String? stagingRelativePath;
-      if (_transferStagingService != null) {
-        LoggerService.info(
-          'Copiando backup para staging: ${backupHistory.backupPath} '
-          '(scheduleId: ${schedule.id}, '
-          'remoteKey: ${isRemoteCommand ? effectiveRunId : "legado=scheduleId"})',
-        );
-        stagingRelativePath = await _transferStagingService.copyToStaging(
-          backupHistory.backupPath,
-          schedule.id,
-          remoteFolderKey: isRemoteCommand ? effectiveRunId : null,
-        );
-
-        if (stagingRelativePath != null) {
-          LoggerService.info(
-            'Backup copiado para staging com sucesso: $stagingRelativePath',
-          );
-        } else {
-          LoggerService.warning(
-            'Falha ao copiar backup para staging (copyToStaging retornou null)',
-          );
-        }
-      } else {
-        LoggerService.warning(
-          'TransferStagingService não está disponível. Cliente não poderá baixar o arquivo.',
-        );
-      }
-
-      // Apaga o arquivo/diretório temporário SOMENTE quando o backup
-      // terminou com sucesso (chegamos aqui sem ter retornado por
-      // upload-error). Antes, o cleanup acontecia incondicionalmente,
-      // o que resultava em perda de dados quando o upload falhava: o
-      // único exemplar do backup era apagado da pasta local.
-      await _deleteTempBackupArtifact(tempBackupPath);
-
-      final now = DateTime.now();
-      final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
-      final nextRunAt = _scheduleCalculator.getNextRunTime(scheduleWithLastRun);
-      final updatedSchedule = scheduleWithLastRun.copyWith(
-        nextRunAt: nextRunAt,
-      );
-      await _scheduleRepository.update(updatedSchedule);
-
-      LoggerService.info(
-        'Próxima execução de ${schedule.name} agendada para: $nextRunAt '
-        '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
-      );
-
-      late final Duration cleanupDuration;
-      if (!isRemoteCommand) {
-        final cleanupStopwatch = Stopwatch()..start();
-        await _cleanupService.cleanOldBackups(
-          destinations: destinations,
-          backupHistoryId: backupHistory.id,
-          schedule: schedule,
-        );
-        cleanupStopwatch.stop();
-        cleanupDuration = cleanupStopwatch.elapsed;
-      } else {
-        cleanupDuration = Duration.zero;
-      }
-
-      final updatedMetrics = _mergeUploadAndCleanupMetrics(
-        backupHistory.metrics,
-        uploadDuration,
-        cleanupDuration,
-      );
-      if (updatedMetrics != null) {
-        final historyWithMetrics = backupHistory.copyWith(
-          metrics: updatedMetrics,
-        );
-        final updateResult = await _backupHistoryRepository.update(
-          historyWithMetrics,
-        );
-        updateResult.fold(
-          (_) {},
-          (e) => LoggerService.warning(
-            'Erro ao atualizar métricas de upload/cleanup: $e',
-          ),
-        );
-      }
-
-      LoggerService.info('Backup agendado concluído: ${schedule.name}');
-
-      final backupRunDurationMs = DateTime.now()
-          .difference(backupHistory.startedAt)
-          .inMilliseconds
-          .toDouble();
-      _metricsCollector?.recordHistogram(
-        ObservabilityMetrics.backupRunDurationMs,
-        backupRunDurationMs,
-      );
-
-      try {
-        // Usar stagingRelativePath se disponível, senão usa backupPath original
-        final pathToSend = stagingRelativePath ?? backupHistory.backupPath;
-
-        // Estes logs eram nível `info` antes, poluindo a saída de
-        // produção com diagnóstico de uma issue específica de
-        // backupPath vazio. Reduzimos para `debug` mantendo o conteúdo.
-        LoggerService.debug('===== COMPLETANDO BACKUP =====');
-        LoggerService.debug('stagingRelativePath: $stagingRelativePath');
-        LoggerService.debug(
-          'backupHistory.backupPath: ${backupHistory.backupPath}',
-        );
-        LoggerService.debug('pathToSend: $pathToSend');
-
-        if (stagingRelativePath == null) {
-          LoggerService.warning(
-            'stagingRelativePath é null, usando backupPath original: '
-            '$pathToSend',
-          );
-        }
-
-        _progressNotifier.completeBackup(
-          message: 'Backup concluído com sucesso!',
-          backupPath: pathToSend,
-        );
-
-        LoggerService.debug(
-          'completeBackup chamado com backupPath: "$pathToSend"',
-        );
-      } on Object catch (e, s) {
-        LoggerService.warning(
-          'Erro ao atualizar progresso completeBackup',
-          e,
-          s,
-        );
-      }
-
-      return const rd.Success(rd.unit);
+      return finalizeResult;
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro no backup agendado', e, stackTrace);
       final friendlyMessage = _failureMessage(e);
@@ -939,9 +481,10 @@ class SchedulerService implements ISchedulerService {
       // o cenário mais perigoso: `executeBackup` retornou Success, mas
       // uma exceção em staging/upload/notify deixou o histórico
       // falsamente como sucesso para o usuário).
-      if (backupHistoryRef != null) {
+      final historyToFail = backupHistoryRef;
+      if (historyToFail != null) {
         await _failScheduledBackupAfterArtifactError(
-          backupHistory: backupHistoryRef,
+          backupHistory: historyToFail,
           errorMessage: 'Erro no backup agendado: $friendlyMessage',
           logStep: LogStepConstants.backupError,
           failure: BackupFailure(
@@ -965,6 +508,530 @@ class SchedulerService implements ISchedulerService {
       _licensePolicyService.clearRunContext();
       LogContext.clearContext();
     }
+  }
+
+  Future<rd.Result<_ScheduledBackupContext>> _prepareScheduledBackupContext({
+    required Schedule schedule,
+    required bool isRemoteCommand,
+    required String effectiveRunId,
+    required void Function(BackupHistory history) onHistoryCreated,
+  }) async {
+    _licensePolicyService.setRunContext(effectiveRunId);
+    LogContext.setContext(runId: effectiveRunId, scheduleId: schedule.id);
+
+    // Garante que o BackupProgressProvider está em estado "running" para
+    // que `setCurrentHistoryId` (chamado pelo orchestrator) consiga
+    // publicar o historyId. Sem isso, o botão Cancelar do
+    // BackupProgressDialog ficaria permanentemente desabilitado quando
+    // o backup foi iniciado pela UI local. Retorno `false` é benigno —
+    // significa que outro caller (ex.: socket handler) já reservou o
+    // slot, o que é o comportamento desejado.
+    _progressNotifier.tryStartBackup(schedule.name);
+    _progressNotifier.setCurrentBackupName(schedule.name);
+
+    final canceledAtStart = await _failIfCancellationRequested(
+      schedule: schedule,
+    );
+    if (canceledAtStart != null) {
+      return rd.Failure(canceledAtStart.exceptionOrNull()!);
+    }
+
+    late final List<BackupDestination> destinations;
+    if (isRemoteCommand) {
+      // ADR-001: destinos do servidor nao sao usados no fluxo
+      // server-first; validacao/lookup ignorados para permitir
+      // execucao remota mesmo com IDs obsoletos.
+      destinations = const <BackupDestination>[];
+    } else {
+      destinations = await _getDestinations(schedule.destinationIds);
+      if (destinations.length != schedule.destinationIds.length) {
+        final foundIds = destinations.map((d) => d.id).toSet();
+        final missingIds = schedule.destinationIds
+            .where((id) => !foundIds.contains(id))
+            .toList();
+
+        final errorMessage =
+            'Destinos vinculados ao agendamento nao foram encontrados: '
+            '${missingIds.join(", ")}';
+        LoggerService.error(errorMessage);
+        return rd.Failure(ValidationFailure(message: errorMessage));
+      }
+    }
+
+    if (schedule.backupFolder.isEmpty) {
+      final errorMessage =
+          'Pasta de backup não configurada para o agendamento: '
+          '${schedule.name}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+
+    final backupDir = Directory(schedule.backupFolder);
+    if (!await backupDir.exists()) {
+      try {
+        await backupDir.create(recursive: true);
+      } on Object catch (e) {
+        final errorMessage =
+            'Erro ao criar pasta de backup: ${schedule.backupFolder}';
+        LoggerService.error(errorMessage, e);
+        return rd.Failure(ValidationFailure(message: errorMessage));
+      }
+    }
+
+    final hasPermission = await _checkWritePermission(backupDir);
+    if (!hasPermission) {
+      final errorMessage =
+          'Sem permissão de escrita na pasta de backup: '
+          '${schedule.backupFolder}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+
+    // A validação de espaço livre vive agora dentro do
+    // BackupOrchestratorService._estimateRequiredSpaceBytes (usa
+    // tamanho real do banco × safetyFactor). Antes existia uma
+    // checagem duplicada aqui com mínimo fixo de 500 MB que dava
+    // false-positive em bancos grandes (passava no scheduler e
+    // falhava no orchestrator).
+
+    final outputDirectory = backupDir.path;
+    LoggerService.info(
+      'Usando pasta temporária de backup: $outputDirectory',
+    );
+
+    if (outputDirectory.isEmpty) {
+      final errorMessage =
+          'Caminho de saída do backup está vazio para o agendamento: '
+          '${schedule.name}';
+      LoggerService.error(errorMessage);
+      return rd.Failure(ValidationFailure(message: errorMessage));
+    }
+
+    final policyResult = await _licensePolicyService
+        .validateExecutionCapabilities(schedule, destinations);
+    if (policyResult.isError()) {
+      final failure = policyResult.exceptionOrNull()!;
+      LoggerService.error(
+        'Execução bloqueada por licença: ${_failureMessage(failure)}',
+        failure,
+      );
+      return rd.Failure(failure);
+    }
+
+    final backupResult = await _backupOrchestratorService.executeBackup(
+      schedule: schedule,
+      outputDirectory: outputDirectory,
+      notifyOnComplete: !isRemoteCommand,
+    );
+
+    if (backupResult.isError()) {
+      final error = backupResult.exceptionOrNull()!;
+      _safeFailBackup(_failureMessage(error));
+      return rd.Failure(error);
+    }
+
+    final backupHistory = backupResult.getOrNull()!;
+    onHistoryCreated(backupHistory);
+    final tempBackupPath = backupHistory.backupPath;
+    // Registra o mapeamento scheduleId → historyId para que
+    // `cancelExecution` consiga matar o processo do SGBD imediatamente
+    // via `IBackupCancellationService.cancelByHistoryId`.
+    _runningHistoryIds[schedule.id] = backupHistory.id;
+
+    final canceledAfterBackup = await _failIfCancellationRequested(
+      schedule: schedule,
+      backupHistory: backupHistory,
+    );
+    if (canceledAfterBackup != null) {
+      return rd.Failure(canceledAfterBackup.exceptionOrNull()!);
+    }
+
+    final missingArtifactResultBefore = await _failIfArtifactMissing(
+      backupHistory,
+    );
+    if (missingArtifactResultBefore != null) {
+      return rd.Failure(missingArtifactResultBefore.exceptionOrNull()!);
+    }
+
+    final hasDestinations = destinations.isNotEmpty;
+    // Remoto: sem upload para destinos, mas ainda exigimos artefato
+    // "arquivo unico" para o staging/download pelo cliente.
+    final mustEnforceFileArtifact = hasDestinations || isRemoteCommand;
+
+    if (mustEnforceFileArtifact) {
+      final artifactType = await FileSystemEntity.type(
+        backupHistory.backupPath,
+      );
+      if (artifactType == FileSystemEntityType.directory) {
+        const errorMessage =
+            'O backup resultou em uma pasta; os destinos configurados '
+            'esperam um arquivo único. Ative compactação no agendamento ou '
+            'remova os destinos até haver suporte a envio de pastas.';
+        LoggerService.error(errorMessage);
+        final failResult = await _failScheduledBackupAfterArtifactError(
+          backupHistory: backupHistory,
+          errorMessage: errorMessage,
+          logStep: LogStepConstants.backupDirectoryUploadNotSupported,
+          failure: const ValidationFailure(message: errorMessage),
+        );
+        return rd.Failure(failResult.exceptionOrNull()!);
+      }
+    }
+
+    return rd.Success(
+      _ScheduledBackupContext(
+        schedule: schedule,
+        destinations: destinations,
+        backupHistory: backupHistory,
+        tempBackupPath: tempBackupPath,
+        isRemoteCommand: isRemoteCommand,
+        effectiveRunId: effectiveRunId,
+      ),
+    );
+  }
+
+  Future<rd.Result<Duration>> _uploadScheduledBackupDestinations(
+    _ScheduledBackupContext context,
+  ) async {
+    final schedule = context.schedule;
+    final destinations = context.destinations;
+    final backupHistory = context.backupHistory;
+    final isRemoteCommand = context.isRemoteCommand;
+    final hasDestinations = destinations.isNotEmpty;
+
+    late final Duration uploadDuration;
+    if (!isRemoteCommand) {
+      if (hasDestinations) {
+        _safeUpdateProgress(
+          step: 'Enviando para destino',
+          message: 'Enviando para destinos...',
+          progress: 0.85,
+        );
+      }
+
+      final uploadErrors = <String>[];
+      var hasCriticalUploadError = false;
+
+      final canceledBeforeUpload = await _failIfCancellationRequested(
+        schedule: schedule,
+        backupHistory: backupHistory,
+      );
+      if (canceledBeforeUpload != null) {
+        return rd.Failure(canceledBeforeUpload.exceptionOrNull()!);
+      }
+
+      final missingArtifactResultBeforeUpload = await _failIfArtifactMissing(
+        backupHistory,
+      );
+      if (missingArtifactResultBeforeUpload != null) {
+        return rd.Failure(missingArtifactResultBeforeUpload.exceptionOrNull()!);
+      }
+
+      final uploadStopwatch = Stopwatch()..start();
+      final backupIdForPath = schedule.databaseType == DatabaseType.sybase
+          ? backupHistory.id
+          : null;
+      // Aplica timeout global ao ciclo de upload para evitar que destinos
+      // travados (FTP lento, Drive offline) mantenham o backup pendurado
+      // indefinidamente. Em timeout, simulamos failures para todas as
+      // destinations não confirmadas e seguimos o fluxo de erro.
+      List<rd.Result<void>> sendResults;
+      var uploadTimedOut = false;
+      try {
+        sendResults = await _destinationOrchestrator
+            .uploadToAllDestinations(
+              sourceFilePath: backupHistory.backupPath,
+              destinations: destinations,
+              isCancelled: () =>
+                  uploadTimedOut ||
+                  _cancelRequestedSchedules.contains(schedule.id),
+              backupId: backupIdForPath,
+              onProgress: _createThrottledUploadProgressCallback(
+                destinations.length,
+              ),
+            )
+            .timeout(_uploadTimeout);
+      } on TimeoutException {
+        uploadTimedOut = true;
+        LoggerService.error(
+          'Upload para destinos excedeu o timeout de '
+          '${_uploadTimeout.inMinutes} minutos para ${schedule.name}',
+        );
+        sendResults = List.generate(
+          destinations.length,
+          (_) => rd.Failure(
+            BackupFailure(
+              message:
+                  'Upload excedeu timeout de ${_uploadTimeout.inMinutes} '
+                  'minutos. Verifique conectividade ou aumente '
+                  'uploadTimeout no scheduler.',
+              code: FailureCodes.uploadFailed,
+            ),
+          ),
+        );
+      }
+      uploadStopwatch.stop();
+      uploadDuration = uploadStopwatch.elapsed;
+      _metricsCollector?.recordHistogram(
+        ObservabilityMetrics.destinationUploadDurationMs,
+        uploadDuration.inMilliseconds.toDouble(),
+      );
+
+      _safeUpdateProgress(
+        step: 'Enviando para destino',
+        message: 'Upload para destinos concluído.',
+        progress: 0.95,
+      );
+
+      for (var index = 0; index < sendResults.length; index++) {
+        final destination = destinations[index];
+        final sendResult = sendResults[index];
+        sendResult.fold((_) {}, (failure) {
+          _metricsCollector?.incrementCounter(
+            ObservabilityMetrics.destinationUploadFailureTotal,
+          );
+          final errorMessage =
+              'Falha ao enviar para ${destination.name}: '
+              '${_failureMessage(failure)}';
+          uploadErrors.add(errorMessage);
+          LoggerService.error(errorMessage, failure);
+          hasCriticalUploadError = true;
+        });
+      }
+
+      if (hasCriticalUploadError) {
+        final errorMessage = uploadErrors.join('\n');
+        final finishedAt = DateTime.now();
+        final failedHistory = backupHistory.copyWith(
+          status: BackupStatus.error,
+          errorMessage:
+              'Backup concluído na pasta temporária, mas falhou ao enviar '
+              'para destinos:\n$errorMessage',
+          finishedAt: finishedAt,
+          durationSeconds: finishedAt
+              .difference(backupHistory.startedAt)
+              .inSeconds,
+        );
+        final updateResult = await _backupHistoryRepository
+            .updateHistoryAndLogIfRunning(
+              history: failedHistory,
+              logStep: LogStepConstants.uploadFailed,
+              logLevel: LogLevel.error,
+              logMessage:
+                  'Falha ao enviar backup para destinos:\n$errorMessage',
+            );
+        updateResult.fold(
+          (_) {},
+          (e) => LoggerService.warning('Erro ao atualizar histórico e log: $e'),
+        );
+
+        final notifyResult = await _notificationService.notifyBackupComplete(
+          failedHistory,
+        );
+        notifyResult.fold(
+          (sent) {
+            if (sent) {
+              LoggerService.info('Notificação de erro enviada por email');
+            } else {
+              LoggerService.warning(
+                'Notificação de erro não foi enviada '
+                '(email desabilitado ou configuração inválida)',
+              );
+            }
+          },
+          (failure) {
+            LoggerService.error(
+              'Erro ao enviar notificação por email',
+              failure,
+            );
+          },
+        );
+
+        final failure = BackupFailure(
+          message: 'Falha ao enviar backup para destinos:\n$errorMessage',
+          code: FailureCodes.uploadFailed,
+        );
+        LoggerService.error(
+          'Backup marcado como erro devido a falhas no upload',
+          failure,
+        );
+
+        _safeFailBackup(errorMessage);
+        return rd.Failure(failure);
+      }
+
+      if (uploadErrors.isNotEmpty) {
+        final warningMessage =
+            'O backup foi concluído, mas houve avisos:\n\n'
+            '${uploadErrors.join('\n')}';
+
+        await _notificationService.sendWarning(
+          databaseName: schedule.name,
+          message: warningMessage,
+        );
+      }
+
+      if (hasDestinations) {
+        LoggerService.info(
+          'Uploads para destinos concluídos, enviando notificação por e-mail',
+        );
+      }
+      await _notificationService.notifyBackupComplete(backupHistory);
+    } else {
+      uploadDuration = Duration.zero;
+      LoggerService.info(
+        'Origem remota: upload para destinos finais e e-mail de '
+        'conclusao do servidor ignorados (ADR-001).',
+      );
+    }
+
+    return rd.Success(uploadDuration);
+  }
+
+  Future<rd.Result<void>> _finalizeScheduledBackup({
+    required _ScheduledBackupContext context,
+    required Duration uploadDuration,
+  }) async {
+    final schedule = context.schedule;
+    final destinations = context.destinations;
+    final backupHistory = context.backupHistory;
+    final tempBackupPath = context.tempBackupPath;
+    final isRemoteCommand = context.isRemoteCommand;
+    final effectiveRunId = context.effectiveRunId;
+
+    // Copiar para staging ANTES de deletar o arquivo temporário
+    // para que o cliente possa baixar o arquivo
+    String? stagingRelativePath;
+    if (_transferStagingService != null) {
+      LoggerService.info(
+        'Copiando backup para staging: ${backupHistory.backupPath} '
+        '(scheduleId: ${schedule.id}, '
+        'remoteKey: ${isRemoteCommand ? effectiveRunId : "legado=scheduleId"})',
+      );
+      stagingRelativePath = await _transferStagingService.copyToStaging(
+        backupHistory.backupPath,
+        schedule.id,
+        remoteFolderKey: isRemoteCommand ? effectiveRunId : null,
+      );
+
+      if (stagingRelativePath != null) {
+        LoggerService.info(
+          'Backup copiado para staging com sucesso: $stagingRelativePath',
+        );
+      } else {
+        LoggerService.warning(
+          'Falha ao copiar backup para staging (copyToStaging retornou null)',
+        );
+      }
+    } else {
+      LoggerService.warning(
+        'TransferStagingService não está disponível. Cliente não poderá baixar o arquivo.',
+      );
+    }
+
+    // Apaga o arquivo/diretório temporário SOMENTE quando o backup
+    // terminou com sucesso (chegamos aqui sem ter retornado por
+    // upload-error). Antes, o cleanup acontecia incondicionalmente,
+    // o que resultava em perda de dados quando o upload falhava: o
+    // único exemplar do backup era apagado da pasta local.
+    await _deleteTempBackupArtifact(tempBackupPath);
+
+    final now = DateTime.now();
+    final scheduleWithLastRun = schedule.copyWith(lastRunAt: now);
+    final nextRunAt = _scheduleCalculator.getNextRunTime(scheduleWithLastRun);
+    final updatedSchedule = scheduleWithLastRun.copyWith(
+      nextRunAt: nextRunAt,
+    );
+    await _scheduleRepository.update(updatedSchedule);
+
+    LoggerService.info(
+      'Próxima execução de ${schedule.name} agendada para: $nextRunAt '
+      '(baseado em lastRunAt: $now, tipo: ${schedule.scheduleType})',
+    );
+
+    late final Duration cleanupDuration;
+    if (!isRemoteCommand) {
+      final cleanupStopwatch = Stopwatch()..start();
+      await _cleanupService.cleanOldBackups(
+        destinations: destinations,
+        backupHistoryId: backupHistory.id,
+        schedule: schedule,
+      );
+      cleanupStopwatch.stop();
+      cleanupDuration = cleanupStopwatch.elapsed;
+    } else {
+      cleanupDuration = Duration.zero;
+    }
+
+    final updatedMetrics = _mergeUploadAndCleanupMetrics(
+      backupHistory.metrics,
+      uploadDuration,
+      cleanupDuration,
+    );
+    if (updatedMetrics != null) {
+      final historyWithMetrics = backupHistory.copyWith(
+        metrics: updatedMetrics,
+      );
+      final updateResult = await _backupHistoryRepository.update(
+        historyWithMetrics,
+      );
+      updateResult.fold(
+        (_) {},
+        (e) => LoggerService.warning(
+          'Erro ao atualizar métricas de upload/cleanup: $e',
+        ),
+      );
+    }
+
+    LoggerService.info('Backup agendado concluído: ${schedule.name}');
+
+    final backupRunDurationMs = DateTime.now()
+        .difference(backupHistory.startedAt)
+        .inMilliseconds
+        .toDouble();
+    _metricsCollector?.recordHistogram(
+      ObservabilityMetrics.backupRunDurationMs,
+      backupRunDurationMs,
+    );
+
+    try {
+      // Usar stagingRelativePath se disponível, senão usa backupPath original
+      final pathToSend = stagingRelativePath ?? backupHistory.backupPath;
+
+      // Estes logs eram nível `info` antes, poluindo a saída de
+      // produção com diagnóstico de uma issue específica de
+      // backupPath vazio. Reduzimos para `debug` mantendo o conteúdo.
+      LoggerService.debug('===== COMPLETANDO BACKUP =====');
+      LoggerService.debug('stagingRelativePath: $stagingRelativePath');
+      LoggerService.debug(
+        'backupHistory.backupPath: ${backupHistory.backupPath}',
+      );
+      LoggerService.debug('pathToSend: $pathToSend');
+
+      if (stagingRelativePath == null) {
+        LoggerService.warning(
+          'stagingRelativePath é null, usando backupPath original: '
+          '$pathToSend',
+        );
+      }
+
+      _progressNotifier.completeBackup(
+        message: 'Backup concluído com sucesso!',
+        backupPath: pathToSend,
+      );
+
+      LoggerService.debug(
+        'completeBackup chamado com backupPath: "$pathToSend"',
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Erro ao atualizar progresso completeBackup',
+        e,
+        s,
+      );
+    }
+
+    return const rd.Success(rd.unit);
   }
 
   Future<rd.Result<void>> _runScheduleWithLock(
@@ -1416,4 +1483,22 @@ class SchedulerService implements ISchedulerService {
     );
     return true;
   }
+}
+
+class _ScheduledBackupContext {
+  const _ScheduledBackupContext({
+    required this.schedule,
+    required this.destinations,
+    required this.backupHistory,
+    required this.tempBackupPath,
+    required this.isRemoteCommand,
+    required this.effectiveRunId,
+  });
+
+  final Schedule schedule;
+  final List<BackupDestination> destinations;
+  final BackupHistory backupHistory;
+  final String tempBackupPath;
+  final bool isRemoteCommand;
+  final String effectiveRunId;
 }
