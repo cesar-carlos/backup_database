@@ -15,7 +15,8 @@ Este documento descreve o funcionamento completo das notificacoes por e-mail no 
 
 ### 2.1 Camada de apresentacao (UI)
 
-- Modal de configuracao SMTP:
+- Modal de configuracao SMTP (fachada + secoes em
+  `notification_config_dialog/`):
   - `lib/presentation/widgets/notifications/notification_config_dialog.dart`
 - Tela de notificacoes e historico:
   - `lib/presentation/pages/notifications_page.dart`
@@ -23,10 +24,14 @@ Este documento descreve o funcionamento completo das notificacoes por e-mail no 
 
 ### 2.2 Camada de aplicacao
 
-- Provider principal de notificacoes:
+- Provider (fachada) de notificacoes:
   - `lib/application/providers/notification_provider.dart`
-- Service de orquestracao de notificacoes:
+  - colaboradores: `notification/notification_config_store.dart`,
+    `notification_history_loader.dart`, `notification_oauth_coordinator.dart`
+- Service de orquestracao (fachada):
   - `lib/application/services/notification_service.dart`
+  - colaboradores: `notification/backup_notification_dispatcher.dart`,
+    `email_configuration_tester.dart`, `notification_audit_writer.dart`
 - Use case de teste:
   - `lib/domain/use_cases/notifications/test_email_configuration.dart`
 

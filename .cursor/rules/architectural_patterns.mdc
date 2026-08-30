@@ -1240,6 +1240,8 @@ Quando mexer em qualquer parte do fluxo de licenciamento, verifique:
   regras de import
 - `docs/onboarding/licenciamento.md` — onboarding curto da cadeia de
   licenciamento (geração, validação, revogação, troubleshooting)
+- `docs/onboarding/execucao_remota.md` — contrato vivo do servidor
+  socket / protocolo remoto
 - `coding_style.mdc` — formatação Dart, naming, logging básico
 - `solid_principles.mdc` — SRP/OCP guidance que motivou várias das
   refatorações (e.g., extração de `BackupStrategy` por SGBD)

@@ -162,5 +162,6 @@ Para detalhes de comportamento PostgreSQL, consulte
 
 - [`requirements.md`](requirements.md)
 - [`install/installation_guide.md`](install/installation_guide.md)
+- [`analise_implementacao_sql_server.md`](analise_implementacao_sql_server.md)
 - [`analise_implementacao_postgresql.md`](analise_implementacao_postgresql.md)
 - [`analise_implementacao_sybase.md`](analise_implementacao_sybase.md)

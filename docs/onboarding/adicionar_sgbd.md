@@ -32,3 +32,5 @@ secao **9** de `.cursor/rules/architectural_patterns.mdc`.
 | Registro central dos SGBDs atuais | `registerBackupDatabaseDefaultSgbds` no mesmo arquivo |
 | Limite de camadas | `.cursor/rules/clean_architecture.mdc` |
 | Anti-patterns da auditoria | `.cursor/rules/architectural_patterns.mdc` (secao 5 e 7) |
+| Execucao remota / protocolo | [execucao_remota.md](execucao_remota.md) |
+| CLI SQL Server / Postgres / Sybase | `docs/analise_implementacao_*.md` |

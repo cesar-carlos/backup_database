@@ -1,6 +1,7 @@
 # Smoke manual Firebird (operacional)
 
-Referência: `plano_suporte_firebird_2026-04-19.md` **§8** e **§8.1**.
+Referência histórica do plano: `archive/plano_suporte_firebird_2026-04-19.md` **§8** e **§8.1**.
+Contrato remoto atual: `docs/onboarding/execucao_remota.md`.
 
 O repositório já cobre MVP com testes unitários e de widget (sem motor real).
 Este runbook é para evidência em VM/máquina com Firebird 2.5, 3.0 e 4.0.
@@ -31,4 +32,6 @@ Este runbook é para evidência em VM/máquina com Firebird 2.5, 3.0 e 4.0.
 - Caminho do artefato `.fbk` / `.nbk` e tamanho.
 - Trecho de log sem password (`ProcessService` redact).
 
-Marcar checkboxes em `plano_suporte_firebird_2026-04-19.md` §8 após execução.
+Este runbook nao altera checklists de plano (o plano Firebird esta
+arquivado). Guarde data, versao FB, versao do app e caminho do artefato
+como evidencia operacional.
