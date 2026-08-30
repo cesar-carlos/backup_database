@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:backup_database/application/services/auto_update_service.dart'
+import 'package:backup_database/application/services/auto_update/app_update_types.dart'
     show AppcastRelease;
 import 'package:intl/intl.dart';
 import 'package:pub_semver/pub_semver.dart';
