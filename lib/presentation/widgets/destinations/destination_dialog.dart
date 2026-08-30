@@ -8,7 +8,6 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
-import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
@@ -16,6 +15,8 @@ import 'package:backup_database/domain/services/i_nextcloud_destination_service.
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_behavior.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_connection_testers.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_draft.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_fields.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_oauth_dialog.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftp_advanced.dart';
@@ -892,144 +893,47 @@ class _DestinationDialogState extends State<DestinationDialog> {
     }
   }
 
+  DestinationDialogConnectionTesters _connectionTesters() {
+    return DestinationDialogConnectionTesters(
+      ftpService: getIt<IFtpService>(),
+      nextcloudService: getIt<INextcloudDestinationService>(),
+      label: _dialogLabel,
+    );
+  }
+
   Future<void> _testFtpConnection() async {
-    if (_ftpHostController.text.trim().isEmpty) {
-      _showError(
-        _dialogLabel('Servidor FTP é obrigatório', 'FTP server is required'),
-      );
-      return;
-    }
-    if (_ftpPortController.text.trim().isEmpty) {
-      _showError(_dialogLabel('Porta é obrigatória', 'Port is required'));
-      return;
-    }
-    if (_ftpUsernameController.text.trim().isEmpty) {
-      _showError(_dialogLabel('Usuário é obrigatório', 'Username is required'));
-      return;
-    }
-    if (_ftpPasswordController.text.trim().isEmpty) {
-      _showError(_dialogLabel('Senha é obrigatória', 'Password is required'));
-      return;
-    }
-
-    setState(() {
-      _isTestingFtpConnection = true;
-    });
-
+    var probeStarted = false;
     try {
-      final port = int.tryParse(_ftpPortController.text.trim());
-      if (port == null || port < 1 || port > 65535) {
-        _showError(
-          _dialogLabel(
-            'Porta inválida. Use um valor entre 1 e 65535',
-            'Invalid port. Use a value between 1 and 65535',
-          ),
-        );
+      final feedback = await _connectionTesters().testFtpConnection(
+        hostController: _ftpHostController,
+        portController: _ftpPortController,
+        usernameController: _ftpUsernameController,
+        passwordController: _ftpPasswordController,
+        remotePathController: _ftpRemotePathController,
+        connectionTimeoutSecondsController: _connectionTimeoutSecondsController,
+        uploadTimeoutMinutesController: _uploadTimeoutMinutesController,
+        useFtps: _useFtps,
+        allowInvalidCertificates: _ftpAllowInvalidCertificates,
+        enableVerboseLog: _enableVerboseLogFtp,
+        enableStrongIntegrityValidation: _enableStrongIntegrityValidationFtp,
+        enableReadBackValidation: _enableReadBackValidationFtp,
+        onProbeStarted: () {
+          probeStarted = true;
+          setState(() {
+            _isTestingFtpConnection = true;
+          });
+        },
+      );
+      if (!mounted) {
         return;
       }
-
-      final connTimeoutStr = _connectionTimeoutSecondsController.text.trim();
-      final connTimeout = connTimeoutStr.isEmpty
-          ? null
-          : int.tryParse(connTimeoutStr);
-      final uploadTimeoutStr = _uploadTimeoutMinutesController.text.trim();
-      final uploadTimeout = uploadTimeoutStr.isEmpty
-          ? null
-          : int.tryParse(uploadTimeoutStr);
-
-      final config = FtpDestinationConfig.fromJson({
-        'host': _ftpHostController.text.trim(),
-        'port': port,
-        'username': _ftpUsernameController.text.trim(),
-        'password': _ftpPasswordController.text,
-        'remotePath': _ftpRemotePathController.text.trim(),
-        'useFtps': _useFtps,
-        'allowInvalidCertificates': _ftpAllowInvalidCertificates,
-        'enableVerboseLog': _enableVerboseLogFtp,
-        'enableStrongIntegrityValidation': _enableStrongIntegrityValidationFtp,
-        'enableReadBackValidation': _enableReadBackValidationFtp,
-        'connectionTimeoutSeconds': connTimeout,
-        'uploadTimeoutMinutes': uploadTimeout,
-      });
-
-      final ftpService = getIt<IFtpService>();
-      final result = await ftpService.testConnection(config);
-
-      if (!mounted) return;
-
-      result.fold(
-        (testResult) {
-          if (testResult.ok) {
-            final restInfo = switch (testResult.supportsRestStream) {
-              true =>
-                '\n${_dialogLabel("Suporta retomada de upload (REST STREAM).", "Supports upload resume (REST STREAM).")}',
-              false =>
-                '\n${_dialogLabel(
-                  "Não suporta retomada de upload. "
-                      "Em caso de interrupção, o envio será reiniciado do zero.",
-                  "Does not support upload resume. "
-                      "If interrupted, upload will restart from the beginning.",
-                )}',
-              null => '',
-            };
-            final compatWarnings = <String>[];
-            if (testResult.canWrite == false) {
-              compatWarnings.add(
-                _dialogLabel(
-                  'Sem permissão de escrita no diretório remoto.',
-                  'No write permission on remote directory.',
-                ),
-              );
-            }
-            if (testResult.canRename == false) {
-              compatWarnings.add(
-                _dialogLabel(
-                  'Renomear arquivos não permitido (RNFR/RNTO). '
-                      'Upload pode falhar na publicação final.',
-                  'File rename not allowed (RNFR/RNTO). '
-                      'Upload may fail at final publication.',
-                ),
-              );
-            }
-            final warningInfo = compatWarnings.isEmpty
-                ? ''
-                : '\n${_dialogLabel("Avisos:", "Warnings:")} ${compatWarnings.join(" ")}'
-                      '${compatWarnings.isNotEmpty ? " " : ""}'
-                      '${_dialogLabel("Consulte o guia de configuração do servidor FTP.", "See FTP server configuration guide.")}';
-            _showSuccess(
-              _dialogLabel(
-                'Conexão FTP estabelecida com sucesso!$restInfo$warningInfo',
-                'FTP connection established successfully!$restInfo$warningInfo',
-              ),
-            );
-          } else {
-            _showError(
-              _dialogLabel(
-                'Falha ao conectar ao servidor FTP',
-                'Failed to connect to FTP server',
-              ),
-            );
-          }
-        },
-        (failure) {
-          final message = failureUserMessage(
-            failure,
-            fallback: _dialogLabel('Erro desconhecido', 'Unknown error'),
-          );
-          _showError(
-            _dialogLabel(
-              'Erro ao testar conexão FTP:\n$message',
-              'Error testing FTP connection:\n$message',
-            ),
-          );
-        },
-      );
+      _applyConnectionTestFeedback(feedback);
     } on Object catch (e) {
       if (mounted) {
         _showError(_dialogLabel('Erro inesperado: $e', 'Unexpected error: $e'));
       }
     } finally {
-      if (mounted) {
+      if (probeStarted && mounted) {
         setState(() {
           _isTestingFtpConnection = false;
         });
@@ -1038,97 +942,48 @@ class _DestinationDialogState extends State<DestinationDialog> {
   }
 
   Future<void> _testNextcloudConnection() async {
-    if (_nextcloudServerUrlController.text.trim().isEmpty) {
-      _showError(
-        _dialogLabel(
-          'URL do Nextcloud é obrigatória',
-          'Nextcloud URL is required',
-        ),
-      );
-      return;
-    }
-    if (_nextcloudUsernameController.text.trim().isEmpty) {
-      _showError(_dialogLabel('Usuário é obrigatório', 'Username is required'));
-      return;
-    }
-    if (_nextcloudAppPasswordController.text.trim().isEmpty) {
-      _showError(
-        _nextcloudAuthMode == NextcloudAuthMode.appPassword
-            ? _dialogLabel(
-                'App Password é obrigatório',
-                'App Password is required',
-              )
-            : _dialogLabel(
-                'Senha do usuário é obrigatória',
-                'User password is required',
-              ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isTestingNextcloudConnection = true;
-    });
-
+    var probeStarted = false;
     try {
-      final config = NextcloudDestinationConfig(
-        serverUrl: _nextcloudServerUrlController.text.trim(),
-        username: _nextcloudUsernameController.text.trim(),
-        appPassword: EncryptionService.encrypt(
-          _nextcloudAppPasswordController.text,
-        ),
+      final feedback = await _connectionTesters().testNextcloudConnection(
+        serverUrlController: _nextcloudServerUrlController,
+        usernameController: _nextcloudUsernameController,
+        appPasswordController: _nextcloudAppPasswordController,
+        remotePathController: _nextcloudRemotePathController,
+        folderNameController: _nextcloudFolderNameController,
         authMode: _nextcloudAuthMode,
-        remotePath: _nextcloudRemotePathController.text.trim(),
-        folderName: _nextcloudFolderNameController.text.trim(),
         allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
-      );
-
-      final nextcloudService = getIt<INextcloudDestinationService>();
-      final result = await nextcloudService.testConnection(config);
-
-      if (!mounted) return;
-
-      result.fold(
-        (success) {
-          if (success) {
-            _showSuccess(
-              _dialogLabel(
-                'Conexão Nextcloud estabelecida com sucesso!',
-                'Nextcloud connection established successfully!',
-              ),
-            );
-          } else {
-            _showError(
-              _dialogLabel(
-                'Falha ao conectar ao servidor Nextcloud',
-                'Failed to connect to Nextcloud server',
-              ),
-            );
-          }
-        },
-        (failure) {
-          final message = failureUserMessage(
-            failure,
-            fallback: _dialogLabel('Erro desconhecido', 'Unknown error'),
-          );
-          _showError(
-            _dialogLabel(
-              'Erro ao testar conexão Nextcloud:\n$message',
-              'Error testing Nextcloud connection:\n$message',
-            ),
-          );
+        onProbeStarted: () {
+          probeStarted = true;
+          setState(() {
+            _isTestingNextcloudConnection = true;
+          });
         },
       );
+      if (!mounted) {
+        return;
+      }
+      _applyConnectionTestFeedback(feedback);
     } on Object catch (e) {
       if (mounted) {
         _showError(_dialogLabel('Erro inesperado: $e', 'Unexpected error: $e'));
       }
     } finally {
-      if (mounted) {
+      if (probeStarted && mounted) {
         setState(() {
           _isTestingNextcloudConnection = false;
         });
       }
+    }
+  }
+
+  void _applyConnectionTestFeedback(
+    DestinationConnectionTestFeedback feedback,
+  ) {
+    switch (feedback) {
+      case DestinationConnectionTestSucceeded(:final message):
+        _showSuccess(message);
+      case DestinationConnectionTestFailed(:final message):
+        _showError(message);
     }
   }
 
@@ -1190,89 +1045,45 @@ class _DestinationDialogState extends State<DestinationDialog> {
       }
     }
 
-    final retentionDays = int.parse(_retentionDaysController.text);
-    late final String configJson;
-
-    switch (_selectedType) {
-      case DestinationType.local:
-        configJson = jsonEncode({
-          'path': _localPathController.text.trim(),
-          'createSubfoldersByDate': _createSubfoldersByDate,
-          'retentionDays': retentionDays,
-        });
-      case DestinationType.ftp:
-        final connTimeoutStr = _connectionTimeoutSecondsController.text.trim();
-        final connTimeout = connTimeoutStr.isEmpty
-            ? null
-            : int.tryParse(connTimeoutStr);
-        final uploadTimeoutStr = _uploadTimeoutMinutesController.text.trim();
-        final uploadTimeout = uploadTimeoutStr.isEmpty
-            ? null
-            : int.tryParse(uploadTimeoutStr);
-        final maxAttemptsStr = _maxAttemptsFtpController.text.trim();
-        final maxAttempts = maxAttemptsStr.isEmpty
-            ? null
-            : int.tryParse(maxAttemptsStr);
-        configJson = jsonEncode({
-          'host': _ftpHostController.text.trim(),
-          'port': int.parse(_ftpPortController.text),
-          'username': _ftpUsernameController.text.trim(),
-          'password': _ftpPasswordController.text,
-          'remotePath': _ftpRemotePathController.text.trim(),
-          'useFtps': _useFtps,
-          'allowInvalidCertificates': _ftpAllowInvalidCertificates,
-          'enableResume': _enableResumeFtp,
-          'keepPartOnCancel': _keepPartOnCancelFtp,
-          'whenResumeNotSupported': _whenResumeNotSupportedFtp.name,
-          ...?(maxAttempts != null ? {'maxAttempts': maxAttempts} : null),
-          'enableVerboseLog': _enableVerboseLogFtp,
-          'enableStrongIntegrityValidation':
-              _enableStrongIntegrityValidationFtp,
-          'enableReadBackValidation': _enableReadBackValidationFtp,
-          ...?(connTimeout != null
-              ? {'connectionTimeoutSeconds': connTimeout}
-              : null),
-          ...?(uploadTimeout != null
-              ? {'uploadTimeoutMinutes': uploadTimeout}
-              : null),
-          'retentionDays': retentionDays,
-        });
-      case DestinationType.googleDrive:
-        configJson = jsonEncode({
-          'folderName': _googleFolderNameController.text.trim(),
-          'folderId': 'root',
-          'retentionDays': retentionDays,
-        });
-      case DestinationType.dropbox:
-        configJson = jsonEncode({
-          'folderPath': _dropboxFolderPathController.text.trim(),
-          'folderName': _dropboxFolderNameController.text.trim(),
-          'retentionDays': retentionDays,
-        });
-      case DestinationType.nextcloud:
-        configJson = jsonEncode({
-          'serverUrl': _nextcloudServerUrlController.text.trim(),
-          'username': _nextcloudUsernameController.text.trim(),
-          'appPassword': EncryptionService.encrypt(
-            _nextcloudAppPasswordController.text,
-          ),
-          'authMode': _nextcloudAuthMode.name,
-          'remotePath': _nextcloudRemotePathController.text.trim(),
-          'folderName': _nextcloudFolderNameController.text.trim(),
-          'allowInvalidCertificates': _nextcloudAllowInvalidCertificates,
-          'retentionDays': retentionDays,
-        });
-    }
-
-    final destination = BackupDestination(
+    final draft = DestinationDialogDraft(
       id: widget.destination?.id,
       name: _nameController.text.trim(),
       type: _selectedType,
-      config: configJson,
       enabled: _isEnabled,
       createdAt: widget.destination?.createdAt,
+      retentionDays: int.parse(_retentionDaysController.text),
+      localPath: _localPathController.text.trim(),
+      createSubfoldersByDate: _createSubfoldersByDate,
+      ftpHost: _ftpHostController.text.trim(),
+      ftpPortText: _ftpPortController.text,
+      ftpUsername: _ftpUsernameController.text.trim(),
+      ftpPassword: _ftpPasswordController.text,
+      ftpRemotePath: _ftpRemotePathController.text.trim(),
+      useFtps: _useFtps,
+      ftpAllowInvalidCertificates: _ftpAllowInvalidCertificates,
+      enableResumeFtp: _enableResumeFtp,
+      keepPartOnCancelFtp: _keepPartOnCancelFtp,
+      whenResumeNotSupportedFtp: _whenResumeNotSupportedFtp,
+      ftpMaxAttemptsText: _maxAttemptsFtpController.text,
+      enableVerboseLogFtp: _enableVerboseLogFtp,
+      enableStrongIntegrityValidationFtp: _enableStrongIntegrityValidationFtp,
+      enableReadBackValidationFtp: _enableReadBackValidationFtp,
+      ftpConnectionTimeoutSecondsText: _connectionTimeoutSecondsController.text,
+      ftpUploadTimeoutMinutesText: _uploadTimeoutMinutesController.text,
+      googleFolderName: _googleFolderNameController.text.trim(),
+      dropboxFolderPath: _dropboxFolderPathController.text.trim(),
+      dropboxFolderName: _dropboxFolderNameController.text.trim(),
+      nextcloudServerUrl: _nextcloudServerUrlController.text.trim(),
+      nextcloudUsername: _nextcloudUsernameController.text.trim(),
+      nextcloudAppPassword: EncryptionService.encrypt(
+        _nextcloudAppPasswordController.text,
+      ),
+      nextcloudAuthMode: _nextcloudAuthMode,
+      nextcloudRemotePath: _nextcloudRemotePathController.text.trim(),
+      nextcloudFolderName: _nextcloudFolderNameController.text.trim(),
+      nextcloudAllowInvalidCertificates: _nextcloudAllowInvalidCertificates,
     );
 
-    Navigator.of(context).pop(destination);
+    Navigator.of(context).pop(draft.toDestination());
   }
 }
