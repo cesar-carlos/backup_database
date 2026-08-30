@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/observability_metrics.dart';
@@ -11,12 +10,14 @@ import 'package:backup_database/domain/services/i_metrics_collector.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_controller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_installer.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_env_provisioner.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_nssm_configurator.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_sc_client.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
-import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart'
     as rd
     show Failure, Result, Success;
@@ -32,6 +33,9 @@ class WindowsServiceService implements IWindowsServiceService {
     WindowsServiceNssmConfigurator? nssmConfigurator,
     WindowsServiceScmPoller? scmPoller,
     WindowsServiceElevationInstaller? elevationInstaller,
+    WindowsServiceEnvProvisioner? envProvisioner,
+    WindowsServiceScClient? scClient,
+    WindowsServiceElevationController? elevationController,
   }) : _timing = timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
        _metrics = metricsCollector,
        _nssmConfigurator =
@@ -39,6 +43,14 @@ class WindowsServiceService implements IWindowsServiceService {
            WindowsServiceNssmConfigurator(
              processService: _processService,
              timing: timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
+           ),
+       _envProvisioner = envProvisioner ?? const WindowsServiceEnvProvisioner(),
+       _scClient =
+           scClient ??
+           WindowsServiceScClient(
+             processService: _processService,
+             timing: timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
+             metricsCollector: metricsCollector,
            ),
        _diagnosticsSink = AppendingFileSink(
          path: _controlDiagnosticsPath,
@@ -58,14 +70,26 @@ class WindowsServiceService implements IWindowsServiceService {
           getStatus: getStatus,
           timing: _timing,
         );
+    _elevationController =
+        elevationController ??
+        WindowsServiceElevationController(
+          processService: _processService,
+          getStatus: getStatus,
+          scmPoller: _scmPoller,
+          timing: _timing,
+          metricsCollector: _metrics,
+        );
   }
 
   final ProcessService _processService;
   final WindowsServiceTimingConfig _timing;
   final IMetricsCollector? _metrics;
   final WindowsServiceNssmConfigurator _nssmConfigurator;
+  final WindowsServiceEnvProvisioner _envProvisioner;
+  final WindowsServiceScClient _scClient;
   late final WindowsServiceScmPoller _scmPoller;
   late final WindowsServiceElevationInstaller _elevationInstaller;
+  late final WindowsServiceElevationController _elevationController;
 
   /// Sink dedicado de diagnostics, com fila serializada e rotação por
   /// tamanho. Substitui o `File.writeAsStringSync(flush: true)` síncrono
@@ -83,24 +107,10 @@ class WindowsServiceService implements IWindowsServiceService {
   /// (1060), retornado pelo `sc.exe` em situação parecida.
   static const int _nssmServiceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
-  static const String _scExeName = 'sc';
   static const String _toolsSubdir = 'tools';
-  static const String _programDataEnv = 'ProgramData';
-  static const String _defaultProgramData = r'C:\ProgramData';
-  static const String _runningState = 'RUNNING';
-  static const String _runningStatePt = 'EM EXECUÇÃO';
-  static const String _runningStatePtNoAccent = 'EM EXECUCAO';
   static const String _logPath = WindowsServiceConstants.logPath;
   static const String _controlDiagnosticsPath =
       r'C:\ProgramData\BackupDatabase\logs\service_control_diagnostics.log';
-  static final RegExp _runningStateRegex = RegExp(
-    r'(?:STATE|ESTADO)\s*:\s*4\b',
-    caseSensitive: false,
-  );
-  static final RegExp _stateCodeRegex = RegExp(
-    r'(?:STATE|ESTADO)\s*:\s*(\d+)',
-    caseSensitive: false,
-  );
 
   static const String _accessDeniedSolution =
       'Solução:\n'
@@ -122,10 +132,7 @@ class WindowsServiceService implements IWindowsServiceService {
       '\n'
       '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
       '4. Atualizar o status e tentar novamente';
-  static const int _serviceNotInstalledWinError = 1060;
-  static const int _serviceNotInstalledBatchError = 36;
   static const int _accessDeniedWinError = 5;
-  static const int _serviceAlreadyRunningWinError = 1056;
 
   Future<rd.Result<void>> _runInstallPreflight({
     required String appDir,
@@ -145,7 +152,9 @@ class WindowsServiceService implements IWindowsServiceService {
       }
     }
 
-    final envCopyResult = await _ensureServiceEnvFile(appDir: appDir);
+    final envCopyResult = await _envProvisioner.ensureServiceEnvFile(
+      appDir: appDir,
+    );
     if (envCopyResult.isError()) {
       return rd.Failure(_asFailure(envCopyResult.exceptionOrNull()!));
     }
@@ -182,172 +191,14 @@ class WindowsServiceService implements IWindowsServiceService {
     return const rd.Success(unit);
   }
 
-  /// Garante que `%ProgramData%\BackupDatabase\config\.env` exista antes
-  /// da instalação. Anteriormente o preflight apenas avisava e prosseguia,
-  /// mas o serviço subseqüentemente falhava em `EnvironmentLoader`,
-  /// `exit(1)`, e o NSSM reiniciava em loop a cada 60s — invisível na UI
-  /// (issue §2.2 da auditoria).
-  ///
-  /// Estratégia: se `.env` já existe, no-op. Caso contrário, tenta copiar
-  /// `<appDir>\.env` ou `<appDir>\.env.example` para o destino. Se nada
-  /// estiver disponível, retorna `ValidationFailure` bloqueante com
-  /// instrução acionável ao usuário.
-  ///
-  /// O parâmetro [configDirOverride] é exclusivamente para testes — em
-  /// produção sempre usa `%ProgramData%\BackupDatabase\config`. Testes
-  /// unitários injetam um diretório temporário para evitar side-effects
-  /// no sistema.
   @visibleForTesting
   Future<rd.Result<void>> ensureServiceEnvFileForTesting({
     required String appDir,
     String? configDirOverride,
-  }) => _ensureServiceEnvFile(
+  }) => _envProvisioner.ensureServiceEnvFile(
     appDir: appDir,
     configDirOverride: configDirOverride,
   );
-
-  Future<rd.Result<void>> _ensureServiceEnvFile({
-    required String appDir,
-    String? configDirOverride,
-  }) async {
-    final configDir = configDirOverride ?? _defaultServiceConfigDir();
-    final envPath = '$configDir${Platform.pathSeparator}.env';
-    final envFile = File(envPath);
-    if (await envFile.exists()) {
-      return const rd.Success(unit);
-    }
-
-    try {
-      Directory(configDir).createSync(recursive: true);
-    } on Object catch (e) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Não foi possível criar diretório de configuração '
-              '$configDir: $e\n\n'
-              'Tente executar como Administrador.',
-        ),
-      );
-    }
-
-    final candidates = [
-      File(p.join(appDir, '.env')),
-      File(p.join(appDir, '.env.example')),
-    ];
-    for (final candidate in candidates) {
-      if (await candidate.exists()) {
-        try {
-          await candidate.copy(envPath);
-          LoggerService.info(
-            'Copiado ${candidate.path} → $envPath para uso do serviço',
-          );
-          return const rd.Success(unit);
-        } on Object catch (e) {
-          LoggerService.warning(
-            'Falha ao copiar ${candidate.path} para $envPath: $e',
-          );
-        }
-      }
-    }
-
-    return rd.Failure(
-      ValidationFailure(
-        message:
-            'Arquivo .env não encontrado em $envPath e nenhum '
-            'template (.env / .env.example) está disponível em $appDir.\n\n'
-            'Crie manualmente o arquivo $envPath com a configuração do '
-            'serviço antes de instalar. Sem ele, o serviço entra em loop '
-            'de restart silencioso após instalado.',
-      ),
-    );
-  }
-
-  String _defaultServiceConfigDir() {
-    final programData =
-        Platform.environment[_programDataEnv] ?? _defaultProgramData;
-    return '$programData\\BackupDatabase\\config';
-  }
-
-  /// Classifica falhas retrátaveis vs permanentes.
-  ///
-  /// S10 da auditoria: antes confiávamos puramente em `failure.toString()`
-  /// contendo strings como "timeout"/"scm"/"busy". Isso era frágil porque:
-  /// - `TimeoutException.toString()` em alguns formats de locale não
-  ///   começa com "timeout" lowercase;
-  /// - `Failure(code: 'TIMEOUT')` é a forma canônica do projeto e
-  ///   merece check explícito por tipo + code.
-  ///
-  /// A nova lógica:
-  /// 1. `TimeoutException` direto: sempre retentar.
-  /// 2. `Failure` com `code` em `_retryableFailureCodes`: retentar.
-  /// 3. Fallback: string-match preservado para erros opacos do
-  ///    `Process.run` que não foram embrulhados em `Failure`.
-  bool _isRetryableProcessFailure(Object failure) {
-    if (failure is TimeoutException) return true;
-    if (failure is Failure && _retryableFailureCodes.contains(failure.code)) {
-      return true;
-    }
-    final msg = failure.toString().toLowerCase();
-    return msg.contains('timeout') ||
-        msg.contains('timed out') ||
-        msg.contains('scm') ||
-        msg.contains('service control manager') ||
-        msg.contains('busy') ||
-        msg.contains('temporarily');
-  }
-
-  static const Set<String> _retryableFailureCodes = {
-    'TIMEOUT',
-    'PROCESS_TIMEOUT',
-    'SCM_BUSY',
-  };
-
-  Future<rd.Result<ProcessResult>> _runScWithRetry({
-    required List<String> arguments,
-    required Duration timeout,
-    String operationName = 'sc',
-  }) async {
-    var attempt = 0;
-    var delay = _timing.retryInitialDelay;
-    rd.Result<ProcessResult>? lastResult;
-
-    while (true) {
-      attempt++;
-      lastResult = await _processService.run(
-        executable: _scExeName,
-        arguments: arguments,
-        timeout: timeout,
-      );
-
-      if (lastResult.isSuccess()) {
-        return lastResult;
-      }
-
-      final failure = lastResult.exceptionOrNull()!;
-      final isLastAttempt = attempt >= _timing.retryMaxAttempts;
-      final canRetry = _isRetryableProcessFailure(failure);
-
-      LoggerService.warning(
-        '$operationName falhou (tentativa $attempt/${_timing.retryMaxAttempts}): $failure',
-        failure,
-      );
-
-      if (isLastAttempt || !canRetry) {
-        return lastResult;
-      }
-
-      _metrics?.incrementCounter(ObservabilityMetrics.windowsServiceScRetries);
-
-      LoggerService.info(
-        'Retentando $operationName em ${delay.inMilliseconds}ms '
-        '(tentativa ${attempt + 1}/${_timing.retryMaxAttempts})',
-      );
-      await Future.delayed(delay);
-      delay = Duration(
-        milliseconds: delay.inMilliseconds * _timing.retryBackoffMultiplier,
-      );
-    }
-  }
 
   @override
   Future<rd.Result<WindowsServiceStatus>> getStatus() async {
@@ -358,7 +209,7 @@ class WindowsServiceService implements IWindowsServiceService {
     }
 
     try {
-      final result = await _runScWithRetry(
+      final result = await _scClient.runWithRetry(
         arguments: ['query', _serviceName],
         timeout: _timing.shortTimeout,
         operationName: 'sc query',
@@ -368,8 +219,8 @@ class WindowsServiceService implements IWindowsServiceService {
         (processResult) {
           if (processResult.exitCode == _successExitCode) {
             final stdout = processResult.stdout;
-            final isRunning = _isRunningState(stdout);
-            final stateCode = _parseStateCode(stdout);
+            final isRunning = _scClient.isRunningState(stdout);
+            final stateCode = _scClient.parseStateCode(stdout);
             _appendControlDiagnostics(
               'getStatus: installed=true running=$isRunning '
               'state=${stateCode?.name ?? 'unknown'} '
@@ -387,10 +238,10 @@ class WindowsServiceService implements IWindowsServiceService {
             );
           }
 
-          if (_isServiceNotInstalledResponse(processResult)) {
+          if (_scClient.isServiceNotInstalledResponse(processResult)) {
             _appendControlDiagnostics(
               'getStatus: installed=false exit=${processResult.exitCode}',
-              output: _getProcessOutput(processResult),
+              output: _scClient.getProcessOutput(processResult),
             );
             return const rd.Success(
               WindowsServiceStatus(
@@ -400,17 +251,18 @@ class WindowsServiceService implements IWindowsServiceService {
             );
           }
 
-          if (_isAccessDeniedResponse(processResult)) {
+          if (_scClient.isAccessDeniedResponse(processResult)) {
             return const rd.Failure(
               ServerFailure(
                 message:
                     'Acesso negado ao consultar status do serviço. '
-                    'Execute o aplicativo como Administrador.\n\n$_accessDeniedSolution',
+                    'Execute o aplicativo como Administrador.\n\n'
+                    '$_accessDeniedSolution',
               ),
             );
           }
 
-          final errorOutput = _getProcessOutput(processResult);
+          final errorOutput = _scClient.getProcessOutput(processResult);
           _appendControlDiagnostics(
             'getStatus: failure exit=${processResult.exitCode}',
             output: errorOutput,
@@ -509,7 +361,9 @@ class WindowsServiceService implements IWindowsServiceService {
                 ? processResult.stderr
                 : processResult.stdout;
 
-            final isAccessDenied = _textContainsAccessDenied(errorMessage);
+            final isAccessDenied = _scClient.textContainsAccessDenied(
+              errorMessage,
+            );
 
             if (isAccessDenied) {
               LoggerService.warning(
@@ -560,7 +414,9 @@ class WindowsServiceService implements IWindowsServiceService {
           final configFailure = configResult.exceptionOrNull();
           if (configFailure != null) {
             final failureMsg = failureUserMessage(configFailure);
-            final isConfigAccessDenied = _textContainsAccessDenied(failureMsg);
+            final isConfigAccessDenied = _scClient.textContainsAccessDenied(
+              failureMsg,
+            );
 
             if (isConfigAccessDenied) {
               LoggerService.warning(
@@ -694,8 +550,7 @@ class WindowsServiceService implements IWindowsServiceService {
         );
       }
 
-      await _processService.run(
-        executable: _scExeName,
+      await _scClient.run(
         arguments: ['stop', _serviceName],
         timeout: _timing.longTimeout,
       );
@@ -728,13 +583,16 @@ class WindowsServiceService implements IWindowsServiceService {
                 ? processResult.stderr
                 : processResult.stdout;
 
-            final isAccessDenied = _textContainsAccessDenied(errorMessage);
+            final isAccessDenied = _scClient.textContainsAccessDenied(
+              errorMessage,
+            );
 
             if (isAccessDenied) {
               LoggerService.warning(
                 'Acesso negado ao remover serviço; solicitando elevação UAC',
               );
-              final elevatedUninstallResult = await _uninstallWithElevation();
+              final elevatedUninstallResult = await _elevationController
+                  .uninstallWithElevation();
               return elevatedUninstallResult.fold(
                 (_) {
                   _metrics?.incrementCounter(
@@ -909,7 +767,7 @@ class WindowsServiceService implements IWindowsServiceService {
       }
       const scCommand = 'start';
 
-      final result = await _runScWithRetry(
+      final result = await _scClient.runWithRetry(
         arguments: [scCommand, _serviceName],
         timeout: _timing.longTimeout,
         operationName: 'sc $scCommand',
@@ -925,7 +783,7 @@ class WindowsServiceService implements IWindowsServiceService {
             output: errorMessage,
           );
 
-          final isAlreadyRunning = _isServiceAlreadyRunningResponse(
+          final isAlreadyRunning = _scClient.isServiceAlreadyRunningResponse(
             processResult,
             errorMessage,
           );
@@ -1006,19 +864,22 @@ class WindowsServiceService implements IWindowsServiceService {
 
           final isAccessDenied =
               processResult.exitCode == _accessDeniedWinError ||
-              _textContainsAccessDenied(errorMessage);
+              _scClient.textContainsAccessDenied(errorMessage);
 
           if (isAccessDenied) {
             LoggerService.warning(
               'Acesso negado ao iniciar serviço; solicitando elevação UAC',
             );
 
-            final elevatedResult = await _startServiceWithElevation(
-              scCommand: scCommand,
-              pollingTimeout: pollingTimeout ?? _timing.startPollingTimeout,
-              pollingInterval: pollingInterval ?? _timing.startPollingInterval,
-              initialDelay: initialDelay ?? _timing.startPollingInitialDelay,
-            );
+            final elevatedResult = await _elevationController
+                .startWithElevation(
+                  scCommand: scCommand,
+                  pollingTimeout: pollingTimeout ?? _timing.startPollingTimeout,
+                  pollingInterval:
+                      pollingInterval ?? _timing.startPollingInterval,
+                  initialDelay:
+                      initialDelay ?? _timing.startPollingInitialDelay,
+                );
 
             return elevatedResult.fold(
               (_) {
@@ -1067,288 +928,6 @@ class WindowsServiceService implements IWindowsServiceService {
         ),
       );
     }
-  }
-
-  Future<rd.Result<void>> _startServiceWithElevation({
-    required String scCommand,
-    required Duration pollingTimeout,
-    required Duration pollingInterval,
-    required Duration initialDelay,
-  }) async {
-    final elevatedCommand =
-        r'$process = Start-Process -FilePath "sc.exe" '
-        '-ArgumentList "$scCommand $_serviceName" '
-        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
-
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
-    );
-
-    return result.fold(
-      (processResult) async {
-        final output = processResult.stderr.isNotEmpty
-            ? processResult.stderr
-            : processResult.stdout;
-
-        if (processResult.exitCode != _successExitCode) {
-          final normalizedOutput = output.toLowerCase();
-          final wasCancelled =
-              normalizedOutput.contains('canceled by the user') ||
-              normalizedOutput.contains('cancelada pelo usuário') ||
-              normalizedOutput.contains('cancelado pelo usuário') ||
-              normalizedOutput.contains('foi cancelada pelo usuário');
-
-          if (wasCancelled) {
-            return const rd.Failure(
-              ValidationFailure(
-                message:
-                    'A solicitação de permissões de Administrador foi '
-                    'cancelada. Para iniciar o serviço, confirme o prompt UAC.',
-              ),
-            );
-          }
-
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Falha ao iniciar serviço com elevação UAC '
-                  '(exit ${processResult.exitCode}). Saída: $output',
-            ),
-          );
-        }
-
-        final runningAfterPoll = await _scmPoller.pollUntilRunning(
-          timeout: pollingTimeout,
-          interval: pollingInterval,
-          initialDelay: initialDelay,
-          onConvergence: (d) => _metrics?.recordHistogram(
-            ObservabilityMetrics.windowsServiceStartConvergenceSeconds,
-            d.inMilliseconds / 1000,
-          ),
-        );
-
-        if (!runningAfterPoll) {
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Comando elevado executado, mas o serviço não atingiu '
-                  'RUNNING dentro de ${pollingTimeout.inSeconds}s.\n\n'
-                  'Tente:\n'
-                  '1. Atualizar o status\n'
-                  '2. Verificar os logs em $_logPath '
-                  '(service_stdout.log e service_stderr.log)\n'
-                  '3. Confirmar que o prompt UAC foi aceito',
-            ),
-          );
-        }
-
-        return const rd.Success(unit);
-      },
-      (failure) {
-        return Future.value(
-          rd.Failure(
-            ServerFailure(
-              message:
-                  'Não foi possível solicitar elevação UAC para iniciar '
-                  'o serviço: $failure',
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<rd.Result<void>> _stopServiceWithElevation({
-    required Duration pollingTimeout,
-    required Duration pollingInterval,
-  }) async {
-    const elevatedCommand =
-        r'$process = Start-Process -FilePath "sc.exe" '
-        '-ArgumentList "stop $_serviceName" '
-        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
-
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
-    );
-
-    return result.fold(
-      (processResult) async {
-        final output = processResult.stderr.isNotEmpty
-            ? processResult.stderr
-            : processResult.stdout;
-
-        if (processResult.exitCode != _successExitCode) {
-          if (_wasUacCancelled(output)) {
-            return const rd.Failure(
-              ValidationFailure(
-                message:
-                    'A solicitação de permissões de Administrador foi '
-                    'cancelada. Para parar o serviço, confirme o prompt UAC.',
-              ),
-            );
-          }
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Falha ao parar serviço com elevação UAC '
-                  '(exit ${processResult.exitCode}). Saída: $output',
-            ),
-          );
-        }
-
-        final stoppedAfterPoll = await _scmPoller.pollUntilStopped(
-          timeout: pollingTimeout,
-          interval: pollingInterval,
-          onConvergence: (d) => _metrics?.recordHistogram(
-            ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
-            d.inMilliseconds / 1000,
-          ),
-        );
-
-        if (!stoppedAfterPoll) {
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Comando elevado executado, mas o serviço não atingiu '
-                  'STOPPED dentro de ${pollingTimeout.inSeconds}s.\n\n'
-                  'Tente:\n'
-                  '1. Atualizar o status\n'
-                  '2. Verificar os logs em $_logPath\n'
-                  '3. Confirmar que o prompt UAC foi aceito',
-            ),
-          );
-        }
-
-        return const rd.Success(unit);
-      },
-      (failure) {
-        return Future.value(
-          rd.Failure(
-            ServerFailure(
-              message:
-                  'Não foi possível solicitar elevação UAC para parar '
-                  'o serviço: $failure',
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<rd.Result<void>> _uninstallWithElevation() async {
-    const elevatedCommand =
-        r'$process = Start-Process -FilePath "cmd.exe" '
-        '-ArgumentList "/c sc stop $_serviceName & sc delete $_serviceName" '
-        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
-
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
-    );
-
-    return result.fold(
-      (processResult) async {
-        final output = processResult.stderr.isNotEmpty
-            ? processResult.stderr
-            : processResult.stdout;
-
-        if (processResult.exitCode != _successExitCode) {
-          if (_wasUacCancelled(output)) {
-            return const rd.Failure(
-              ValidationFailure(
-                message:
-                    'A solicitação de permissões de Administrador foi '
-                    'cancelada. Para remover o serviço, confirme o prompt UAC.',
-              ),
-            );
-          }
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Falha ao remover serviço com elevação UAC '
-                  '(exit ${processResult.exitCode}). Saída: $output',
-            ),
-          );
-        }
-
-        final postStatus = await getStatus();
-        return postStatus.fold(
-          (status) {
-            if (status.isInstalled) {
-              return const rd.Failure(
-                ServerFailure(
-                  message:
-                      'O comando elevado foi executado, mas o serviço '
-                      'ainda está registrado. Tente remover manualmente '
-                      'via services.msc.',
-                ),
-              );
-            }
-            return const rd.Success(unit);
-          },
-          rd.Failure.new,
-        );
-      },
-      (failure) {
-        return Future.value(
-          rd.Failure(
-            ServerFailure(
-              message:
-                  'Não foi possível solicitar elevação UAC para remover '
-                  'o serviço: $failure',
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  bool _wasUacCancelled(String output) {
-    final normalizedOutput = output.toLowerCase();
-    return normalizedOutput.contains('canceled by the user') ||
-        normalizedOutput.contains('cancelada pelo usuário') ||
-        normalizedOutput.contains('cancelado pelo usuário') ||
-        normalizedOutput.contains('foi cancelada pelo usuário');
-  }
-
-  /// Verifica se a saída do sc query indica estado RUNNING.
-  /// Suporta locale EN (RUNNING) e PT-BR (EM EXECUÇÃO), além do código 4.
-  bool _isRunningState(String stdout) {
-    final upper = stdout.toUpperCase();
-    return upper.contains(_runningState) ||
-        upper.contains(_runningStatePt.toUpperCase()) ||
-        upper.contains(_runningStatePtNoAccent) ||
-        _runningStateRegex.hasMatch(stdout);
-  }
-
-  WindowsServiceStateCode? _parseStateCode(String stdout) {
-    final match = _stateCodeRegex.firstMatch(stdout);
-    if (match == null) return null;
-    final code = int.tryParse(match.group(1) ?? '');
-    return code != null ? WindowsServiceStateCode.fromCode(code) : null;
   }
 
   @override
@@ -1404,7 +983,7 @@ class WindowsServiceService implements IWindowsServiceService {
         LoggerService.info('Serviço em START_PENDING, enviando comando stop');
       }
 
-      final result = await _runScWithRetry(
+      final result = await _scClient.runWithRetry(
         arguments: ['stop', _serviceName],
         timeout: _timing.longTimeout,
         operationName: 'sc stop',
@@ -1429,16 +1008,19 @@ class WindowsServiceService implements IWindowsServiceService {
               ? processResult.stderr
               : processResult.stdout;
 
-          final isAccessDenied = _textContainsAccessDenied(errorMessage);
+          final isAccessDenied = _scClient.textContainsAccessDenied(
+            errorMessage,
+          );
 
           if (isAccessDenied) {
             LoggerService.warning(
               'Acesso negado ao parar serviço; solicitando elevação UAC',
             );
-            final elevatedStopResult = await _stopServiceWithElevation(
-              pollingTimeout: _timing.longTimeout,
-              pollingInterval: _timing.startPollingInterval,
-            );
+            final elevatedStopResult = await _elevationController
+                .stopWithElevation(
+                  pollingTimeout: _timing.longTimeout,
+                  pollingInterval: _timing.startPollingInterval,
+                );
             return elevatedStopResult.fold(
               (_) {
                 _metrics?.incrementCounter(
@@ -1537,86 +1119,6 @@ class WindowsServiceService implements IWindowsServiceService {
         return Future.value(rd.Failure(f));
       },
     );
-  }
-
-  bool _isServiceNotInstalledResponse(ProcessResult processResult) {
-    if (processResult.exitCode == _serviceNotInstalledWinError ||
-        processResult.exitCode == _serviceNotInstalledBatchError) {
-      return true;
-    }
-
-    final output = _getProcessOutput(processResult).toLowerCase();
-    return output.contains('1060') ||
-        output.contains('does not exist as an installed service') ||
-        output.contains('specified service does not exist') ||
-        output.contains('nao existe como servico instalado') ||
-        output.contains('não existe como serviço instalado');
-  }
-
-  bool _isAccessDeniedResponse(ProcessResult processResult) {
-    if (processResult.exitCode == _accessDeniedWinError) {
-      return true;
-    }
-    return _textContainsAccessDenied(_getProcessOutput(processResult));
-  }
-
-  /// Detector case-insensitive de "access denied" em mensagens do `sc.exe`,
-  /// `nssm.exe` e `taskkill` (PT-BR + EN).
-  ///
-  /// Consolida ~4 cadeias inline duplicadas (`errorMessage.contains('Acesso
-  /// negado') || errorMessage.contains('Access denied') ||
-  /// errorMessage.contains('FALHA 5') || errorMessage.contains('FAILURE 5')`)
-  /// em `_install`, `_configure`, `_uninstall` e `_stopService`. Também é a
-  /// primitiva usada por `_isAccessDeniedResponse` (que mantém o
-  /// short-circuit pelo `exitCode == _accessDeniedWinError`).
-  ///
-  /// **Histórico (S13 da auditoria)**: este helper antes excluía a variante
-  /// `"access is denied"` (com "is"), que ficava como check in-line apenas
-  /// no `_startService`. Algumas builds do `sc.exe` imprimem essa variação,
-  /// e a assimetria foi mantida quando o helper foi extraído para preservar
-  /// backwards-compat com os outros caminhos. Após validação de testes
-  /// (todos os existentes seguem passando com a inclusão), agora cobrimos
-  /// todas as variantes em um único lugar — eliminando o foot-gun para
-  /// próximos refactors.
-  static bool _textContainsAccessDenied(String text) {
-    final lower = text.toLowerCase();
-    return lower.contains('acesso negado') ||
-        lower.contains('access denied') ||
-        lower.contains('access is denied') ||
-        lower.contains('falha 5') ||
-        lower.contains('failure 5');
-  }
-
-  bool _isServiceAlreadyRunningResponse(
-    ProcessResult processResult,
-    String output,
-  ) {
-    if (processResult.exitCode == _serviceAlreadyRunningWinError) {
-      return true;
-    }
-
-    final normalizedOutput = output.toLowerCase();
-    return normalizedOutput.contains('1056') ||
-        normalizedOutput.contains('already running') ||
-        normalizedOutput.contains('já está em execução') ||
-        normalizedOutput.contains('ja esta em execucao') ||
-        normalizedOutput.contains('uma copia deste serv') ||
-        normalizedOutput.contains('uma cópia deste serv');
-  }
-
-  String _getProcessOutput(ProcessResult processResult) {
-    final stderr = processResult.stderr.trim();
-    final stdout = processResult.stdout.trim();
-    if (stderr.isNotEmpty && stdout.isNotEmpty) {
-      return '$stderr | $stdout';
-    }
-    if (stderr.isNotEmpty) {
-      return stderr;
-    }
-    if (stdout.isNotEmpty) {
-      return stdout;
-    }
-    return 'sem saída';
   }
 
   /// Converte o `Object?` que sai de `Result.exceptionOrNull()` em
