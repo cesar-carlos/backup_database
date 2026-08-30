@@ -1,12 +1,14 @@
 import 'dart:async';
-import 'dart:convert' show jsonDecode, jsonEncode;
 
 import 'package:backup_database/application/dtos/remote/queued_execution_view.dart';
 import 'package:backup_database/application/dtos/remote/remote_dto_mappers.dart';
 import 'package:backup_database/application/dtos/remote/remote_preflight_view.dart';
 import 'package:backup_database/application/dtos/remote/run_diagnostics_view.dart';
+import 'package:backup_database/application/providers/remote/pending_remote_run_store.dart';
+import 'package:backup_database/application/providers/remote/remote_run_resume_service.dart';
+import 'package:backup_database/application/providers/remote/remote_schedule_execution_coordinator.dart';
+import 'package:backup_database/application/providers/remote/remote_schedules_run_session.dart';
 import 'package:backup_database/application/providers/remote_file_transfer_provider.dart';
-import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/errors/failure.dart'
     show Failure, failureUserMessage;
@@ -17,15 +19,13 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection_status.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
-import 'package:backup_database/infrastructure/protocol/diagnostics_messages.dart';
-import 'package:backup_database/infrastructure/protocol/execution_status_messages.dart';
 import 'package:backup_database/infrastructure/protocol/queue_events.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
 import 'package:flutter/foundation.dart';
-import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
 
-typedef EnsureServerHealthyForBackup = Future<bool> Function();
+export 'package:backup_database/application/providers/remote/remote_schedule_execution_coordinator.dart'
+    show EnsureServerHealthyForBackup;
 
 enum RemotePreflightUiAction { proceed, showDialog, notApplicable }
 
@@ -59,24 +59,46 @@ class RemoteSchedulesProvider extends ChangeNotifier {
            machineSettings ??
            (getIt.isRegistered<IMachineSettingsRepository>()
                ? getIt<IMachineSettingsRepository>()
-               : null),
-       _ensureServerHealthy =
-           ensureServerHealthy ??
-           (() =>
-               _refreshServerHealthViaConnectionManager(_connectionManager)) {
+               : null) {
+    final pendingRunStore = PendingRemoteRunStore(_machineSettings);
+    _session = RemoteSchedulesRunSession(
+      notifyListeners: notifyListeners,
+      pendingRunStore: pendingRunStore,
+    );
+    final ensureHealthy =
+        ensureServerHealthy ??
+        (() => _refreshServerHealthViaConnectionManager(_connectionManager));
+    _execution = RemoteScheduleExecutionCoordinator(
+      connectionManager: _connectionManager,
+      session: _session,
+      pendingRunStore: pendingRunStore,
+      tempDirectoryService: _tempDirectoryService,
+      ensureServerHealthy: ensureHealthy,
+      loadExecutionQueue: loadExecutionQueue,
+      transferProvider: _transferProvider,
+    );
+    _resume = RemoteRunResumeService(
+      connectionManager: _connectionManager,
+      session: _session,
+      execution: _execution,
+    );
+    _pendingRunStore = pendingRunStore;
     _listenToConnectionStatus();
     _queueEventsSubscription = _connectionManager.queueEvents.listen(
       _onQueueEvent,
     );
-    // §audit-2026-05-28 wave 3 (P2): tenta restaurar estado de run
-    // pendente do disco. Não bloqueia o construtor; quando carregar,
-    // a primeira `ConnectionStatus.connected` dispara o resume.
     unawaited(_restorePendingRemoteRunFromDisk());
   }
 
   final ConnectionManager _connectionManager;
-  final EnsureServerHealthyForBackup _ensureServerHealthy;
   final IMachineSettingsRepository? _machineSettings;
+  final RemoteFileTransferProvider? _transferProvider;
+  final TempDirectoryService _tempDirectoryService;
+
+  late final RemoteSchedulesRunSession _session;
+  late final RemoteScheduleExecutionCoordinator _execution;
+  late final RemoteRunResumeService _resume;
+  late final PendingRemoteRunStore _pendingRunStore;
 
   static Future<bool> _refreshServerHealthViaConnectionManager(
     ConnectionManager manager,
@@ -90,42 +112,11 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   StreamSubscription<ConnectionStatus>? _statusSubscription;
   StreamSubscription<QueueEvent>? _queueEventsSubscription;
-  final RemoteFileTransferProvider? _transferProvider;
-  final TempDirectoryService _tempDirectoryService;
 
   List<Schedule> _schedules = [];
   bool _isLoading = false;
   bool _isUpdating = false;
-  bool _isExecuting = false;
-  String? _error;
-  String? _lastErrorCode;
   String? _updatingScheduleId;
-  String? _executingScheduleId;
-  String? _activeRunId;
-  bool _disconnectedDuringRun = false;
-
-  /// §audit-2026-05-28 wave 2 (P1): guarda contra dupla execução do
-  /// resume após reconnect. Antes, tanto o
-  /// `ServerConnectionProvider._listenToConnectionStatus` quanto o
-  /// `RemoteSchedulesPage._onConnectionChanged` chamavam este método
-  /// — se a página estivesse aberta no momento da reconexão, os dois
-  /// fluxos rodavam em paralelo (`getExecutionStatus`,
-  /// `waitForRemoteBackupCompletion`, `_finishBackupAndDownload`),
-  /// disparando downloads duplicados do mesmo `runId`.
-  ///
-  /// O `ServerConnectionProvider` é agora o **único owner** desta
-  /// chamada, mas mantemos a flag como defesa em profundidade
-  /// (re-entrância acidental por callbacks de UI futuros).
-  bool _isResumingAfterReconnect = false;
-
-  String? _backupStep;
-  String? _backupMessage;
-  double? _backupProgress;
-
-  String? _transferStep;
-  String? _transferMessage;
-  double? _transferProgress;
-  bool _isTransferringFile = false;
 
   List<QueuedExecutionView> _executionQueue = [];
   bool _isLoadingExecutionQueue = false;
@@ -134,35 +125,35 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   List<Schedule> get schedules => _schedules;
   bool get isLoading => _isLoading;
   bool get isUpdating => _isUpdating;
-  bool get isExecuting => _isExecuting;
-  String? get error => _error;
-  String? get lastErrorCode => _lastErrorCode;
+  bool get isExecuting => _session.isExecuting;
+  String? get error => _session.error;
+  String? get lastErrorCode => _session.lastErrorCode;
   bool get isConnected => _connectionManager.isConnected;
   String? get updatingScheduleId => _updatingScheduleId;
-  String? get executingScheduleId => _executingScheduleId;
-  String? get activeRunId => _activeRunId;
-  String? get backupStep => _backupStep;
-  String? get backupMessage => _backupMessage;
-  double? get backupProgress => _backupProgress;
-  String? get transferStep => _transferStep;
-  String? get transferMessage => _transferMessage;
-  double? get transferProgress => _transferProgress;
-  bool get isTransferringFile => _isTransferringFile;
+  String? get executingScheduleId => _session.executingScheduleId;
+  String? get activeRunId => _session.activeRunId;
+  String? get backupStep => _session.backupStep;
+  String? get backupMessage => _session.backupMessage;
+  double? get backupProgress => _session.backupProgress;
+  String? get transferStep => _session.transferStep;
+  String? get transferMessage => _session.transferMessage;
+  double? get transferProgress => _session.transferProgress;
+  bool get isTransferringFile => _session.isTransferringFile;
   List<QueuedExecutionView> get executionQueue => _executionQueue;
   bool get isLoadingExecutionQueue => _isLoadingExecutionQueue;
   String? get executionQueueError => _executionQueueError;
 
   Future<void> loadSchedules() async {
     if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para ver os agendamentos.';
-      _lastErrorCode = null;
+      _session.error = 'Conecte-se a um servidor para ver os agendamentos.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return;
     }
 
     _isLoading = true;
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.listSchedules();
@@ -171,11 +162,11 @@ class RemoteSchedulesProvider extends ChangeNotifier {
       (list) {
         _schedules = list;
         _isLoading = false;
-        _lastErrorCode = null;
+        _session.lastErrorCode = null;
       },
       (exception) {
-        _error = mapExceptionToMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = mapExceptionToMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         _isLoading = false;
       },
     );
@@ -216,16 +207,16 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   Future<bool> createRemoteSchedule(Schedule schedule) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para criar agendamentos.';
-      _lastErrorCode = null;
+      _session.error = 'Conecte-se a um servidor para criar agendamentos.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
 
     _isUpdating = true;
     _updatingScheduleId = null;
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.createRemoteSchedule(
@@ -235,16 +226,16 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
     return result.fold(
       (_) async {
-        _error = null;
-        _lastErrorCode = null;
+        _session.error = null;
+        _session.lastErrorCode = null;
         _isUpdating = false;
         notifyListeners();
         await _reloadSchedulesAndQueue();
         return true;
       },
       (exception) {
-        _error = failureUserMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = failureUserMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         _isUpdating = false;
         notifyListeners();
         return false;
@@ -254,22 +245,22 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   Future<bool> deleteRemoteSchedule(String scheduleId) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para excluir agendamentos.';
-      _lastErrorCode = null;
+      _session.error = 'Conecte-se a um servidor para excluir agendamentos.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
     if (scheduleId.isEmpty) {
-      _error = 'Identificador de agendamento inválido.';
-      _lastErrorCode = null;
+      _session.error = 'Identificador de agendamento inválido.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
 
     _isUpdating = true;
     _updatingScheduleId = scheduleId;
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.deleteRemoteSchedule(
@@ -280,8 +271,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     return result.fold(
       (_) async {
         _schedules = _schedules.where((s) => s.id != scheduleId).toList();
-        _error = null;
-        _lastErrorCode = null;
+        _session.error = null;
+        _session.lastErrorCode = null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -289,8 +280,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         return true;
       },
       (exception) {
-        _error = failureUserMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = failureUserMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -304,24 +295,24 @@ class RemoteSchedulesProvider extends ChangeNotifier {
     required bool paused,
   }) async {
     if (!_connectionManager.isConnected) {
-      _error = paused
+      _session.error = paused
           ? 'Conecte-se a um servidor para pausar agendamentos.'
           : 'Conecte-se a um servidor para retomar agendamentos.';
-      _lastErrorCode = null;
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
     if (scheduleId.isEmpty) {
-      _error = 'Identificador de agendamento inválido.';
-      _lastErrorCode = null;
+      _session.error = 'Identificador de agendamento inválido.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
 
     _isUpdating = true;
     _updatingScheduleId = scheduleId;
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
 
     final idempotencyKey = const Uuid().v4();
@@ -350,8 +341,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
               ..[index] = _schedules[index].copyWith(enabled: !paused);
           }
         }
-        _error = null;
-        _lastErrorCode = null;
+        _session.error = null;
+        _session.lastErrorCode = null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -359,8 +350,8 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         return true;
       },
       (exception) {
-        _error = failureUserMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = failureUserMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -378,16 +369,16 @@ class RemoteSchedulesProvider extends ChangeNotifier {
 
   Future<bool> updateSchedule(Schedule schedule) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para atualizar agendamentos.';
-      _lastErrorCode = null;
+      _session.error = 'Conecte-se a um servidor para atualizar agendamentos.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
 
     _isUpdating = true;
     _updatingScheduleId = schedule.id;
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
 
     final result = await _connectionManager.updateSchedule(schedule);
@@ -398,16 +389,16 @@ class RemoteSchedulesProvider extends ChangeNotifier {
         if (index >= 0) {
           _schedules = List<Schedule>.from(_schedules)..[index] = updated;
         }
-        _error = null;
-        _lastErrorCode = null;
+        _session.error = null;
+        _session.lastErrorCode = null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
         return true;
       },
       (exception) {
-        _error = mapExceptionToMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = mapExceptionToMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         _isUpdating = false;
         _updatingScheduleId = null;
         notifyListeners();
@@ -492,654 +483,33 @@ class RemoteSchedulesProvider extends ChangeNotifier {
   Future<bool> executeSchedule(
     String scheduleId, {
     bool skipPreflightCheck = false,
-  }) async {
-    if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para executar agendamentos.';
-      _lastErrorCode = null;
-      notifyListeners();
-      return false;
-    }
-
-    if (_connectionManager.isRunIdSupported) {
-      final isHealthy = await _ensureServerHealthy();
-      if (!isHealthy) {
-        _error =
-            'Servidor indisponível ou com problemas de saúde. '
-            'Atualize o status da conexão e tente novamente.';
-        _lastErrorCode = null;
-        notifyListeners();
-        return false;
-      }
-    }
-
-    _beginExecution(scheduleId);
-
-    if (_connectionManager.isRunIdSupported && !skipPreflightCheck) {
-      final preflightOk = await _runServerPreflightGate();
-      if (!preflightOk) {
-        return false;
-      }
-    }
-
-    final idempotencyKey = const Uuid().v4();
-    final backupResult = _connectionManager.isRunIdSupported
-        ? await _connectionManager.executeRemoteBackup(
-            scheduleId: scheduleId,
-            idempotencyKey: idempotencyKey,
-            queueIfBusy: _connectionManager.isExecutionQueueSupported,
-            onProgress: _onBackupProgress,
-            onRunIdKnown: (runId) {
-              _activeRunId = runId;
-              // §audit-2026-05-28 wave 3 (P2): persiste IMEDIATAMENTE
-              // ao saber o runId. Crash / auto-update entre aqui e o
-              // término do backup continua recuperável: no próximo
-              // boot lemos esse JSON e o `tryResumeExecutionAfterReconnect`
-              // já existente cuida do resto.
-              unawaited(
-                _persistPendingRemoteRunSnapshot(
-                  runId: runId,
-                  scheduleId: scheduleId,
-                ),
-              );
-              notifyListeners();
-            },
-          )
-        // Fallback consciente para servidor `v1` sem `supportsRunId`.
-        // O caminho deprecado ainda existe para compat de janela; quando o
-        // suporte a servidor v1 for removido, este else cai junto.
-        // ignore: deprecated_member_use_from_same_package
-        : await _connectionManager.executeSchedule(
-            scheduleId,
-            onProgress: _onBackupProgress,
-          );
-
-    final finished = await backupResult.fold(
-      (backupPath) async => _finishBackupAndDownload(
-        scheduleId: scheduleId,
-        backupPath: backupPath,
-        runId: _activeRunId,
-      ),
-      (exception) async {
-        if (_shouldPreserveStateAfterDisconnectFailure(exception)) {
-          _isExecuting = false;
-          _disconnectedDuringRun = true;
-          _error = _connectionLostMessage;
-          _lastErrorCode = null;
-          notifyListeners();
-          return false;
-        }
-        _resetExecutionState(
-          error: mapExceptionToMessage(exception),
-          errorCode: exception is Failure ? exception.code : null,
-        );
-        return false;
-      },
-    );
-    if (_connectionManager.isExecutionQueueSupported) {
-      unawaited(loadExecutionQueue());
-    }
-    return finished;
-  }
-
-  bool _shouldPreserveStateAfterDisconnectFailure(Object failure) {
-    if (_activeRunId == null) return false;
-    if (_disconnectedDuringRun) return true;
-    if (failure is StateError && failure.message == 'Disconnected') {
-      return true;
-    }
-    final message = mapExceptionToMessage(failure);
-    if (message.contains('Disconnected during backup') ||
-        message.contains('Conexão encerrada') ||
-        message.contains('durante o backup') ||
-        message.contains('desconectado do servidor')) {
-      return true;
-    }
-    final raw = failureUserMessage(failure, fallback: '');
-    return raw.contains('Disconnected during backup') ||
-        raw.contains('Conexão encerrada') ||
-        (raw.contains('Disconnected') && raw.contains('backup'));
-  }
-
-  void _beginExecution(String scheduleId) {
-    _isExecuting = true;
-    _executingScheduleId = scheduleId;
-    _activeRunId = null;
-    _disconnectedDuringRun = false;
-    _error = null;
-    _lastErrorCode = null;
-    _backupStep = 'Iniciando';
-    _backupMessage = 'Solicitando backup no servidor...';
-    _backupProgress = null;
-    _transferStep = null;
-    _transferMessage = null;
-    _transferProgress = null;
-    _isTransferringFile = false;
-    notifyListeners();
-  }
-
-  void _onBackupProgress(String step, String message, double progress) {
-    _backupStep = step;
-    _backupMessage = message;
-    _backupProgress = progress;
-    notifyListeners();
-  }
-
-  void _onQueueEvent(QueueEvent event) {
-    if (_activeRunId == null || event.runId != _activeRunId) {
-      return;
-    }
-    if (event.isQueued) {
-      _backupStep = 'Na fila';
-      _backupMessage =
-          event.message ??
-          (event.queuePosition != null
-              ? 'Posição ${event.queuePosition} na fila do servidor'
-              : 'Aguardando slot no servidor');
-      _backupProgress ??= 0;
-      notifyListeners();
-      return;
-    }
-    if (event.isStarted) {
-      _backupStep = 'Em execução';
-      _backupMessage = event.message ?? 'Backup iniciado no servidor';
-      notifyListeners();
-    }
-  }
-
-  static const String _artifactExpiredMessage =
-      'Artefato expirou no servidor; execute um novo backup.';
-
-  bool _isArtifactUsableForResume(ArtifactMetadataResult artifact) {
-    if (!artifact.found || artifact.stagingPath == null) {
-      return false;
-    }
-    if (_connectionManager.isArtifactRetentionSupported && artifact.isExpired) {
-      return false;
-    }
-    return true;
-  }
-
-  Future<bool> _runServerPreflightGate() async {
-    final result = await _connectionManager.validateServerBackupPrerequisites();
-    return result.fold(
-      (preflight) {
-        if (preflight.isBlocked) {
-          final detail = preflight.blockingFailures
-              .map((c) => c.message)
-              .join('\n');
-          _resetExecutionState(
-            error: detail.isEmpty
-                ? 'Servidor bloqueou o backup (preflight)'
-                : detail,
-          );
-          return false;
-        }
-        if (preflight.hasWarnings) {
-          _resetExecutionState();
-          return false;
-        }
-        return true;
-      },
-      (exception) {
-        LoggerService.warning('Preflight remoto falhou: $exception');
-        return true;
-      },
-    );
-  }
-
-  Future<bool> _finishBackupAndDownload({
-    required String scheduleId,
-    required String backupPath,
-    String? runId,
-  }) async {
-    LoggerService.info('===== BACKUP CONCLUÍDO NO SERVIDOR =====');
-    LoggerService.info('BackupPath recebido: "$backupPath"');
-
-    if (backupPath.isEmpty) {
-      _resetExecutionState();
-      return true;
-    }
-
-    final transfer = _transferProvider;
-    if (transfer == null) {
-      _resetExecutionState();
-      return true;
-    }
-
-    _backupStep = 'Validando pasta local';
-    _backupMessage = 'Verificando permissões para download...';
-    notifyListeners();
-
-    final hasPermission = await _tempDirectoryService
-        .validateDownloadsDirectory();
-    if (!hasPermission) {
-      final downloadsDir = await _tempDirectoryService.getDownloadsDirectory();
-      _resetExecutionState(
-        error:
-            'Sem permissão de escrita na pasta temporária:\n${downloadsDir.path}\n\n'
-            'Configure a pasta em Configurações > Geral ou execute como Administrador.',
-      );
-      return false;
-    }
-
-    _backupStep = 'Baixando arquivo';
-    _backupMessage = 'Transferindo backup do servidor...';
-    _backupProgress = null;
-    notifyListeners();
-
-    final downloadSuccess = await transfer.transferCompletedBackupToClient(
+  }) {
+    return _execution.executeSchedule(
       scheduleId,
-      backupPath,
-      runId: runId,
-      onTransferProgress: (step, message, progress) {
-        _backupStep = step;
-        _backupMessage = message;
-        _backupProgress = progress;
-        _transferStep = step;
-        _transferMessage = message;
-        _transferProgress = progress;
-        _isTransferringFile = true;
-        notifyListeners();
-      },
-    );
-
-    if (!downloadSuccess) {
-      _resetExecutionState(
-        error:
-            transfer.error ??
-            transfer.uploadError ??
-            'Falha ao baixar backup do servidor',
-      );
-      return false;
-    }
-
-    if (transfer.uploadError != null) {
-      _resetExecutionState(error: transfer.uploadError);
-      return false;
-    }
-
-    _resetExecutionState();
-    return true;
-  }
-
-  /// M8.4: após reconectar, reidrata status e reassina progresso se ainda ativo.
-  Future<void> tryResumeExecutionAfterReconnect() async {
-    if (!_disconnectedDuringRun ||
-        _activeRunId == null ||
-        !_connectionManager.isConnected) {
-      return;
-    }
-
-    // §audit-2026-05-28 wave 2 (P1): guard de re-entrância. Owner único
-    // é o `ServerConnectionProvider`, mas se algum callback de UI
-    // ainda disparar (page resume, retry manual), o segundo caller
-    // simplesmente sai cedo — sem disparar downloads paralelos.
-    if (_isResumingAfterReconnect) {
-      LoggerService.debug(
-        '[remote_schedules] tryResumeExecutionAfterReconnect já em '
-        'execução para runId=$_activeRunId; ignorando re-entry',
-      );
-      return;
-    }
-    _isResumingAfterReconnect = true;
-
-    try {
-      await _tryResumeExecutionAfterReconnectInner();
-    } finally {
-      _isResumingAfterReconnect = false;
-    }
-  }
-
-  Future<void> _tryResumeExecutionAfterReconnectInner() async {
-    final runId = _activeRunId!;
-    final scheduleId = _executingScheduleId;
-    if (scheduleId == null) {
-      _disconnectedDuringRun = false;
-      return;
-    }
-
-    _isExecuting = true;
-    _error = null;
-    _backupStep = 'Reconectado';
-    _backupMessage = 'Consultando status do backup no servidor...';
-    notifyListeners();
-
-    final statusResult = await _connectionManager.getExecutionStatus(runId);
-    await statusResult.fold(
-      (status) async {
-        if (status.state == ExecutionState.running) {
-          _disconnectedDuringRun = false;
-          _connectionManager.attachRemoteBackupListener(
-            runId: runId,
-            onProgress: _onBackupProgress,
-          );
-          _backupMessage = 'Backup em andamento no servidor';
-          notifyListeners();
-          final pathResult = await _connectionManager
-              .waitForRemoteBackupCompletion(
-                runId,
-              );
-          await pathResult.fold(
-            (path) => _finishBackupAndDownload(
-              scheduleId: scheduleId,
-              backupPath: path,
-              runId: runId,
-            ),
-            (exception) async {
-              _resetExecutionState(
-                error: mapExceptionToMessage(exception),
-                errorCode: exception is Failure ? exception.code : null,
-              );
-            },
-          );
-          return;
-        }
-
-        if (status.state == ExecutionState.queued) {
-          _disconnectedDuringRun = false;
-          final polled = await _pollUntilRunningOrTerminal(runId);
-          await polled.fold(
-            (next) async {
-              if (next == ExecutionState.running) {
-                _connectionManager.attachRemoteBackupListener(
-                  runId: runId,
-                  onProgress: _onBackupProgress,
-                );
-                final pathResult = await _connectionManager
-                    .waitForRemoteBackupCompletion(runId);
-                await pathResult.fold(
-                  (path) => _finishBackupAndDownload(
-                    scheduleId: scheduleId,
-                    backupPath: path,
-                    runId: runId,
-                  ),
-                  (exception) async {
-                    _resetExecutionState(
-                      error: mapExceptionToMessage(exception),
-                    );
-                  },
-                );
-                return;
-              }
-              if (next == ExecutionState.completed) {
-                final meta = await _connectionManager.getArtifactMetadata(
-                  runId: runId,
-                );
-                await meta.fold(
-                  (artifact) async {
-                    if (!_isArtifactUsableForResume(artifact)) {
-                      _resetExecutionState(
-                        error:
-                            artifact.isExpired &&
-                                _connectionManager.isArtifactRetentionSupported
-                            ? _artifactExpiredMessage
-                            : 'Backup concluído sem artefato no servidor',
-                      );
-                      return;
-                    }
-                    await _finishBackupAndDownload(
-                      scheduleId: scheduleId,
-                      backupPath: artifact.stagingPath!,
-                      runId: runId,
-                    );
-                  },
-                  (exception) async {
-                    _resetExecutionState(
-                      error: mapExceptionToMessage(exception),
-                    );
-                  },
-                );
-                return;
-              }
-              _resetExecutionState(
-                error: next == ExecutionState.cancelled
-                    ? 'Backup cancelado no servidor'
-                    : 'Backup falhou no servidor',
-              );
-            },
-            (exception) async {
-              _resetExecutionState(error: mapExceptionToMessage(exception));
-            },
-          );
-          return;
-        }
-
-        if (status.state == ExecutionState.notFound) {
-          final meta = await _connectionManager.getArtifactMetadata(
-            runId: runId,
-          );
-          await meta.fold(
-            (artifact) async {
-              if (_isArtifactUsableForResume(artifact)) {
-                await _finishBackupAndDownload(
-                  scheduleId: scheduleId,
-                  backupPath: artifact.stagingPath!,
-                  runId: runId,
-                );
-                return;
-              }
-              if (artifact.isExpired &&
-                  _connectionManager.isArtifactRetentionSupported) {
-                _resetExecutionState(error: _artifactExpiredMessage);
-                return;
-              }
-              _resetExecutionState(
-                error:
-                    'Execução não encontrada no servidor após reconexão. '
-                    'Dispare o backup novamente.',
-              );
-            },
-            (exception) async {
-              _resetExecutionState(error: mapExceptionToMessage(exception));
-            },
-          );
-          return;
-        }
-
-        if (status.state == ExecutionState.completed) {
-          _disconnectedDuringRun = false;
-          final meta = await _connectionManager.getArtifactMetadata(
-            runId: runId,
-          );
-          await meta.fold(
-            (artifact) async {
-              if (!_isArtifactUsableForResume(artifact)) {
-                _resetExecutionState(
-                  error:
-                      artifact.isExpired &&
-                          _connectionManager.isArtifactRetentionSupported
-                      ? _artifactExpiredMessage
-                      : 'Backup concluído, mas artefato não encontrado no servidor',
-                );
-                return;
-              }
-              await _finishBackupAndDownload(
-                scheduleId: scheduleId,
-                backupPath: artifact.stagingPath!,
-                runId: runId,
-              );
-            },
-            (exception) async {
-              _resetExecutionState(error: mapExceptionToMessage(exception));
-            },
-          );
-          return;
-        }
-
-        if (status.state == ExecutionState.failed ||
-            status.state == ExecutionState.cancelled) {
-          _resetExecutionState(
-            error:
-                status.message ??
-                (status.state == ExecutionState.cancelled
-                    ? 'Backup cancelado no servidor'
-                    : 'Backup falhou no servidor'),
-          );
-          return;
-        }
-
-        _resetExecutionState(
-          error:
-              'Execução não encontrada no servidor após reconexão. '
-              'Dispare o backup novamente.',
-        );
-      },
-      (exception) async {
-        _resetExecutionState(error: mapExceptionToMessage(exception));
-      },
+      skipPreflightCheck: skipPreflightCheck,
     );
   }
 
-  Future<rd.Result<ExecutionState>> _pollUntilRunningOrTerminal(
-    String runId,
-  ) async {
-    final deadline = DateTime.now().add(SocketConfig.backupExecutionTimeout);
-    while (DateTime.now().isBefore(deadline)) {
-      if (!_connectionManager.isConnected) {
-        return rd.Failure(Exception('Desconectado'));
-      }
-      final statusResult = await _connectionManager.getExecutionStatus(runId);
-      final status = statusResult.getOrNull();
-      if (status == null) {
-        await Future<void>.delayed(const Duration(seconds: 2));
-        continue;
-      }
-      if (status.state == ExecutionState.running || status.state.isTerminal) {
-        return rd.Success(status.state);
-      }
-      if (status.state == ExecutionState.queued) {
-        _backupMessage = status.queuedPosition != null
-            ? 'Na fila do servidor (posição ${status.queuedPosition})'
-            : 'Na fila do servidor';
-        notifyListeners();
-      }
-      await Future<void>.delayed(const Duration(seconds: 2));
-    }
-    return rd.Failure(
-      TimeoutException('Tempo esgotado aguardando fila remota'),
-    );
-  }
-
-  void _resetExecutionState({String? error, String? errorCode}) {
-    _isExecuting = false;
-    _executingScheduleId = null;
-    _activeRunId = null;
-    _disconnectedDuringRun = false;
-    _backupStep = null;
-    _backupMessage = null;
-    _backupProgress = null;
-    _transferStep = null;
-    _transferMessage = null;
-    _transferProgress = null;
-    _isTransferringFile = false;
-    _error = error;
-    _lastErrorCode = errorCode;
-    // §audit-2026-05-28 wave 3 (P2): limpar o snapshot persistido.
-    // Reset é sempre terminal — sucesso, falha ou cancelamento — não
-    // queremos que o próximo boot tente "resumir" algo já encerrado.
-    unawaited(_clearPendingRemoteRunSnapshot());
-    notifyListeners();
-  }
-
-  // ---------------------------------------------------------------
-  // Snapshot persistido de execução remota (P2 wave 3)
-  // ---------------------------------------------------------------
-
-  /// Grava `{runId, scheduleId, startedAt}` em
-  /// `IMachineSettingsRepository`. Best-effort: falha de I/O só vira
-  /// warning para não atrapalhar o fluxo de execução em si.
-  Future<void> _persistPendingRemoteRunSnapshot({
-    required String runId,
-    required String scheduleId,
-  }) async {
-    final settings = _machineSettings;
-    if (settings == null) return;
-    try {
-      final json = jsonEncode({
-        'v': 1,
-        'runId': runId,
-        'scheduleId': scheduleId,
-        'startedAt': DateTime.now().toUtc().toIso8601String(),
-      });
-      await settings.setPendingRemoteRunSnapshotJson(json);
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        '[remote_schedules] Falha ao persistir snapshot de run pendente: $e',
-        e,
-        s,
-      );
-    }
-  }
-
-  Future<void> _clearPendingRemoteRunSnapshot() async {
-    final settings = _machineSettings;
-    if (settings == null) return;
-    try {
-      await settings.setPendingRemoteRunSnapshotJson(null);
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        '[remote_schedules] Falha ao limpar snapshot de run pendente: $e',
-        e,
-        s,
-      );
-    }
-  }
-
-  /// Lê o snapshot persistido (se existir) e popula `_activeRunId` /
-  /// `_executingScheduleId` em modo "desconectado durante run". A
-  /// próxima `ConnectionStatus.connected` dispara o
-  /// `tryResumeExecutionAfterReconnect` que já existia, agora cobrindo
-  /// o caminho de **restart do processo** além de simples drop de
-  /// conexão.
-  Future<void> _restorePendingRemoteRunFromDisk() async {
-    final settings = _machineSettings;
-    if (settings == null) return;
-    try {
-      final raw = await settings.getPendingRemoteRunSnapshotJson();
-      if (raw == null || raw.isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-      final runId = decoded['runId'] as String?;
-      final scheduleId = decoded['scheduleId'] as String?;
-      if (runId == null || runId.isEmpty) return;
-      if (scheduleId == null || scheduleId.isEmpty) return;
-      _activeRunId = runId;
-      _executingScheduleId = scheduleId;
-      _disconnectedDuringRun = true;
-      _backupStep = 'Aguardando reconexão';
-      _backupMessage =
-          'Execução remota pendente detectada do boot anterior; '
-          'retomaremos assim que a conexão for restabelecida.';
-      LoggerService.info(
-        '[remote_schedules] Snapshot pré-restart restaurado: '
-        'runId=$runId, scheduleId=$scheduleId',
-      );
-      notifyListeners();
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        '[remote_schedules] Falha ao restaurar snapshot pré-restart: $e',
-        e,
-        s,
-      );
-    }
+  Future<void> tryResumeExecutionAfterReconnect() {
+    return _resume.tryResumeExecutionAfterReconnect();
   }
 
   Future<bool> cancelQueuedRemoteBackup(String runId) async {
     if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para cancelar itens da fila.';
-      _lastErrorCode = null;
+      _session.error = 'Conecte-se a um servidor para cancelar itens da fila.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
     if (!_connectionManager.isExecutionQueueSupported) {
-      _error = 'Servidor não suporta cancelamento na fila remota.';
-      _lastErrorCode = null;
+      _session.error = 'Servidor não suporta cancelamento na fila remota.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
     if (runId.isEmpty) {
-      _error = 'Identificador de execução inválido.';
-      _lastErrorCode = null;
+      _session.error = 'Identificador de execução inválido.';
+      _session.lastErrorCode = null;
       notifyListeners();
       return false;
     }
@@ -1154,79 +524,63 @@ class RemoteSchedulesProvider extends ChangeNotifier {
           await loadExecutionQueue();
           return true;
         }
-        _error =
+        _session.error =
             cancelResult.message ?? 'Item não encontrado na fila do servidor.';
-        _lastErrorCode = null;
+        _session.lastErrorCode = null;
         notifyListeners();
         return false;
       },
       (exception) {
-        _error = mapExceptionToMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
+        _session.error = mapExceptionToMessage(exception);
+        _session.lastErrorCode = exception is Failure ? exception.code : null;
         notifyListeners();
         return false;
       },
     );
   }
 
-  Future<bool> cancelSchedule() async {
-    if (!_connectionManager.isConnected) {
-      _error = 'Conecte-se a um servidor para cancelar agendamentos.';
-      _lastErrorCode = null;
-      notifyListeners();
-      return false;
-    }
-
-    if (_executingScheduleId == null) {
-      _error = 'Nenhum backup em execução para cancelar.';
-      _lastErrorCode = null;
-      notifyListeners();
-      return false;
-    }
-
-    final result = _activeRunId != null && _connectionManager.isRunIdSupported
-        ? await _connectionManager.cancelRemoteBackup(runId: _activeRunId)
-        : await _connectionManager.cancelSchedule(_executingScheduleId!);
-
-    return result.fold(
-      (_) {
-        _resetExecutionState();
-        return true;
-      },
-      (exception) {
-        _error = mapExceptionToMessage(exception);
-        _lastErrorCode = exception is Failure ? exception.code : null;
-        notifyListeners();
-        return false;
-      },
-    );
-  }
+  Future<bool> cancelSchedule() => _execution.cancelSchedule();
 
   void clearError() {
-    _error = null;
-    _lastErrorCode = null;
+    _session.error = null;
+    _session.lastErrorCode = null;
     notifyListeners();
   }
 
-  static const String _connectionLostMessage =
-      'Conexão perdida; consultando servidor após reconectar...';
-
   void clearExecutionStateOnDisconnect() {
-    if (_executingScheduleId == null) return;
-    _disconnectedDuringRun = _activeRunId != null;
-    _isExecuting = false;
-    _backupStep = null;
-    _backupMessage = null;
-    _backupProgress = null;
-    _transferStep = null;
-    _transferMessage = null;
-    _transferProgress = null;
-    _isTransferringFile = false;
-    _error = _disconnectedDuringRun
-        ? _connectionLostMessage
-        : 'Conexão perdida durante o backup.';
-    _lastErrorCode = null;
-    notifyListeners();
+    _session.clearExecutionStateOnDisconnect();
+  }
+
+  void _onQueueEvent(QueueEvent event) {
+    if (_session.activeRunId == null || event.runId != _session.activeRunId) {
+      return;
+    }
+    if (event.isQueued) {
+      _session.backupStep = 'Na fila';
+      _session.backupMessage =
+          event.message ??
+          (event.queuePosition != null
+              ? 'Posição ${event.queuePosition} na fila do servidor'
+              : 'Aguardando slot no servidor');
+      _session.backupProgress ??= 0;
+      notifyListeners();
+      return;
+    }
+    if (event.isStarted) {
+      _session.backupStep = 'Em execução';
+      _session.backupMessage = event.message ?? 'Backup iniciado no servidor';
+      notifyListeners();
+    }
+  }
+
+  Future<void> _restorePendingRemoteRunFromDisk() async {
+    final snapshot = await _pendingRunStore.restore();
+    if (snapshot == null) return;
+    _session.applyRestoredSnapshot(snapshot);
+    LoggerService.info(
+      '[remote_schedules] Snapshot pré-restart restaurado: '
+      'runId=${snapshot.runId}, scheduleId=${snapshot.scheduleId}',
+    );
   }
 
   void _listenToConnectionStatus() {
