@@ -8,28 +8,23 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
-import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
-import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_behavior.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_connection_testers.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_draft.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_fields.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_oauth_dialog.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_dropbox_oauth_slots.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftp_advanced.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftp_fields.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_google_drive_fields.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_ftps_section.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_google_oauth_dialog.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_identity.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_google_oauth_slots.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_labels.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_local_fields.dart';
 import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_nextcloud_fields.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_oauth_credentials_card.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_oauth_status_card.dart';
-import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_type_meta.dart';
+import 'package:backup_database/presentation/widgets/destinations/destination_dialog/destination_dialog_shell.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
@@ -250,123 +245,163 @@ class _DestinationDialogState extends State<DestinationDialog> {
         maxWidth: 600,
         maxHeight: 800,
       ),
-      title: _buildTitle(),
-      content: _buildContent(),
-      actions: _buildActions(),
-    );
-  }
-
-  Widget _buildTitle() {
-    return Row(
-      children: [
-        Icon(
-          DestinationDialogTypeMeta.iconOf(_selectedType),
-          color: DestinationDialogTypeMeta.colorOf(_selectedType),
-        ),
-        const SizedBox(width: 12),
-        Text(
-          isEditing
-              ? _dialogLabel('Editar destino', 'Edit destination')
-              : _dialogLabel('Novo destino', 'New destination'),
-          style: FluentTheme.of(context).typography.title,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContent() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DestinationDialogIdentitySection(
-            selectedType: _selectedType,
-            isEditing: isEditing,
-            nameController: _nameController,
-            labelBuilder: _dialogLabel,
-            onTypeChanged: (DestinationType value) {
-              setState(() {
-                _selectedType = value;
-              });
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppSectionCard(
-            title: DestinationDialogTypeMeta.sectionTitle(
-              _selectedType,
-              _dialogLabel,
-            ),
-            description: DestinationDialogTypeMeta.sectionDescription(
-              _selectedType,
-              _dialogLabel,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildTypeSpecificFields(),
-                if (_selectedType == DestinationType.ftp) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _buildFtpsSection(),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          DestinationDialogBehaviorSection(
-            selectedType: _selectedType,
-            retentionDaysController: _retentionDaysController,
-            createSubfoldersByDate: _createSubfoldersByDate,
-            isEnabled: _isEnabled,
-            labelBuilder: _dialogLabel,
-            onCreateSubfoldersByDateChanged: (bool value) {
-              setState(() {
-                _createSubfoldersByDate = value;
-              });
-            },
-            onEnabledChanged: (bool value) {
-              setState(() {
-                _isEnabled = value;
-              });
-            },
-          ),
-        ],
+      title: DestinationDialogTitle(
+        selectedType: _selectedType,
+        isEditing: isEditing,
+        labelBuilder: _dialogLabel,
       ),
-    );
-  }
-
-  Widget _buildTypeSpecificFields() {
-    if (_selectedType == DestinationType.local) {
-      return _buildLocalFields();
-    } else if (_selectedType == DestinationType.ftp) {
-      return _buildFtpFields();
-    } else if (_selectedType == DestinationType.googleDrive) {
-      return _buildGoogleDriveFields();
-    } else if (_selectedType == DestinationType.dropbox) {
-      return _buildDropboxFields();
-    } else {
-      return _buildNextcloudFields();
-    }
-  }
-
-  Widget _buildNextcloudFields() {
-    return NextcloudDestinationFields(
-      serverUrlController: _nextcloudServerUrlController,
-      usernameController: _nextcloudUsernameController,
-      appPasswordController: _nextcloudAppPasswordController,
-      remotePathController: _nextcloudRemotePathController,
-      folderNameController: _nextcloudFolderNameController,
-      authMode: _nextcloudAuthMode,
-      allowInvalidCertificates: _nextcloudAllowInvalidCertificates,
-      isTestingConnection: _isTestingNextcloudConnection,
-      labelBuilder: _dialogLabel,
-      onAuthModeChanged: (NextcloudAuthMode value) {
-        setState(() {
-          _nextcloudAuthMode = value;
-        });
-      },
-      onAllowInvalidCertificatesChanged: _setNextcloudAllowInvalidCertificates,
-      onTestConnection: _testNextcloudConnection,
+      content: DestinationDialogContent(
+        formKey: _formKey,
+        selectedType: _selectedType,
+        isEditing: isEditing,
+        nameController: _nameController,
+        labelBuilder: _dialogLabel,
+        onTypeChanged: (DestinationType value) {
+          setState(() {
+            _selectedType = value;
+          });
+        },
+        typeSpecificFields: _DestinationTypeSpecificFields(
+          selectedType: _selectedType,
+          localPathController: _localPathController,
+          onSelectLocalFolder: _selectLocalFolder,
+          ftpHostController: _ftpHostController,
+          ftpPortController: _ftpPortController,
+          ftpUsernameController: _ftpUsernameController,
+          ftpPasswordController: _ftpPasswordController,
+          ftpRemotePathController: _ftpRemotePathController,
+          googleFolderNameController: _googleFolderNameController,
+          onGoogleConnect: _connectToGoogle,
+          onGoogleConfigureCredentials: _showOAuthConfigDialog,
+          dropboxFolderPathController: _dropboxFolderPathController,
+          dropboxFolderNameController: _dropboxFolderNameController,
+          onDropboxConnect: _connectToDropbox,
+          onDropboxConfigureCredentials: _showDropboxOAuthConfigDialog,
+          nextcloudServerUrlController: _nextcloudServerUrlController,
+          nextcloudUsernameController: _nextcloudUsernameController,
+          nextcloudAppPasswordController: _nextcloudAppPasswordController,
+          nextcloudRemotePathController: _nextcloudRemotePathController,
+          nextcloudFolderNameController: _nextcloudFolderNameController,
+          nextcloudAuthMode: _nextcloudAuthMode,
+          nextcloudAllowInvalidCertificates: _nextcloudAllowInvalidCertificates,
+          isTestingNextcloudConnection: _isTestingNextcloudConnection,
+          onNextcloudAuthModeChanged: (NextcloudAuthMode value) {
+            setState(() {
+              _nextcloudAuthMode = value;
+            });
+          },
+          onNextcloudAllowInvalidCertificatesChanged:
+              _setNextcloudAllowInvalidCertificates,
+          onTestNextcloudConnection: _testNextcloudConnection,
+          labelBuilder: _dialogLabel,
+        ),
+        ftpExtraSection: _selectedType == DestinationType.ftp
+            ? FtpSecurityAndResumeSection(
+                useFtps: _useFtps,
+                allowInvalidCertificates: _ftpAllowInvalidCertificates,
+                enableResume: _enableResumeFtp,
+                isTestingConnection: _isTestingFtpConnection,
+                labelBuilder: _dialogLabel,
+                onUseFtpsChanged: (bool value) {
+                  setState(() {
+                    _useFtps = value;
+                  });
+                },
+                onAllowInvalidCertificatesChanged: (bool value) {
+                  setState(() {
+                    _ftpAllowInvalidCertificates = value;
+                  });
+                },
+                onEnableResumeChanged: (bool value) {
+                  setState(() {
+                    _enableResumeFtp = value;
+                  });
+                },
+                onTestConnection: _testFtpConnection,
+                advancedOptions: FtpAdvancedOptionsSlot(
+                  integrityPreset: _ftpIntegrityPreset,
+                  whenResumeNotSupported: _whenResumeNotSupportedFtp,
+                  enableStrongIntegrityValidation:
+                      _enableStrongIntegrityValidationFtp,
+                  enableReadBackValidation: _enableReadBackValidationFtp,
+                  keepPartOnCancel: _keepPartOnCancelFtp,
+                  enableVerboseLog: _enableVerboseLogFtp,
+                  maxAttemptsController: _maxAttemptsFtpController,
+                  connectionTimeoutSecondsController:
+                      _connectionTimeoutSecondsController,
+                  uploadTimeoutMinutesController:
+                      _uploadTimeoutMinutesController,
+                  labelBuilder: _dialogLabel,
+                  onPresetChanged: (FtpIntegrityPreset value) {
+                    setState(() {
+                      _ftpIntegrityPreset = value;
+                      _applyFtpIntegrityPreset(value);
+                    });
+                  },
+                  onEnableStrongIntegrityValidationChanged: (bool value) {
+                    setState(() {
+                      _enableStrongIntegrityValidationFtp = value;
+                      if (!value) {
+                        _enableReadBackValidationFtp = false;
+                      }
+                      _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
+                        enableStrongIntegrityValidation:
+                            _enableStrongIntegrityValidationFtp,
+                        enableReadBackValidation: _enableReadBackValidationFtp,
+                      );
+                    });
+                  },
+                  onEnableReadBackValidationChanged:
+                      _enableStrongIntegrityValidationFtp
+                      ? (bool value) {
+                          setState(() {
+                            _enableReadBackValidationFtp = value;
+                            _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
+                              enableStrongIntegrityValidation:
+                                  _enableStrongIntegrityValidationFtp,
+                              enableReadBackValidation:
+                                  _enableReadBackValidationFtp,
+                            );
+                          });
+                        }
+                      : null,
+                  onKeepPartOnCancelChanged: (bool value) {
+                    setState(() {
+                      _keepPartOnCancelFtp = value;
+                    });
+                  },
+                  onWhenResumeNotSupportedChanged:
+                      (FtpWhenResumeNotSupported value) {
+                        setState(() {
+                          _whenResumeNotSupportedFtp = value;
+                        });
+                      },
+                  onEnableVerboseLogChanged: (bool value) {
+                    setState(() {
+                      _enableVerboseLogFtp = value;
+                    });
+                  },
+                ),
+              )
+            : null,
+        retentionDaysController: _retentionDaysController,
+        createSubfoldersByDate: _createSubfoldersByDate,
+        isEnabled: _isEnabled,
+        onCreateSubfoldersByDateChanged: (bool value) {
+          setState(() {
+            _createSubfoldersByDate = value;
+          });
+        },
+        onEnabledChanged: (bool value) {
+          setState(() {
+            _isEnabled = value;
+          });
+        },
+      ),
+      actions: [
+        const CancelButton(),
+        SaveButton(onPressed: _save, isEditing: isEditing),
+      ],
     );
   }
 
@@ -391,278 +426,10 @@ class _DestinationDialogState extends State<DestinationDialog> {
     }
   }
 
-  Widget _buildFtpsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LabeledToggle(
-          title: _dialogLabel('Usar FTPS', 'Use FTPS'),
-          description: _dialogLabel(
-            'Conexão FTP segura (SSL/TLS)',
-            'Secure FTP connection (SSL/TLS)',
-          ),
-          value: _useFtps,
-          onChanged: (bool value) {
-            setState(() {
-              _useFtps = value;
-            });
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (_useFtps) ...[
-          LabeledToggle(
-            title: _dialogLabel(
-              'Permitir certificado FTPS invalido',
-              'Allow invalid FTPS certificate',
-            ),
-            description: _dialogLabel(
-              'Compatibilidade com certificados autoassinados. Desative para validar certificados em producao.',
-              'Compatibility with self-signed certificates. Turn off to validate production certificates.',
-            ),
-            value: _ftpAllowInvalidCertificates,
-            onChanged: (bool value) {
-              setState(() {
-                _ftpAllowInvalidCertificates = value;
-              });
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
-        LabeledToggle(
-          title: _dialogLabel(
-            'Retomada de upload (REST STREAM)',
-            'Upload resume (REST STREAM)',
-          ),
-          description: _dialogLabel(
-            'Retomar envio do ponto de interrupção quando o servidor suportar',
-            'Resume upload from interruption point when server supports it',
-          ),
-          value: _enableResumeFtp,
-          onChanged: (bool value) {
-            setState(() {
-              _enableResumeFtp = value;
-            });
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppButton(
-          label: _dialogLabel('Testar conexão FTP', 'Test FTP connection'),
-          icon: FluentIcons.network_tower,
-          onPressed: _testFtpConnection,
-          isLoading: _isTestingFtpConnection,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _buildFtpAdvancedOptions(),
-      ],
-    );
-  }
-
   void _applyFtpIntegrityPreset(FtpIntegrityPreset preset) {
     _enableStrongIntegrityValidationFtp =
         preset.enablesStrongIntegrityValidation;
     _enableReadBackValidationFtp = preset.enablesReadBackValidation;
-  }
-
-  Widget _buildFtpAdvancedOptions() {
-    return FtpAdvancedOptionsSection(
-      integrityPreset: _ftpIntegrityPreset,
-      whenResumeNotSupported: _whenResumeNotSupportedFtp,
-      enableStrongIntegrityValidation: _enableStrongIntegrityValidationFtp,
-      enableReadBackValidation: _enableReadBackValidationFtp,
-      keepPartOnCancel: _keepPartOnCancelFtp,
-      enableVerboseLog: _enableVerboseLogFtp,
-      maxAttemptsController: _maxAttemptsFtpController,
-      connectionTimeoutSecondsController: _connectionTimeoutSecondsController,
-      uploadTimeoutMinutesController: _uploadTimeoutMinutesController,
-      impactColor: _ftpIntegrityPreset.impactColor(context),
-      impactText: _ftpIntegrityPreset.impactText(_dialogLabel),
-      labelBuilder: _dialogLabel,
-      onPresetChanged: (FtpIntegrityPreset value) {
-        setState(() {
-          _ftpIntegrityPreset = value;
-          _applyFtpIntegrityPreset(value);
-        });
-      },
-      onEnableStrongIntegrityValidationChanged: (bool value) {
-        setState(() {
-          _enableStrongIntegrityValidationFtp = value;
-          if (!value) {
-            _enableReadBackValidationFtp = false;
-          }
-          _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
-            enableStrongIntegrityValidation:
-                _enableStrongIntegrityValidationFtp,
-            enableReadBackValidation: _enableReadBackValidationFtp,
-          );
-        });
-      },
-      onEnableReadBackValidationChanged: _enableStrongIntegrityValidationFtp
-          ? (bool value) {
-              setState(() {
-                _enableReadBackValidationFtp = value;
-                _ftpIntegrityPreset = FtpIntegrityPresetX.fromFlags(
-                  enableStrongIntegrityValidation:
-                      _enableStrongIntegrityValidationFtp,
-                  enableReadBackValidation: _enableReadBackValidationFtp,
-                );
-              });
-            }
-          : null,
-      onKeepPartOnCancelChanged: (bool value) {
-        setState(() {
-          _keepPartOnCancelFtp = value;
-        });
-      },
-      onWhenResumeNotSupportedChanged: (FtpWhenResumeNotSupported value) {
-        setState(() {
-          _whenResumeNotSupportedFtp = value;
-        });
-      },
-      onEnableVerboseLogChanged: (bool value) {
-        setState(() {
-          _enableVerboseLogFtp = value;
-        });
-      },
-    );
-  }
-
-  List<Widget> _buildActions() {
-    return [
-      const CancelButton(),
-      SaveButton(onPressed: _save, isEditing: isEditing),
-    ];
-  }
-
-  Widget _buildLocalFields() {
-    return LocalDestinationFields(
-      pathController: _localPathController,
-      labelBuilder: _dialogLabel,
-      onSelectFolder: _selectLocalFolder,
-    );
-  }
-
-  Widget _buildFtpFields() {
-    return FtpConnectionFields(
-      hostController: _ftpHostController,
-      portController: _ftpPortController,
-      usernameController: _ftpUsernameController,
-      passwordController: _ftpPasswordController,
-      remotePathController: _ftpRemotePathController,
-      labelBuilder: _dialogLabel,
-    );
-  }
-
-  Widget _buildGoogleDriveFields() {
-    final googleAuth = getIt<GoogleAuthProvider>();
-
-    return ListenableBuilder(
-      listenable: googleAuth,
-      builder: (BuildContext context, _) {
-        final features = getIt<FeatureAvailabilityService>();
-        return GoogleDriveDestinationFields(
-          oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
-              ? AppCallout(
-                  tone: AppCalloutTone.warning,
-                  message:
-                      '${_dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in')}. '
-                      '${localizeCompatibilityReason(
-                        context,
-                        reason: features.externalBrowserOAuthDisabledReason,
-                        fallbackPt: 'Não disponível nesta versão do Windows.',
-                        fallbackEn: 'Not available on this Windows version.',
-                      )}',
-                )
-              : null,
-          authStatus: _buildGoogleAuthStatus(googleAuth),
-          oauthConfigSection: !googleAuth.isConfigured
-              ? _buildOAuthConfigSection(googleAuth)
-              : null,
-          folderField: _buildGoogleFolderField(googleAuth),
-          notSignedInWarning: !googleAuth.isSignedIn
-              ? _buildGoogleNotSignedInWarning()
-              : null,
-        );
-      },
-    );
-  }
-
-  Widget _buildGoogleFolderField(GoogleAuthProvider googleAuth) {
-    return AppTextField(
-      controller: _googleFolderNameController,
-      label: _dialogLabel(
-        'Nome da pasta no Google Drive',
-        'Google Drive folder name',
-      ),
-      hint: 'Backups',
-      prefixIcon: const Icon(FluentIcons.cloud),
-      enabled: googleAuth.isSignedIn,
-      validator: (String? value) {
-        if (value == null || value.trim().isEmpty) {
-          return _dialogLabel(
-            'Nome da pasta é obrigatório',
-            'Folder name is required',
-          );
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildGoogleNotSignedInWarning() {
-    return AppCallout(
-      tone: AppCalloutTone.danger,
-      message: _dialogLabel(
-        'Conecte-se ao Google para configurar o destino.',
-        'Sign in to Google to configure this destination.',
-      ),
-    );
-  }
-
-  Widget _buildGoogleAuthStatus(GoogleAuthProvider googleAuth) {
-    final features = getIt<FeatureAvailabilityService>();
-    final oauthOk = features.isExternalBrowserOAuthEnabled;
-    final isSignedIn = googleAuth.isSignedIn;
-    final isLoading = googleAuth.isLoading;
-
-    return OAuthStatusCard(
-      isSignedIn: isSignedIn,
-      isLoading: isLoading,
-      isConfigured: googleAuth.isConfigured,
-      signedInBackgroundColor: AppPalette.googleDriveSignedInBackground,
-      signedInBorderColor: AppPalette.googleDriveSignedInBorder,
-      signedInIconColor: AppPalette.googleDriveSignedIn,
-      signedInLabel: _dialogLabel(
-        'Conectado como ${googleAuth.currentEmail ?? 'usuario'}',
-        'Connected as ${googleAuth.currentEmail ?? 'user'}',
-      ),
-      signedOutLabel: _dialogLabel(
-        'Não conectado ao Google',
-        'Not connected to Google',
-      ),
-      disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
-      connectLabel: _dialogLabel('Conectar ao Google', 'Connect to Google'),
-      connectingLabel: _dialogLabel('Conectando...', 'Connecting...'),
-      errorMessage: googleAuth.error,
-      onDisconnect: () => googleAuth.signOut(),
-      onConnect: (!oauthOk || isLoading)
-          ? null
-          : () => _connectToGoogle(googleAuth),
-    );
-  }
-
-  Widget _buildOAuthConfigSection(GoogleAuthProvider googleAuth) {
-    return OAuthCredentialsSectionCard(
-      title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
-      description: _dialogLabel(
-        'Para usar o Google Drive, configure as credenciais OAuth do Google Cloud Console.',
-        'To use Google Drive, configure OAuth credentials in Google Cloud Console.',
-      ),
-      actionLabel: _dialogLabel(
-        'Configurar credenciais',
-        'Configure credentials',
-      ),
-      onPressed: () => _showOAuthConfigDialog(googleAuth),
-    );
   }
 
   Future<void> _connectToGoogle(GoogleAuthProvider googleAuth) async {
@@ -698,148 +465,6 @@ class _DestinationDialogState extends State<DestinationDialog> {
         ),
       );
     }
-  }
-
-  Widget _buildDropboxFields() {
-    final dropboxAuth = getIt<DropboxAuthProvider>();
-
-    return ListenableBuilder(
-      listenable: dropboxAuth,
-      builder: (BuildContext context, _) {
-        final features = getIt<FeatureAvailabilityService>();
-        return DropboxDestinationFields(
-          oauthAvailabilityWarning: !features.isExternalBrowserOAuthEnabled
-              ? AppCallout(
-                  tone: AppCalloutTone.warning,
-                  message:
-                      '${_dialogLabel('Inicio de sessao OAuth', 'OAuth sign-in')}. '
-                      '${localizeCompatibilityReason(
-                        context,
-                        reason: features.externalBrowserOAuthDisabledReason,
-                        fallbackPt: 'Não disponível nesta versão do Windows.',
-                        fallbackEn: 'Not available on this Windows version.',
-                      )}',
-                )
-              : null,
-          authStatus: _buildDropboxAuthStatus(dropboxAuth),
-          oauthConfigSection: !dropboxAuth.isSignedIn
-              ? _buildDropboxOAuthConfigSection(dropboxAuth)
-              : null,
-          folderFields: _buildDropboxFolderFields(dropboxAuth),
-          notSignedInWarning: !dropboxAuth.isSignedIn
-              ? _buildDropboxNotSignedInWarning()
-              : null,
-        );
-      },
-    );
-  }
-
-  Widget _buildDropboxFolderFields(DropboxAuthProvider dropboxAuth) {
-    return Column(
-      children: [
-        AppTextField(
-          controller: _dropboxFolderPathController,
-          label: _dialogLabel(
-            'Caminho da pasta (opcional)',
-            'Folder path (optional)',
-          ),
-          hint: _dialogLabel(
-            '/Backups ou deixe vazio para raiz',
-            '/Backups or leave empty for root',
-          ),
-          prefixIcon: const Icon(FluentIcons.folder),
-          enabled: dropboxAuth.isSignedIn,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(
-          controller: _dropboxFolderNameController,
-          label: _dialogLabel(
-            'Nome da pasta no Dropbox',
-            'Dropbox folder name',
-          ),
-          hint: 'Backups',
-          prefixIcon: const Icon(FluentIcons.cloud),
-          enabled: dropboxAuth.isSignedIn,
-          validator: (String? value) {
-            if (value == null || value.trim().isEmpty) {
-              return _dialogLabel(
-                'Nome da pasta é obrigatório',
-                'Folder name is required',
-              );
-            }
-            return null;
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDropboxNotSignedInWarning() {
-    return AppCallout(
-      tone: AppCalloutTone.danger,
-      message: _dialogLabel(
-        'Conecte-se ao Dropbox para configurar o destino.',
-        'Sign in to Dropbox to configure this destination.',
-      ),
-    );
-  }
-
-  Widget _buildDropboxAuthStatus(DropboxAuthProvider dropboxAuth) {
-    final features = getIt<FeatureAvailabilityService>();
-    final oauthOk = features.isExternalBrowserOAuthEnabled;
-    final isSignedIn = dropboxAuth.isSignedIn;
-    final isLoading = dropboxAuth.isLoading;
-
-    return OAuthStatusCard(
-      isSignedIn: isSignedIn,
-      isLoading: isLoading,
-      isConfigured: dropboxAuth.isConfigured,
-      signedInBackgroundColor: AppPalette.destinationDropbox.withValues(
-        alpha: 0.1,
-      ),
-      signedInBorderColor: AppPalette.destinationDropbox.withValues(
-        alpha: 0.3,
-      ),
-      signedInIconColor: AppPalette.destinationDropbox,
-      signedInLabel: _dialogLabel(
-        'Conectado como ${dropboxAuth.currentEmail ?? 'usuario'}',
-        'Connected as ${dropboxAuth.currentEmail ?? 'user'}',
-      ),
-      signedOutLabel: _dialogLabel(
-        'Não conectado ao Dropbox',
-        'Not connected to Dropbox',
-      ),
-      disconnectLabel: _dialogLabel('Desconectar', 'Disconnect'),
-      connectLabel: _dialogLabel('Conectar ao Dropbox', 'Connect to Dropbox'),
-      connectingLabel: _dialogLabel('Conectando...', 'Connecting...'),
-      errorMessage: dropboxAuth.error,
-      onDisconnect: () => dropboxAuth.signOut(),
-      onConnect: (!oauthOk || isLoading)
-          ? null
-          : () => _connectToDropbox(dropboxAuth),
-    );
-  }
-
-  Widget _buildDropboxOAuthConfigSection(DropboxAuthProvider dropboxAuth) {
-    final isConfigured = dropboxAuth.isConfigured;
-    final hasClientId = dropboxAuth.oauthConfig?.clientId.isNotEmpty ?? false;
-
-    return OAuthCredentialsSectionCard(
-      title: _dialogLabel('Configuracao OAuth', 'OAuth configuration'),
-      description: isConfigured && hasClientId
-          ? _dialogLabel(
-              'Credenciais OAuth configuradas. Clique em "Alterar credenciais" para modificar.',
-              'OAuth credentials configured. Click "Change credentials" to modify.',
-            )
-          : _dialogLabel(
-              'Para usar o Dropbox, configure as credenciais OAuth do Dropbox App Console.',
-              'To use Dropbox, configure OAuth credentials in Dropbox App Console.',
-            ),
-      actionLabel: isConfigured && hasClientId
-          ? _dialogLabel('Alterar credenciais', 'Change credentials')
-          : _dialogLabel('Configurar credenciais', 'Configure credentials'),
-      onPressed: () => _showDropboxOAuthConfigDialog(dropboxAuth),
-    );
   }
 
   Future<void> _connectToDropbox(DropboxAuthProvider dropboxAuth) async {
@@ -1085,5 +710,114 @@ class _DestinationDialogState extends State<DestinationDialog> {
     );
 
     Navigator.of(context).pop(draft.toDestination());
+  }
+}
+
+class _DestinationTypeSpecificFields extends StatelessWidget {
+  const _DestinationTypeSpecificFields({
+    required this.selectedType,
+    required this.localPathController,
+    required this.onSelectLocalFolder,
+    required this.ftpHostController,
+    required this.ftpPortController,
+    required this.ftpUsernameController,
+    required this.ftpPasswordController,
+    required this.ftpRemotePathController,
+    required this.googleFolderNameController,
+    required this.onGoogleConnect,
+    required this.onGoogleConfigureCredentials,
+    required this.dropboxFolderPathController,
+    required this.dropboxFolderNameController,
+    required this.onDropboxConnect,
+    required this.onDropboxConfigureCredentials,
+    required this.nextcloudServerUrlController,
+    required this.nextcloudUsernameController,
+    required this.nextcloudAppPasswordController,
+    required this.nextcloudRemotePathController,
+    required this.nextcloudFolderNameController,
+    required this.nextcloudAuthMode,
+    required this.nextcloudAllowInvalidCertificates,
+    required this.isTestingNextcloudConnection,
+    required this.onNextcloudAuthModeChanged,
+    required this.onNextcloudAllowInvalidCertificatesChanged,
+    required this.onTestNextcloudConnection,
+    required this.labelBuilder,
+  });
+
+  final DestinationType selectedType;
+  final TextEditingController localPathController;
+  final VoidCallback onSelectLocalFolder;
+  final TextEditingController ftpHostController;
+  final TextEditingController ftpPortController;
+  final TextEditingController ftpUsernameController;
+  final TextEditingController ftpPasswordController;
+  final TextEditingController ftpRemotePathController;
+  final TextEditingController googleFolderNameController;
+  final Future<void> Function(GoogleAuthProvider auth) onGoogleConnect;
+  final Future<void> Function(GoogleAuthProvider auth)
+  onGoogleConfigureCredentials;
+  final TextEditingController dropboxFolderPathController;
+  final TextEditingController dropboxFolderNameController;
+  final Future<void> Function(DropboxAuthProvider auth) onDropboxConnect;
+  final Future<void> Function(DropboxAuthProvider auth)
+  onDropboxConfigureCredentials;
+  final TextEditingController nextcloudServerUrlController;
+  final TextEditingController nextcloudUsernameController;
+  final TextEditingController nextcloudAppPasswordController;
+  final TextEditingController nextcloudRemotePathController;
+  final TextEditingController nextcloudFolderNameController;
+  final NextcloudAuthMode nextcloudAuthMode;
+  final bool nextcloudAllowInvalidCertificates;
+  final bool isTestingNextcloudConnection;
+  final ValueChanged<NextcloudAuthMode> onNextcloudAuthModeChanged;
+  final ValueChanged<bool> onNextcloudAllowInvalidCertificatesChanged;
+  final VoidCallback onTestNextcloudConnection;
+  final DestinationDialogLabelBuilder labelBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (selectedType) {
+      DestinationType.local => LocalDestinationFields(
+        pathController: localPathController,
+        labelBuilder: labelBuilder,
+        onSelectFolder: onSelectLocalFolder,
+      ),
+      DestinationType.ftp => FtpConnectionFields(
+        hostController: ftpHostController,
+        portController: ftpPortController,
+        usernameController: ftpUsernameController,
+        passwordController: ftpPasswordController,
+        remotePathController: ftpRemotePathController,
+        labelBuilder: labelBuilder,
+      ),
+      DestinationType.googleDrive => GoogleDriveOAuthSlots(
+        folderNameController: googleFolderNameController,
+        labelBuilder: labelBuilder,
+        onConnect: onGoogleConnect,
+        onConfigureCredentials: onGoogleConfigureCredentials,
+      ),
+      DestinationType.dropbox => DropboxOAuthSlots(
+        folderPathController: dropboxFolderPathController,
+        folderNameController: dropboxFolderNameController,
+        labelBuilder: labelBuilder,
+        onConnect: onDropboxConnect,
+        onConfigureCredentials: onDropboxConfigureCredentials,
+      ),
+      DestinationType.nextcloud => NextcloudDestinationFields(
+        serverUrlController: nextcloudServerUrlController,
+        usernameController: nextcloudUsernameController,
+        appPasswordController: nextcloudAppPasswordController,
+        remotePathController: nextcloudRemotePathController,
+        folderNameController: nextcloudFolderNameController,
+        authMode: nextcloudAuthMode,
+        allowInvalidCertificates: nextcloudAllowInvalidCertificates,
+        isTestingConnection: isTestingNextcloudConnection,
+        labelBuilder: labelBuilder,
+        onAuthModeChanged: onNextcloudAuthModeChanged,
+        onAllowInvalidCertificatesChanged:
+            onNextcloudAllowInvalidCertificatesChanged,
+        onTestConnection: onTestNextcloudConnection,
+      ),
+    };
   }
 }

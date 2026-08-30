@@ -12,7 +12,6 @@ import 'package:backup_database/presentation/utils/integrity_error_modal_helper.
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/remote/remote_backup_preflight_dialog.dart';
 import 'package:backup_database/presentation/widgets/remote_schedules/remote_schedules.dart';
-import 'package:backup_database/presentation/widgets/schedules/schedules.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -137,7 +136,7 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
             child: Consumer<ServerConnectionProvider>(
               builder: (context, connectionProvider, _) {
                 if (!connectionProvider.isConnected) {
-                  return _buildNotConnected(context);
+                  return const RemoteSchedulesNotConnected();
                 }
                 return Consumer<RemoteSchedulesProvider>(
                   builder: (context, provider, _) {
@@ -163,10 +162,33 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
                         onAction: () => unawaited(provider.loadSchedules()),
                       );
                     }
-                    return _buildScheduleList(
-                      context,
-                      provider,
+                    return RemoteSchedulesListView(
+                      provider: provider,
                       connectionProvider: connectionProvider,
+                      onCreatePressed: () => _showCreateRemoteScheduleDialog(
+                        context,
+                        provider,
+                      ),
+                      onToggleEnabled: (schedule, enabled) =>
+                          _onToggleSchedulePaused(
+                            context,
+                            provider,
+                            schedule,
+                            enabled,
+                          ),
+                      onDelete: (schedule) => _onDeleteRemoteSchedule(
+                        context,
+                        provider,
+                        schedule,
+                      ),
+                      onRunNow: (scheduleId) => _onRunNow(
+                        context,
+                        provider,
+                        scheduleId,
+                        connectionProvider,
+                      ),
+                      onTransferDestinations: (schedule) =>
+                          _showTransferDestinationsDialog(context, schedule),
                     );
                   },
                 );
@@ -185,192 +207,6 @@ class _RemoteSchedulesPageState extends State<RemoteSchedulesPage> {
       }
     }
     return scheduleId;
-  }
-
-  bool _isDisconnectionError(String message) {
-    final lower = message.toLowerCase();
-    return lower.contains('desconectado') ||
-        lower.contains('conexao perdida') ||
-        lower.contains('conexão perdida') ||
-        lower.contains('reconecte-se');
-  }
-
-  Widget _buildNotConnected(BuildContext context) {
-    return AppPageState.empty(
-      title: 'Conecte-se a um servidor',
-      message: 'Vá em Conectar para adicionar e conectar a um servidor, depois volte aqui para ver e controlar os agendamentos.',
-      actionLabel: 'Ir para Conectar',
-      onAction: () => context.go(RouteNames.serverLogin),
-    );
-  }
-
-  Widget _buildScheduleList(
-    BuildContext context,
-    RemoteSchedulesProvider provider, {
-    required ServerConnectionProvider connectionProvider,
-  }) {
-    final partialError = provider.error;
-    final health = connectionProvider.serverHealth;
-    final isServerHealthy = connectionProvider.isServerHealthy;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isServerHealthy) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: InfoBar(
-              title: Text(
-                appLocaleString(
-                  context,
-                  'Servidor indisponível para backup',
-                  'Server unavailable for backup',
-                ),
-              ),
-              content: SelectableText(
-                health?.message ??
-                    appLocaleString(
-                      context,
-                      'Atualize o status do servidor ou aguarde a recuperação '
-                          'antes de executar backups remotos.',
-                      'Refresh server status or wait for recovery before '
-                          'running remote backups.',
-                    ),
-              ),
-              severity: health?.isUnhealthy ?? true
-                  ? InfoBarSeverity.error
-                  : InfoBarSeverity.warning,
-              action: Button(
-                onPressed: connectionProvider.isRefreshingStatus
-                    ? null
-                    : () => unawaited(
-                        connectionProvider.refreshServerStatus(),
-                      ),
-                child: Text(
-                  appLocaleString(
-                    context,
-                    'Atualizar status',
-                    'Refresh status',
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-        if (partialError != null) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: InfoBar(
-              title: const Text('Aviso'),
-              content: SelectableText.rich(
-                TextSpan(
-                  text: partialError,
-                  style: FluentTheme.of(context).typography.body?.copyWith(
-                    color: context.colors.danger,
-                  ),
-                ),
-              ),
-              severity: InfoBarSeverity.error,
-              onClose: () => provider.clearError(),
-              action: _isDisconnectionError(partialError)
-                  ? Button(
-                      onPressed: () {
-                        provider.clearError();
-                        context.go(RouteNames.serverLogin);
-                      },
-                      child: const Text('Reconectar'),
-                    )
-                  : null,
-            ),
-          ),
-        ],
-        CommandBar(
-          mainAxisAlignment: MainAxisAlignment.end,
-          primaryItems: [
-            CommandBarButton(
-              icon: const Icon(FluentIcons.add),
-              label: Text(
-                appLocaleString(
-                  context,
-                  'Novo agendamento remoto',
-                  'New remote schedule',
-                ),
-              ),
-              onPressed: provider.isUpdating || provider.isExecuting
-                  ? null
-                  : () => _showCreateRemoteScheduleDialog(
-                      context,
-                      provider,
-                    ),
-            ),
-            CommandBarButton(
-              icon: const Icon(FluentIcons.refresh),
-              onPressed: provider.isUpdating || provider.isExecuting
-                  ? null
-                  : () {
-                      unawaited(provider.loadSchedules());
-                      unawaited(provider.loadExecutionQueue());
-                      unawaited(
-                        connectionProvider.refreshServerStatus(),
-                      );
-                    },
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Expanded(
-          child: ListView.separated(
-            itemCount: provider.schedules.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final schedule = provider.schedules[index];
-              final isOperating =
-                  schedule.id == provider.updatingScheduleId ||
-                  schedule.id == provider.executingScheduleId;
-              return ScheduleListItem(
-                schedule: schedule,
-                isOperating: isOperating,
-                onToggleEnabled: schedule.id == provider.updatingScheduleId
-                    ? null
-                    : (enabled) => _onToggleSchedulePaused(
-                        context,
-                        provider,
-                        schedule,
-                        enabled,
-                      ),
-                onDelete:
-                    schedule.id == provider.updatingScheduleId ||
-                        schedule.id == provider.executingScheduleId
-                    ? null
-                    : () => _onDeleteRemoteSchedule(
-                        context,
-                        provider,
-                        schedule,
-                      ),
-                onRunNow:
-                    schedule.id == provider.executingScheduleId ||
-                        !schedule.enabled ||
-                        !isServerHealthy
-                    ? null
-                    : () => _onRunNow(
-                        context,
-                        provider,
-                        schedule.id,
-                        connectionProvider,
-                      ),
-                onTransferDestinations:
-                    schedule.id == provider.updatingScheduleId ||
-                        schedule.id == provider.executingScheduleId
-                    ? null
-                    : () => _showTransferDestinationsDialog(
-                        context,
-                        schedule,
-                      ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
   }
 
   Future<void> _showCreateRemoteScheduleDialog(
