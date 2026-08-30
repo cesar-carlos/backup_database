@@ -33,14 +33,12 @@ final List<_Rule> _rules = <_Rule>[
     pattern: RegExp(
       r'MediaQuery\.of\s*\(\s*context\s*\)\.size\.width\s*>\s*\d',
     ),
-    message:
-        'Use context.isCompactWindow / AppBreakpoints instead of width literals.',
+    message: 'Use context.isCompactWindow / AppBreakpoints instead of width literals.',
   ),
   _Rule(
     id: 'atomic_doc_comment',
     pattern: RegExp(r'\*\*(Atom|Molecule|Organism)\*\*'),
-    message:
-        'Document atomic level with /// **Atom|Molecule|Organism** in the file.',
+    message: 'Document atomic level with /// **Atom|Molecule|Organism** in the file.',
     matchRequired: true,
   ),
 ];
