@@ -12,6 +12,11 @@ import 'package:backup_database/domain/services/i_firebird_backup_service.dart';
 import 'package:backup_database/domain/value_objects/firebird_config_enums.dart';
 import 'package:backup_database/domain/value_objects/port_number.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
+import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog/firebird_client_lib_section.dart';
+import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog/firebird_connection_section.dart';
+import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog/firebird_credentials_section.dart';
+import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog/firebird_dialog_labels.dart';
+import 'package:backup_database/presentation/widgets/firebird/firebird_config_dialog/firebird_embedded_section.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -38,8 +43,6 @@ class FirebirdConfigDialog extends StatefulWidget {
 }
 
 class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
-  static const int _kDefaultFirebirdPort = 3050;
-
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _hostController = TextEditingController();
@@ -48,7 +51,7 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _portController = TextEditingController(
-    text: '$_kDefaultFirebirdPort',
+    text: '$defaultFirebirdPort',
   );
   final TextEditingController _clientLibController = TextEditingController();
   final TextEditingController _cryptKeyController = TextEditingController();
@@ -138,259 +141,50 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AppTextField(
-              controller: _nameController,
-              label: appLocaleString(
-                context,
-                'Nome da configuração',
-                'Configuration name',
-              ),
-              hint: 'Ex: Produção Firebird',
-              validator: (String? value) {
-                if (value == null || value.trim().isEmpty) {
-                  return appLocaleString(
-                    context,
-                    'Nome é obrigatório',
-                    'Name is required',
-                  );
-                }
-                return null;
-              },
-              prefixIcon: const Icon(FluentIcons.tag),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            HostPortFields(
+            FirebirdConnectionSection(
+              nameController: _nameController,
               hostController: _hostController,
               portController: _portController,
-              hostLabel: appLocaleString(context, 'Host', 'Host'),
-              portLabel: appLocaleString(context, 'Porta', 'Port'),
-              hostHint: appLocaleString(
-                context,
-                'localhost ou IP',
-                'localhost or IP',
-              ),
-              portHint: '$_kDefaultFirebirdPort',
-              hostEnabled: !_useEmbedded,
-              hostValidator: (String? value) {
-                if (!_useEmbedded && (value == null || value.trim().isEmpty)) {
-                  return appLocaleString(
-                    context,
-                    'Host é obrigatório',
-                    'Host is required',
-                  );
-                }
-                return null;
-              },
+              databaseFileController: _databaseFileController,
+              aliasController: _aliasController,
+              useEmbedded: _useEmbedded,
             ),
             const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _databaseFileController,
-              label: appLocaleString(
-                context,
-                'Arquivo do banco (.fdb)',
-                'Database file (.fdb)',
-              ),
-              hint: r'C:\Dados\minha_base.fdb',
-              validator: (String? value) {
-                final pathEmpty = value == null || value.trim().isEmpty;
-                final aliasEmpty = _aliasController.text.trim().isEmpty;
-                if (pathEmpty && aliasEmpty) {
-                  return appLocaleString(
-                    context,
-                    'Informe o caminho do arquivo ou um alias',
-                    'Enter the database file path or an alias',
-                  );
-                }
-                return null;
-              },
-              prefixIcon: const Icon(FluentIcons.open_file),
+            FirebirdCredentialsSection(
+              usernameController: _usernameController,
+              passwordController: _passwordController,
             ),
             const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _aliasController,
-              label: appLocaleString(
-                context,
-                'Alias (opcional)',
-                'Alias (optional)',
-              ),
-              hint: appLocaleString(
-                context,
-                'Nome lógico no databases.conf',
-                'Logical name in databases.conf',
-              ),
-              prefixIcon: const Icon(FluentIcons.link),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _usernameController,
-              label: appLocaleString(context, 'Usuário', 'Username'),
-              hint: 'SYSDBA',
-              validator: (String? value) {
-                if (value == null || value.trim().isEmpty) {
-                  return appLocaleString(
-                    context,
-                    'Usuário é obrigatório',
-                    'Username is required',
-                  );
-                }
-                return null;
-              },
-              prefixIcon: const Icon(FluentIcons.contact),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            PasswordField(
-              controller: _passwordController,
-              hint: appLocaleString(
-                context,
-                'Senha do usuario',
-                'User password',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            InfoLabel(
-              label: appLocaleString(
-                context,
-                'Modo embedded',
-                'Embedded mode',
-              ),
-              child: ToggleSwitch(
-                checked: _useEmbedded,
-                onChanged: (bool value) {
-                  setState(() {
-                    _useEmbedded = value;
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _clientLibController,
-              label: appLocaleString(
-                context,
-                'fbclient.dll (opcional)',
-                'fbclient.dll (optional)',
-              ),
-              hint: appLocaleString(
-                context,
-                'Caminho completo se não estiver no PATH',
-                'Full path if not on PATH',
-              ),
-              prefixIcon: const Icon(FluentIcons.folder),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppDropdown<FirebirdServerVersionHint>(
-              label: appLocaleString(
-                context,
-                'Versão do servidor (dica)',
-                'Server version (hint)',
-              ),
-              value: _serverVersionHint,
-              items: FirebirdServerVersionHint.values
-                  .map(
-                    (FirebirdServerVersionHint v) =>
-                        ComboBoxItem<FirebirdServerVersionHint>(
-                          value: v,
-                          child: Text(_firebirdVersionHintLabel(context, v)),
-                        ),
-                  )
-                  .toList(growable: false),
-              onChanged: (FirebirdServerVersionHint? value) {
-                if (value != null) {
-                  setState(() {
-                    _serverVersionHint = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppDropdown<FirebirdServiceManagerMode>(
-              label: appLocaleString(
-                context,
-                'Gerenciador de serviço',
-                'Service manager',
-              ),
-              value: _serviceManagerMode,
-              items: FirebirdServiceManagerMode.values
-                  .map(
-                    (FirebirdServiceManagerMode v) =>
-                        ComboBoxItem<FirebirdServiceManagerMode>(
-                          value: v,
-                          child: Text(_serviceManagerModeLabel(context, v)),
-                        ),
-                  )
-                  .toList(growable: false),
-              onChanged: (FirebirdServiceManagerMode? value) {
-                if (value != null) {
-                  setState(() {
-                    _serviceManagerMode = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _cryptKeyController,
-              label: appLocaleString(
-                context,
-                'Chave de criptografia (não suportada nesta versão)',
-                'Encryption key (not supported in this version)',
-              ),
-              hint: appLocaleString(
-                context,
-                'Backup logico encriptado requer -CRYPT + -KEYHOLDER + '
-                    '-KEYNAME (FB 3+); UI dedicada virá em versão futura.',
-                'Encrypted logical backup needs -CRYPT + -KEYHOLDER + '
-                    '-KEYNAME (FB 3+); dedicated UI coming in a future '
-                    'release.',
-              ),
-              prefixIcon: const Icon(FluentIcons.lock),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              appLocaleString(
-                context,
-                'Aviso: backups Firebird com chave preenchida são '
-                    'rejeitados antes de invocar gbak (a flag -key não '
-                    'existe; -KEYNAME sozinho não encripta). Valor é '
-                    'preservado entre versões via secure storage.',
-                'Warning: Firebird backups with a key filled are rejected '
-                    'before invoking gbak (the -key flag does not exist; '
-                    '-KEYNAME alone does not encrypt). Value is preserved '
-                    'across versions via secure storage.',
-              ),
-              style: FluentTheme.of(context).typography.caption,
-            ),
-            const SizedBox(height: AppSpacing.md),
-            LabeledToggle(
-              title: appLocaleString(context, 'Habilitado', 'Enabled'),
-              description: appLocaleString(
-                context,
-                'Configuração ativa para uso em agendamentos',
-                'Configuration active for schedules',
-              ),
-              value: _isEnabled,
+            FirebirdEmbeddedSection(
+              useEmbedded: _useEmbedded,
               onChanged: (bool value) {
                 setState(() {
-                  _isEnabled = value;
+                  _useEmbedded = value;
                 });
               },
             ),
             const SizedBox(height: AppSpacing.md),
-            InfoLabel(
-              label: appLocaleString(
-                context,
-                'Teste de conexão',
-                'Connection test',
-              ),
-              child: Text(
-                appLocaleString(
-                  context,
-                  'Usa gstat -h com as credenciais informadas (mesma base '
-                      'usada pelo agendamento).',
-                  'Uses gstat -h with the credentials entered (same probe '
-                      'as scheduling).',
-                ),
-              ),
+            FirebirdClientLibSection(
+              clientLibController: _clientLibController,
+              cryptKeyController: _cryptKeyController,
+              serverVersionHint: _serverVersionHint,
+              serviceManagerMode: _serviceManagerMode,
+              isEnabled: _isEnabled,
+              onServerVersionHintChanged: (FirebirdServerVersionHint value) {
+                setState(() {
+                  _serverVersionHint = value;
+                });
+              },
+              onServiceManagerModeChanged: (FirebirdServiceManagerMode value) {
+                setState(() {
+                  _serviceManagerMode = value;
+                });
+              },
+              onEnabledChanged: (bool value) {
+                setState(() {
+                  _isEnabled = value;
+                });
+              },
             ),
           ],
         ),
@@ -647,45 +441,6 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
       serviceManagerMode: _serviceManagerMode,
       cryptKey: _cryptKeyController.text,
     );
-  }
-
-  String _firebirdVersionHintLabel(
-    BuildContext context,
-    FirebirdServerVersionHint v,
-  ) {
-    return switch (v) {
-      FirebirdServerVersionHint.auto => appLocaleString(
-        context,
-        'Automático',
-        'Automatic',
-      ),
-      FirebirdServerVersionHint.v25 => 'Firebird 2.5',
-      FirebirdServerVersionHint.v30 => 'Firebird 3.0',
-      FirebirdServerVersionHint.v40 => 'Firebird 4.0',
-    };
-  }
-
-  String _serviceManagerModeLabel(
-    BuildContext context,
-    FirebirdServiceManagerMode v,
-  ) {
-    return switch (v) {
-      FirebirdServiceManagerMode.auto => appLocaleString(
-        context,
-        'Automático',
-        'Automatic',
-      ),
-      FirebirdServiceManagerMode.always => appLocaleString(
-        context,
-        'Sempre usar',
-        'Always use',
-      ),
-      FirebirdServiceManagerMode.never => appLocaleString(
-        context,
-        'Nunca usar',
-        'Never use',
-      ),
-    };
   }
 
   void _save() {
