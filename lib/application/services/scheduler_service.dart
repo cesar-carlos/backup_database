@@ -369,7 +369,8 @@ class SchedulerService implements ISchedulerService {
       },
       (failure) {
         LoggerService.error(
-          'Falha ao buscar agendamentos vencidos para execução: $failure',
+          'Falha ao buscar agendamentos vencidos para execução: '
+          '${_failureMessage(failure)}',
         );
       },
     );
@@ -418,7 +419,8 @@ class SchedulerService implements ISchedulerService {
       },
       (failure) {
         LoggerService.warning(
-          'Não foi possível reconciliar históricos running antigos: $failure',
+          'Não foi possível reconciliar históricos running antigos: '
+          '${_failureMessage(failure)}',
         );
       },
     );

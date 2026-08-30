@@ -299,7 +299,8 @@ class ServiceHealthChecker {
             HealthIssue(
               severity: HealthStatus.warning,
               category: 'backup',
-              message: 'Erro ao buscar histórico de backups: $failure',
+              message:
+                  'Erro ao buscar histórico de backups: ${_issueMessage(failure)}',
             ),
           );
         },
@@ -439,7 +440,8 @@ class ServiceHealthChecker {
           },
           (failure) {
             LoggerService.warning(
-              'Erro ao executar fsutil para $pathToCheck: $failure',
+              'Erro ao executar fsutil para $pathToCheck: '
+              '${_issueMessage(failure)}',
             );
           },
         );
@@ -525,7 +527,8 @@ class ServiceHealthChecker {
           severity: HealthStatus.warning,
           category: 'postgres_slot',
           message:
-              'Falha ao carregar configuracoes PostgreSQL para health check de slot: $failure',
+              'Falha ao carregar configuracoes PostgreSQL para health check de slot: '
+              '${_issueMessage(failure)}',
         ),
       );
       return _CheckResult(issues, metrics);
@@ -587,7 +590,8 @@ class ServiceHealthChecker {
               severity: HealthStatus.warning,
               category: 'postgres_slot',
               message:
-                  'Falha ao verificar slots WAL em ${config.name}: $failure',
+                  'Falha ao verificar slots WAL em ${config.name}: '
+                  '${_issueMessage(failure)}',
             ),
           );
         },
@@ -831,6 +835,10 @@ class ServiceHealthChecker {
   HealthCheckResult? get lastResult => _lastResult;
 
   bool get isRunning => _isRunning;
+
+  String _issueMessage(Object? failure) {
+    return failureUserMessage(failure, fallback: 'Erro desconhecido');
+  }
 }
 
 class _CheckResult {
