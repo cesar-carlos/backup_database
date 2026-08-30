@@ -18,44 +18,34 @@ import 'package:backup_database/domain/services/backup_execution_result.dart';
 import 'package:backup_database/domain/services/i_sybase_backup_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
     as ps;
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_cli_runner.dart';
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_failure_message.dart';
+import 'package:backup_database/infrastructure/external/process/sybase/sybase_verification_runner.dart';
 import 'package:backup_database/infrastructure/external/process/sybase_connection_strategy_cache.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
-/// Extrai mensagem amigável de qualquer Object usado em `result.fold`.
-///
-/// Substitui o padrão `failure is Failure ? failure.message : failure.toString()`
-/// repetido em vários `fold` deste serviço, evitando expor `Failure(...)` no
-/// stdout/UI (§5.6 de `architectural_patterns.mdc`) e o cast inseguro §5.2.
-String _failureMessage(Object failure) {
-  if (failure is Failure) {
-    return failure.message;
-  }
-  return failure.toString();
-}
-
 class SybaseBackupService implements ISybaseBackupService {
   SybaseBackupService(
-    this._processService, {
+    ps.ProcessService processService, {
     required this._strategyCache,
-    this._useCredentialsFile = true,
-  }) {
+    bool useCredentialsFile = true,
+  }) : _cliRunner = SybaseCliRunner(
+         processService: processService,
+         useCredentialsFile: useCredentialsFile,
+       ) {
     // A6: limpa eventuais diretórios `sybase_backup_*` deixados em
     // `Directory.systemTemp` por execuções anteriores que foram mortas
     // antes do `finally` do `_runSybaseToolWithCredentials`. Cada um
     // contém um `args.txt` com `PWD=...` em texto plano. O cleanup é
     // best-effort e roda em background — falhas são logadas em debug.
-    unawaited(_cleanupOrphanCredentialDirs());
+    unawaited(_cliRunner.cleanupOrphanCredentialDirs());
   }
 
-  final ps.ProcessService _processService;
   final SybaseConnectionStrategyCache _strategyCache;
-
-  /// Quando `true` (default em produção) os utilitários SA são executados
-  /// via arquivo temporário de argumentos (`@<file>`) para evitar expor a
-  /// senha em `tasklist /v`. Pode ser desabilitado em testes que precisam
-  /// inspecionar diretamente os argumentos passados ao `ProcessService`.
-  final bool _useCredentialsFile;
+  final SybaseCliRunner _cliRunner;
+  late final SybaseVerificationRunner _verificationRunner =
+      SybaseVerificationRunner(cliRunner: _cliRunner);
 
   @override
   Future<rd.Result<BackupExecutionResult>> executeBackup({
@@ -214,7 +204,7 @@ class SybaseBackupService implements ISybaseBackupService {
           backupPath: backupPath,
         );
 
-        result = await _runSybaseToolWithCredentials(
+        result = await _cliRunner.runWithCredentials(
           executable: executable,
           arguments: args,
           timeout: backupTimeout ?? const Duration(hours: 2),
@@ -254,7 +244,7 @@ class SybaseBackupService implements ISybaseBackupService {
           options,
         );
         if (backupSql != null) {
-          result = await _runSybaseToolWithCredentials(
+          result = await _cliRunner.runWithCredentials(
             executable: 'dbisql',
             arguments: ['-c', connStr, '-nogui', backupSql],
             timeout: backupTimeout ?? const Duration(hours: 2),
@@ -308,7 +298,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
           final dbisqlArgs = ['-c', connStr, '-nogui', backupSql];
 
-          result = await _runSybaseToolWithCredentials(
+          result = await _cliRunner.runWithCredentials(
             executable: 'dbisql',
             arguments: dbisqlArgs,
             timeout: backupTimeout ?? const Duration(hours: 2),
@@ -328,7 +318,7 @@ class SybaseBackupService implements ISybaseBackupService {
               }
             },
             (failure) {
-              lastError = _failureMessage(failure);
+              lastError = sybaseFailureMessage(failure);
             },
           );
 
@@ -351,7 +341,7 @@ class SybaseBackupService implements ISybaseBackupService {
             backupPath: backupPath,
           );
 
-          result = await _runSybaseToolWithCredentials(
+          result = await _cliRunner.runWithCredentials(
             executable: executable,
             arguments: args,
             timeout: backupTimeout ?? const Duration(hours: 2),
@@ -375,7 +365,7 @@ class SybaseBackupService implements ISybaseBackupService {
               }
             },
             (failure) {
-              lastError = _failureMessage(failure);
+              lastError = sybaseFailureMessage(failure);
             },
           );
 
@@ -541,7 +531,7 @@ class SybaseBackupService implements ISybaseBackupService {
           'Backup Sybase concluído: $actualBackupPath (${ByteFormat.format(totalSize)})',
         );
 
-        final verification = await _runVerification(
+        final verification = await _verificationRunner.runVerification(
           config: config,
           actualBackupPath: actualBackupPath,
           effectiveType: effectiveType,
@@ -625,163 +615,6 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
-  /// Roda a verificação pós-backup (dbvalid + fallback dbverify) ou
-  /// determina que verificação não é aplicável (log).
-  ///
-  /// Para `effectiveType == log`, retorna `_VerifyOutcome.logUnavailable` e
-  /// (em strict) sinaliza falha via `strictFailureMessage` para o caller
-  /// abortar antes de montar métricas.
-  Future<_VerifyOutcome> _runVerification({
-    required SybaseConfig config,
-    required String actualBackupPath,
-    required BackupType effectiveType,
-    required bool verifyAfterBackup,
-    required VerifyPolicy verifyPolicy,
-    required Duration? verifyTimeout,
-    required String verifyCancelTag,
-  }) async {
-    if (!verifyAfterBackup) {
-      return const _VerifyOutcome(
-        success: false,
-        methodUsed: 'dbvalid',
-        duration: Duration.zero,
-      );
-    }
-
-    if (effectiveType == BackupType.log) {
-      // C6: strict + log = decisão explícita de "não há verificação real
-      // disponível para log". Em strict, sinalizamos falha via mensagem.
-      if (verifyPolicy == VerifyPolicy.strict) {
-        return const _VerifyOutcome(
-          success: false,
-          methodUsed: 'dbvalid',
-          duration: Duration.zero,
-          strictFailureMessage:
-              'Verificação de integridade não disponível para backup '
-              'de log Sybase, e modo estrito (strict) foi solicitado. '
-              'Use VerifyPolicy.bestEffort para backups de log ou '
-              'desabilite "Verificar após backup".',
-        );
-      }
-      LoggerService.info(
-        'Verificação não disponível para backup de log; '
-        'resultado registrado como indisponível',
-      );
-      return const _VerifyOutcome(
-        success: false,
-        methodUsed: 'dbvalid',
-        duration: Duration.zero,
-      );
-    }
-
-    // M2: stopwatch só roda quando há verificação real (full).
-    final stopwatch = Stopwatch()..start();
-    LoggerService.info('Verificando integridade do backup Sybase...');
-
-    var verifySuccess = false;
-    var methodUsed = 'dbvalid';
-    var lastVerifyError = '';
-
-    final dir = Directory(actualBackupPath);
-    if (await dir.exists()) {
-      final backupDbFile = await _tryFindBackupDbFile(dir);
-      if (backupDbFile != null) {
-        final connStr =
-            'UID=${config.username};PWD=${config.password};'
-            'DBF=${backupDbFile.path}';
-
-        final dbvalidOutcome = await _runVerifyTool(
-          executable: 'dbvalid',
-          connectionString: connStr,
-          timeout: verifyTimeout,
-          tag: verifyCancelTag,
-        );
-        verifySuccess = dbvalidOutcome.success;
-        lastVerifyError = dbvalidOutcome.errorMessage;
-
-        if (!verifySuccess) {
-          LoggerService.debug(
-            'Tentando fallback dbverify no arquivo: ${backupDbFile.path}',
-          );
-          final dbverifyOutcome = await _runVerifyTool(
-            executable: 'dbverify',
-            connectionString: connStr,
-            timeout: verifyTimeout,
-            tag: verifyCancelTag,
-          );
-          if (dbverifyOutcome.success) {
-            verifySuccess = true;
-            methodUsed = 'dbverify';
-          } else {
-            lastVerifyError = dbverifyOutcome.errorMessage;
-          }
-        }
-      } else {
-        lastVerifyError =
-            'Não foi possível localizar um arquivo .db no diretório do backup';
-      }
-    }
-
-    if (!verifySuccess) {
-      LoggerService.warning(
-        'Verificação de integridade falhou (dbvalid e dbverify): '
-        '$lastVerifyError',
-      );
-      if (verifyPolicy == VerifyPolicy.strict) {
-        stopwatch.stop();
-        return _VerifyOutcome(
-          success: false,
-          methodUsed: methodUsed,
-          duration: stopwatch.elapsed,
-          strictFailureMessage:
-              'Verificação de integridade falhou (modo estrito). '
-              '$lastVerifyError',
-        );
-      }
-    }
-    stopwatch.stop();
-    return _VerifyOutcome(
-      success: verifySuccess,
-      methodUsed: methodUsed,
-      duration: stopwatch.elapsed,
-    );
-  }
-
-  /// Executa um único utilitário de verificação (`dbvalid` ou `dbverify`)
-  /// e devolve sucesso + mensagem de erro consolidada.
-  Future<_VerifyToolOutcome> _runVerifyTool({
-    required String executable,
-    required String connectionString,
-    required Duration? timeout,
-    required String tag,
-  }) async {
-    final result = await _runSybaseToolWithCredentials(
-      executable: executable,
-      arguments: ['-c', connectionString],
-      timeout: timeout ?? const Duration(minutes: 30),
-      tag: tag,
-    );
-    return result.fold(
-      (processResult) {
-        if (processResult.isSuccess) {
-          LoggerService.info(
-            'Verificação de integridade concluída com sucesso ($executable)',
-          );
-          return const _VerifyToolOutcome(success: true, errorMessage: '');
-        }
-        final msg = processResult.stderr.isNotEmpty
-            ? processResult.stderr
-            : processResult.stdout;
-        LoggerService.debug('$executable falhou: $msg');
-        return _VerifyToolOutcome(success: false, errorMessage: msg);
-      },
-      (failure) => _VerifyToolOutcome(
-        success: false,
-        errorMessage: _failureMessage(failure),
-      ),
-    );
-  }
-
   /// Resolve a etiqueta exibida em `flags.verifyPolicy` /
   /// `sybaseOptions.verificationMethod` na ordem: `none`,
   /// `log_unavailable`, método usado (dbvalid/dbverify) ou `dbvalid_falhou`.
@@ -842,134 +675,6 @@ class SybaseBackupService implements ISybaseBackupService {
     }
     args.addAll(['-c', connectionString, '-y', backupPath]);
     return args;
-  }
-
-  /// Prefixo dos diretórios temporários criados em
-  /// [_runSybaseToolWithCredentials]. Específico o suficiente para não
-  /// colidir com dirs criados por testes (que tipicamente usam prefixos
-  /// como `sybase_backup_test_`) ou outros consumidores de
-  /// `Directory.systemTemp`.
-  static const String _credentialsTempDirPrefix = 'sybase_backup_creds_';
-
-  /// Remove diretórios `sybase_backup_creds_*` órfãos em `systemTemp`.
-  ///
-  /// Quando o processo Dart é morto (Task Manager, BSOD, watchdog) antes
-  /// do `finally` do [_runSybaseToolWithCredentials] rodar, o diretório
-  /// temporário (com o `args.txt` contendo `PWD=...` em texto puro) fica
-  /// no disco indefinidamente. Este método varre `systemTemp` no boot do
-  /// service e remove diretórios com o prefixo conhecido.
-  Future<void> _cleanupOrphanCredentialDirs() async {
-    try {
-      final tempDir = Directory.systemTemp;
-      if (!await tempDir.exists()) return;
-      await for (final entity in tempDir.list(followLinks: false)) {
-        if (entity is! Directory) continue;
-        final name = p.basename(entity.path);
-        if (!name.startsWith(_credentialsTempDirPrefix)) continue;
-        try {
-          await entity.delete(recursive: true);
-          LoggerService.debug(
-            'Removido diretório órfão de credenciais Sybase: ${entity.path}',
-          );
-        } on Object catch (e) {
-          // Outro processo (talvez outro backup em execução) pode estar
-          // segurando o diretório. Skip silencioso — pegaremos no próximo
-          // boot.
-          LoggerService.debug(
-            'Não foi possível remover ${entity.path} (em uso?): $e',
-          );
-        }
-      }
-    } on Object catch (e, stackTrace) {
-      LoggerService.debug(
-        'Cleanup de diretórios órfãos Sybase falhou: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  /// Executa um utilitário Sybase (dbisql/dbbackup) escrevendo a lista de
-  /// argumentos em um arquivo temporário e invocando `<exe> @<arquivo>`.
-  ///
-  /// Vantagens em relação a passar a senha como argumento direto:
-  ///  - A connection string (com `PWD=...`) não aparece em ferramentas
-  ///    como `tasklist /v`/`wmic process` (Windows) ou `ps -ef` (Linux).
-  ///  - O arquivo é criado no diretório temporário do usuário e removido
-  ///    no `finally`, mesmo em caso de falha/timeout.
-  ///
-  /// Se a escrita do arquivo falhar (caso muito raro), faz fallback para a
-  /// execução direta com aviso em log para preservar a operação do backup.
-  Future<rd.Result<ps.ProcessResult>> _runSybaseToolWithCredentials({
-    required String executable,
-    required List<String> arguments,
-    required Duration timeout,
-    String? tag,
-  }) async {
-    if (!_useCredentialsFile) {
-      // Modo de testes/legacy: executa diretamente preservando o array
-      // de argumentos para que mocks possam inspecionar a chamada.
-      return _processService.run(
-        executable: executable,
-        arguments: arguments,
-        timeout: timeout,
-        tag: tag,
-      );
-    }
-    File? credentialsFile;
-    try {
-      final tempDir = await Directory.systemTemp.createTemp(
-        _credentialsTempDirPrefix,
-      );
-      credentialsFile = File(p.join(tempDir.path, 'args.txt'));
-      // Cada argumento em uma linha; valores com espaços já vêm sem aspas
-      // (a Sybase Tools faz parsing de uma linha por argumento neste modo).
-      final buffer = StringBuffer();
-      arguments.forEach(buffer.writeln);
-      await credentialsFile.writeAsString(buffer.toString(), flush: true);
-
-      final result = await _processService.run(
-        executable: executable,
-        arguments: ['@${credentialsFile.path}'],
-        timeout: timeout,
-        tag: tag,
-      );
-      return result;
-    } on Object catch (e, stackTrace) {
-      // M1: degradação de segurança — quando o arquivo de credenciais
-      // falha, a senha acaba indo no `arguments` do processo filho
-      // (visível em `tasklist /v` no Windows). Logamos como ERRO para
-      // garantir visibilidade no painel de logs do app, não warning.
-      LoggerService.error(
-        'Falha ao usar arquivo de credenciais para $executable; '
-        'fazendo fallback para execução direta — a senha pode ficar '
-        'visível em `tasklist /v`/`ps -ef` durante a execução. Erro: $e',
-        e,
-        stackTrace,
-      );
-      return _processService.run(
-        executable: executable,
-        arguments: arguments,
-        timeout: timeout,
-        tag: tag,
-      );
-    } finally {
-      if (credentialsFile != null) {
-        try {
-          if (await credentialsFile.exists()) {
-            await credentialsFile.delete();
-          }
-          final parent = credentialsFile.parent;
-          if (await parent.exists()) {
-            await parent.delete(recursive: true);
-          }
-        } on Object catch (e) {
-          LoggerService.debug(
-            'Não foi possível remover arquivo temporário de credenciais: $e',
-          );
-        }
-      }
-    }
   }
 
   /// Constrói lista de estratégias dbisql na ordem cronológica de tentativa.
@@ -1228,26 +933,6 @@ class SybaseBackupService implements ISybaseBackupService {
     }
   }
 
-  Future<File?> _tryFindBackupDbFile(Directory backupDir) async {
-    try {
-      final entities = await backupDir.list().toList();
-      final dbFiles = entities
-          .whereType<File>()
-          .where((f) => p.extension(f.path).toLowerCase() == '.db')
-          .toList();
-      if (dbFiles.isEmpty) return null;
-
-      // A7: `length()` async em vez de `lengthSync()` no comparador.
-      final pairs = await Future.wait(
-        dbFiles.map((f) async => (f, await f.length())),
-      );
-      pairs.sort((a, b) => b.$2.compareTo(a.$2));
-      return pairs.first.$1;
-    } on Object catch (_) {
-      return null;
-    }
-  }
-
   @override
   Future<rd.Result<bool>> testConnection(SybaseConfig config) async {
     try {
@@ -1289,7 +974,7 @@ class SybaseBackupService implements ISybaseBackupService {
 
           final arguments = ['-c', connStr, '-q', 'SELECT 1', '-nogui'];
 
-          final result = await _runSybaseToolWithCredentials(
+          final result = await _cliRunner.runWithCredentials(
             executable: 'dbisql',
             arguments: arguments,
             // Antes era 10s, apertado para servidor remoto/VPN. Postgres
@@ -1319,7 +1004,7 @@ class SybaseBackupService implements ISybaseBackupService {
               LoggerService.debug('Estratégia falhou: $lastError');
             },
             (failure) {
-              lastError = _failureMessage(failure);
+              lastError = sybaseFailureMessage(failure);
               LoggerService.debug('Estratégia falhou: $lastError');
             },
           );
@@ -1401,7 +1086,7 @@ class SybaseBackupService implements ISybaseBackupService {
         "SELECT CAST(db_property('FileSize') AS BIGINT) * "
         "CAST(db_property('PageSize') AS BIGINT)";
 
-    final result = await _runSybaseToolWithCredentials(
+    final result = await _cliRunner.runWithCredentials(
       executable: 'dbisql',
       arguments: ['-c', connStr, '-nogui', '-q', sql],
       timeout: timeout ?? const Duration(seconds: 15),
@@ -1453,32 +1138,4 @@ class _SybaseConnectionStrategy {
 
   final String name;
   final String conn;
-}
-
-/// Resultado consolidado da fase de verificação pós-backup.
-///
-/// Substitui um conjunto de variáveis locais (`verifySuccess`,
-/// `verificationMethodUsed`, `verifyDuration`, `lastVerifyError`) que
-/// poluíam o frame do `_executeBackupCore`. O caller só lê o tipo aqui.
-class _VerifyOutcome {
-  const _VerifyOutcome({
-    required this.success,
-    required this.methodUsed,
-    required this.duration,
-    this.strictFailureMessage,
-  });
-
-  final bool success;
-  final String methodUsed;
-  final Duration duration;
-
-  /// Quando preenchido, indica que o pipeline deve abortar com este
-  /// texto em `BackupFailure` (modo strict).
-  final String? strictFailureMessage;
-}
-
-class _VerifyToolOutcome {
-  const _VerifyToolOutcome({required this.success, required this.errorMessage});
-  final bool success;
-  final String errorMessage;
 }
