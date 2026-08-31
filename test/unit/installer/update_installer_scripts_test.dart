@@ -152,6 +152,42 @@ void main() {
     );
 
     test(
+      'ResolveSelectedMode does not expand {app} during InitializeWizard',
+      () async {
+        final iss = await _loadSetupIssParser();
+
+        expect(
+          iss.routineContains(
+            'ResolveSelectedMode',
+            "ExpandConstant('{app}",
+          ),
+          isFalse,
+          reason:
+              '{app} is not initialized in InitializeWizard; expanding '
+              'it aborts Setup with Internal error',
+        );
+        expect(
+          iss.routineContains(
+            'InitializeWizard',
+            "ExpandConstant('{app}",
+          ),
+          isFalse,
+        );
+        expect(
+          iss.routineContains('GetInstallModeFilePath', 'PrevAppDir'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'ResolveSelectedMode',
+            'GetInstallModeFilePath',
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
       'setup.iss treats VC++ redist success codes and hides UI',
       () async {
         final setup = await _repoFile(
