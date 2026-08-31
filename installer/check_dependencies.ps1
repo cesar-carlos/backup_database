@@ -41,7 +41,7 @@ function Write-OptionalToolStatus {
     Write-Host ""
 }
 
-Write-Host "[1/10] Verificando Visual C++ Redistributables..." -ForegroundColor Yellow
+Write-Host "[1/13] Verificando Visual C++ Redistributables..." -ForegroundColor Yellow
 $vcRedist = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" -ErrorAction SilentlyContinue
 if ($vcRedist) {
     Write-Host "  OK: Visual C++ Redistributables encontrado (versao: $($vcRedist.Version))" -ForegroundColor Green
@@ -52,16 +52,19 @@ if ($vcRedist) {
 }
 Write-Host ""
 
-Write-OptionalToolStatus -Label "[2/10] Verificando sqlcmd (SQL Server)..." -CommandName "sqlcmd" -OnlyIfUsing "SQL Server"
-Write-OptionalToolStatus -Label "[3/10] Verificando dbisql (Sybase SQL Anywhere)..." -CommandName "dbisql" -OnlyIfUsing "Sybase SQL Anywhere"
-Write-OptionalToolStatus -Label "[4/10] Verificando dbbackup (Sybase SQL Anywhere)..." -CommandName "dbbackup" -OnlyIfUsing "Sybase SQL Anywhere"
-Write-OptionalToolStatus -Label "[5/10] Verificando psql (PostgreSQL)..." -CommandName "psql" -OnlyIfUsing "PostgreSQL"
-Write-OptionalToolStatus -Label "[6/10] Verificando pg_basebackup (PostgreSQL)..." -CommandName "pg_basebackup" -OnlyIfUsing "PostgreSQL"
-Write-OptionalToolStatus -Label "[7/10] Verificando gbak (Firebird)..." -CommandName "gbak" -OnlyIfUsing "Firebird"
-Write-OptionalToolStatus -Label "[8/10] Verificando nbackup (Firebird)..." -CommandName "nbackup" -OnlyIfUsing "Firebird"
-Write-OptionalToolStatus -Label "[9/10] Verificando gstat (Firebird)..." -CommandName "gstat" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[2/13] Verificando sqlcmd (SQL Server)..." -CommandName "sqlcmd" -OnlyIfUsing "SQL Server"
+Write-OptionalToolStatus -Label "[3/13] Verificando dbisql (Sybase SQL Anywhere)..." -CommandName "dbisql" -OnlyIfUsing "Sybase SQL Anywhere"
+Write-OptionalToolStatus -Label "[4/13] Verificando dbbackup (Sybase SQL Anywhere)..." -CommandName "dbbackup" -OnlyIfUsing "Sybase SQL Anywhere"
+Write-OptionalToolStatus -Label "[5/13] Verificando dbvalid (Sybase SQL Anywhere)..." -CommandName "dbvalid" -OnlyIfUsing "Sybase SQL Anywhere (verificacao)"
+Write-OptionalToolStatus -Label "[6/13] Verificando dbverify (Sybase SQL Anywhere)..." -CommandName "dbverify" -OnlyIfUsing "Sybase SQL Anywhere (verificacao, fallback)"
+Write-OptionalToolStatus -Label "[7/13] Verificando psql (PostgreSQL)..." -CommandName "psql" -OnlyIfUsing "PostgreSQL"
+Write-OptionalToolStatus -Label "[8/13] Verificando pg_basebackup (PostgreSQL)..." -CommandName "pg_basebackup" -OnlyIfUsing "PostgreSQL"
+Write-OptionalToolStatus -Label "[9/13] Verificando pg_verifybackup (PostgreSQL)..." -CommandName "pg_verifybackup" -OnlyIfUsing "PostgreSQL (verificacao de backup)"
+Write-OptionalToolStatus -Label "[10/13] Verificando gbak (Firebird)..." -CommandName "gbak" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[11/13] Verificando nbackup (Firebird)..." -CommandName "nbackup" -OnlyIfUsing "Firebird"
+Write-OptionalToolStatus -Label "[12/13] Verificando gstat (Firebird)..." -CommandName "gstat" -OnlyIfUsing "Firebird"
 
-Write-Host "[10/10] Verificando isql (Firebird)..." -ForegroundColor Yellow
+Write-Host "[13/13] Verificando isql (Firebird)..." -ForegroundColor Yellow
 $isqlPath = Test-CommandInPath -CommandName "isql"
 $gbakPath = Test-CommandInPath -CommandName "gbak"
 $nbackupPath = Test-CommandInPath -CommandName "nbackup"

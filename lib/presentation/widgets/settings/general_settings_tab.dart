@@ -6,6 +6,7 @@ import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/services/temp_directory_service.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:backup_database/presentation/widgets/settings/settings_ui.dart';
@@ -116,7 +117,7 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: AppSpacing.paddingLg,
+      padding: InheritedAppDensity.resolve(context).contentPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

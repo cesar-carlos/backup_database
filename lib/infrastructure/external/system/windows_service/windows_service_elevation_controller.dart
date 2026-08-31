@@ -24,9 +24,11 @@ class WindowsServiceElevationController {
   final WindowsServiceTimingConfig _timing;
   final IMetricsCollector? _metrics;
 
+  void Function(bool waiting)? onElevationWaitChanged;
+
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const int _successExitCode = 0;
-  static const String _logPath = WindowsServiceConstants.logPath;
+  static String get _logPath => WindowsServiceConstants.logPath;
 
   Future<rd.Result<void>> startWithElevation({
     required String scCommand,
@@ -39,16 +41,9 @@ class WindowsServiceElevationController {
         '-ArgumentList "$scCommand $_serviceName" '
         r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
 
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
+    final result = await _runElevatedPowerShell(
+      elevatedCommand,
+      timeout: _timing.uacPromptTimeout,
     );
 
     return result.fold(
@@ -117,7 +112,7 @@ class WindowsServiceElevationController {
             ServerFailure(
               message:
                   'Não foi possível solicitar elevação UAC para iniciar '
-                  'o serviço: $failure',
+                  'o serviço: ${failureUserMessage(failure)}',
             ),
           ),
         );
@@ -134,16 +129,9 @@ class WindowsServiceElevationController {
         '-ArgumentList "stop $_serviceName" '
         r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
 
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
+    final result = await _runElevatedPowerShell(
+      elevatedCommand,
+      timeout: _timing.uacPromptTimeout,
     );
 
     return result.fold(
@@ -202,7 +190,7 @@ class WindowsServiceElevationController {
             ServerFailure(
               message:
                   'Não foi possível solicitar elevação UAC para parar '
-                  'o serviço: $failure',
+                  'o serviço: ${failureUserMessage(failure)}',
             ),
           ),
         );
@@ -210,22 +198,34 @@ class WindowsServiceElevationController {
     );
   }
 
-  Future<rd.Result<void>> uninstallWithElevation() async {
-    const elevatedCommand =
-        r'$process = Start-Process -FilePath "cmd.exe" '
-        '-ArgumentList "/c sc stop $_serviceName & sc delete $_serviceName" '
-        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $process.ExitCode';
+  Future<rd.Result<void>> uninstallWithElevation({
+    required String nssmPath,
+  }) async {
+    final delaySeconds = _timing.serviceDelay.inSeconds;
+    final pollSeconds = _timing.longTimeout.inSeconds;
+    final nssmPs = nssmPath.replaceAll('`', '``').replaceAll('"', '`"');
+    final inner =
+        '\$nssm = "$nssmPs"; '
+        'sc.exe stop $_serviceName | Out-Null; '
+        '\$deadline = (Get-Date).AddSeconds($pollSeconds); '
+        'do { '
+        '  \$q = sc.exe query $_serviceName 2>\$null | Out-String; '
+        r"  if ($q -match 'STOPPED' -or $q -match 'PARADO') { break }; "
+        '  Start-Sleep -Seconds 1 '
+        r'} while ((Get-Date) -lt $deadline); '
+        'Start-Sleep -Seconds $delaySeconds; '
+        '& \$nssm remove $_serviceName confirm; '
+        r'exit $LASTEXITCODE';
+    final elevatedCommand =
+        r'$p = Start-Process -FilePath "powershell.exe" '
+        "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',"
+        " '$inner' "
+        '-Verb RunAs -WindowStyle Hidden -PassThru -Wait; '
+        r'if ($null -eq $p) { exit 1223 }; exit $p.ExitCode';
 
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.longTimeout,
+    final result = await _runElevatedPowerShell(
+      elevatedCommand,
+      timeout: _timing.uacPromptTimeout + _timing.longTimeout,
     );
 
     return result.fold(
@@ -235,7 +235,7 @@ class WindowsServiceElevationController {
             : processResult.stdout;
 
         if (processResult.exitCode != _successExitCode) {
-          if (_wasUacCancelled(output)) {
+          if (_wasUacCancelled(output) || processResult.exitCode == 1223) {
             return const rd.Failure(
               ValidationFailure(
                 message:
@@ -248,7 +248,8 @@ class WindowsServiceElevationController {
             ServerFailure(
               message:
                   'Falha ao remover serviço com elevação UAC '
-                  '(exit ${processResult.exitCode}). Saída: $output',
+                  '(exit ${processResult.exitCode}). '
+                  'Saída: ${failureUserMessage(output, fallback: output)}',
             ),
           );
         }
@@ -277,12 +278,93 @@ class WindowsServiceElevationController {
             ServerFailure(
               message:
                   'Não foi possível solicitar elevação UAC para remover '
-                  'o serviço: $failure',
+                  'o serviço: ${failureUserMessage(failure)}',
             ),
           ),
         );
       },
     );
+  }
+
+  Future<rd.Result<void>> scheduleStartAfterUiExit() async {
+    final delaySeconds = _timing.serviceDelay.inSeconds;
+    final inner =
+        'Start-Sleep -Seconds $delaySeconds; '
+        'sc.exe start $_serviceName';
+    final elevatedCommand =
+        'try { '
+        r'$p = Start-Process -FilePath "powershell.exe" '
+        "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',"
+        " '$inner' "
+        '-Verb RunAs -WindowStyle Hidden -PassThru; '
+        r'if ($null -eq $p) { exit 1223 }; exit 0 '
+        '} catch { '
+        r'$msg = [string]$_.Exception.Message; '
+        r"if ($msg -match 'canceled|cancelad') { exit 1223 }; "
+        r'Write-Error $msg; exit 1 }';
+
+    final result = await _runElevatedPowerShell(
+      elevatedCommand,
+      timeout: _timing.uacPromptTimeout,
+    );
+
+    return result.fold(
+      (processResult) {
+        final output = processResult.stderr.isNotEmpty
+            ? processResult.stderr
+            : processResult.stdout;
+        if (processResult.exitCode == 1223 || _wasUacCancelled(output)) {
+          return const rd.Failure(
+            ValidationFailure(
+              message:
+                  'A solicitação de permissões de Administrador foi '
+                  'cancelada. O aplicativo não será fechado. Confirme o '
+                  'prompt UAC para iniciar o serviço após fechar.',
+            ),
+          );
+        }
+        if (processResult.exitCode != _successExitCode) {
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Não foi possível agendar o início do serviço após fechar '
+                  'o aplicativo (exit ${processResult.exitCode}). '
+                  'Saída: ${failureUserMessage(output, fallback: output)}',
+            ),
+          );
+        }
+        return const rd.Success(unit);
+      },
+      (failure) => rd.Failure(
+        ServerFailure(
+          message:
+              'Não foi possível solicitar elevação UAC para iniciar o '
+              'serviço após fechar: ${failureUserMessage(failure)}',
+        ),
+      ),
+    );
+  }
+
+  Future<rd.Result<ProcessResult>> _runElevatedPowerShell(
+    String elevatedCommand, {
+    required Duration timeout,
+  }) async {
+    onElevationWaitChanged?.call(true);
+    try {
+      return await _processService.run(
+        executable: 'powershell',
+        arguments: [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          elevatedCommand,
+        ],
+        timeout: timeout,
+      );
+    } finally {
+      onElevationWaitChanged?.call(false);
+    }
   }
 
   bool _wasUacCancelled(String output) {

@@ -188,10 +188,15 @@ class ServiceModeInitializer {
         step: _ServiceBootstrapStep.startIpc.oneBased,
         label: 'Inicializando IPC do processo dono do lock',
         action: () async {
-          await singleInstanceService!.startIpcServer(
+          final started = await singleInstanceService!.startIpcServer(
             role: SingleInstanceConfig.ipcInstanceRoleService,
             onRunSchedule: ScheduledBackupExecutor.execute,
           );
+          if (!started) {
+            throw StateError(
+              'Falha ao iniciar IPC named pipe do processo servico',
+            );
+          }
         },
       );
 

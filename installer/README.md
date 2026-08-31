@@ -120,22 +120,35 @@ O `setup.iss` empacota:
 
 - binarios do app Flutter para Windows
 - `.env.example` em `C:\ProgramData\BackupDatabase\config`
-- guias operacionais basicos em `{app}\docs`
+- guias operacionais basicos em `{app}\docs` (inclui `TROUBLESHOOTING_SERVICE.md`)
 - `check_dependencies.ps1`
 - `nssm.exe` e scripts de servico em `{app}\tools`
+
+SO minimo: Windows 8 / Server 2012+ x64 (`MinVersion=6.2`). Auto-update
+silencioso desabilitado em Server 2012 / 2012 R2.
 
 O instalador oferece dois modos:
 
 - `Server Mode`
-- `Client Mode`
+- `Client Mode` (sem atalho de servico; `{app}\tools\install_service.ps1`
+  ainda instala o servico se precisar)
+
+IPC local: named pipe Win32; o instalador nao abre porta TCP para IPC.
+Socket remoto: TCP 9527. Task opcional (desmarcada, so Server Mode) libera
+a porta no Firewall (`Backup Database Remote Socket`). Sem a task, use
+`netsh` manual.
+
+Upgrade e overwrite nativo (`Flags: ignoreversion`): o setup nao
+desinstala a versao anterior antes de copiar arquivos.
+
+Uninstall: remove logs em `ProgramData\BackupDatabase\logs`; preserva
+`.env`/staging/locks no silent; no wizard interativo pergunta se apaga
+`C:\ProgramData\BackupDatabase` (padrao Nao).
 
 O auto-update silencioso passa `/MODE=server` ou `/MODE=client` para o
 Inno Setup preservar o modo no upgrade (a pagina customizada nao e
 restaurada por `UsePreviousTasks`). Sem `/MODE=`, o setup le
 `update_context.json` e, se faltar, `{app}\.install_mode`.
-
-Upgrade e overwrite nativo (`Flags: ignoreversion`): o setup nao
-desinstala a versao anterior antes de copiar arquivos.
 
 ## Servico Windows
 
@@ -151,7 +164,12 @@ Referencias operacionais:
 - comportamento do update: `docs\install\auto_update_setup.md`
 
 Importante: update silencioso do servico so e restaurado automaticamente
-quando a conta do Windows Service e `LocalSystem`.
+quando a conta do Windows Service e `LocalSystem`. Conta customizada: o
+`restore_update_state.ps1` sai com codigo 2 **sem** `nssm remove`/`install`.
+Origem `ui`: o restore so relanca a UI, sem startar o servico.
+
+Assinatura Authenticode: procedimento em `docs\install\release_guide.md`;
+`build_installer.py` nao chama `signtool`.
 
 ## Distribuicao
 

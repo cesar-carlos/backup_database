@@ -13,17 +13,16 @@ class WindowsServiceMessages {
       '3. Selecione "Executar como administrador"\n'
       '4. Tente novamente';
 
-  static const String troubleshootingAdminLogs =
+  static String get troubleshootingAdminLogs =>
       'Tente:\n'
       '1. Executar como Administrador\n'
       '2. Verificar logs em ${WindowsServiceConstants.logPath}\n'
       '3. Atualizar o status e tentar novamente';
 
-  static const String troubleshootingWithEnv =
+  static String get troubleshootingWithEnv =>
       'Tente:\n'
       '1. Executar como Administrador\n'
-      r'2. Verificar se existe C:\ProgramData\BackupDatabase\config\.env'
-      '\n'
+      '2. Verificar se existe ${WindowsServiceConstants.configPath}\\.env\n'
       '3. Verificar logs em ${WindowsServiceConstants.logPath} '
       '(service_stdout.log, service_stderr.log)\n'
       '4. Atualizar o status e tentar novamente';

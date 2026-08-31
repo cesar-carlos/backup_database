@@ -59,7 +59,10 @@ class BackupProgressDialog extends StatelessWidget {
               ],
             ),
             content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
+              constraints: AppDialogConstraints.of(
+                context,
+                preferredWidth: 800,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

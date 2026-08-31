@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:backup_database/core/constants/windows_service_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:path/path.dart' as p;
@@ -9,9 +10,6 @@ import 'package:result_dart/result_dart.dart' show unit;
 class WindowsServiceEnvProvisioner {
   const WindowsServiceEnvProvisioner();
 
-  static const String _programDataEnv = 'ProgramData';
-  static const String _defaultProgramData = r'C:\ProgramData';
-
   /// Garante que `%ProgramData%\BackupDatabase\config\.env` exista antes
   /// da instalação. Anteriormente o preflight apenas avisava e prosseguia,
   /// mas o serviço subseqüentemente falhava em `EnvironmentLoader`,
@@ -19,7 +17,8 @@ class WindowsServiceEnvProvisioner {
   /// (issue §2.2 da auditoria).
   ///
   /// Estratégia: se `.env` já existe, no-op. Caso contrário, tenta copiar
-  /// `<appDir>\.env` ou `<appDir>\.env.example` para o destino. Se nada
+  /// `<appDir>\.env`, `<appDir>\.env.example` ou
+  /// `<configDir>\.env.example` (template do Inno em ProgramData). Se nada
   /// estiver disponível, retorna `ValidationFailure` bloqueante com
   /// instrução acionável ao usuário.
   ///
@@ -54,9 +53,13 @@ class WindowsServiceEnvProvisioner {
     final candidates = [
       File(p.join(appDir, '.env')),
       File(p.join(appDir, '.env.example')),
+      File(p.join(configDir, '.env.example')),
     ];
+    var hadCandidate = false;
+    Object? lastCopyError;
     for (final candidate in candidates) {
       if (await candidate.exists()) {
+        hadCandidate = true;
         try {
           await candidate.copy(envPath);
           LoggerService.info(
@@ -64,6 +67,7 @@ class WindowsServiceEnvProvisioner {
           );
           return const rd.Success(unit);
         } on Object catch (e) {
+          lastCopyError = e;
           LoggerService.warning(
             'Falha ao copiar ${candidate.path} para $envPath: $e',
           );
@@ -71,11 +75,23 @@ class WindowsServiceEnvProvisioner {
       }
     }
 
+    if (hadCandidate) {
+      return rd.Failure(
+        ValidationFailure(
+          message:
+              'Não foi possível copiar o template .env para $envPath: '
+              '$lastCopyError\n\n'
+              'Tente executar como Administrador.',
+        ),
+      );
+    }
+
     return rd.Failure(
       ValidationFailure(
         message:
             'Arquivo .env não encontrado em $envPath e nenhum '
-            'template (.env / .env.example) está disponível em $appDir.\n\n'
+            'template (.env / .env.example) está disponível em $appDir '
+            'nem em $configDir.\n\n'
             'Crie manualmente o arquivo $envPath com a configuração do '
             'serviço antes de instalar. Sem ele, o serviço entra em loop '
             'de restart silencioso após instalado.',
@@ -83,9 +99,5 @@ class WindowsServiceEnvProvisioner {
     );
   }
 
-  String _defaultServiceConfigDir() {
-    final programData =
-        Platform.environment[_programDataEnv] ?? _defaultProgramData;
-    return '$programData\\BackupDatabase\\config';
-  }
+  String _defaultServiceConfigDir() => WindowsServiceConstants.configPath;
 }

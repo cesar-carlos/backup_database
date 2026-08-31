@@ -20,10 +20,12 @@ Clientes corporativos frequentemente exigem evidencias de acessibilidade
    `meetsGuideline(textContrastGuideline)` em testes widget quando a
    superficie for estavel (temas claro e escuro com
    `AppSemanticColors` registrado no tema Fluent).
-2. **Alvos de toque/teclado**: acoes primarias repetiveis usam
-   `AppTargetSize.comfortable` (48 logical pixels) como minimo onde o
-   controle e exclusivamente apontador/teclado; a shell principal
-   (`MainLayout`) e coberta por teste de guideline de tap target.
+2. **Alvos de apontador/teclado**: acoes primarias usam
+   `AppTargetSize.desktop` (32 logical pixels, padrao WinUI/Fluent).
+   O minimo a11y e `AppTargetSize.minimum` (24, WCAG 2.2 AA 2.5.8).
+   Testes usam `desktopTapTargetGuideline`, nao
+   `androidTapTargetGuideline` (48, Android). Janela minima suportada:
+   800×600.
 3. **Escala de texto**: layouts de paginas principais devem tolerar
    `TextScaler.linear(1.5)` e `2.0` sem overflow em testes widget com
    viewport desktop representativa (`MediaQueryData` nos testes).
@@ -80,5 +82,7 @@ Clientes corporativos frequentemente exigem evidencias de acessibilidade
   `test/widget/presentation/pages/main_pages_accessibility_test.dart`,
   `test/widget/presentation/pages/database_config_page_empty_sections_test.dart`,
   `test/widget/presentation/pages/main_layout_accessibility_test.dart`,
-  `test/widget/presentation/widgets/common/design_system_accessibility_test.dart`.
-- Tokens: `AppTargetSize`, `AppSpacing`, `AppSemanticColors` (ADR-009).
+  `test/widget/presentation/widgets/common/design_system_accessibility_test.dart`,
+  `test/support/desktop_tap_target_guideline.dart`.
+- Tokens: `AppTargetSize` (desktop 32 / minimum 24), `AppSpacing`,
+  `AppSemanticColors` (ADR-009), `AppDialogConstraints`.

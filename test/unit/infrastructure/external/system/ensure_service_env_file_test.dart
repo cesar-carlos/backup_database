@@ -89,6 +89,26 @@ void main() {
       },
     );
 
+    test(
+      'falls back to configDir .env.example (ProgramData template)',
+      () async {
+        File(p.join(configDir.path, '.env.example')).writeAsStringSync(
+          'FROM_PROGRAMDATA=1',
+        );
+
+        final result = await service.ensureServiceEnvFileForTesting(
+          appDir: appDir.path,
+          configDirOverride: configDir.path,
+        );
+
+        expect(result.isSuccess(), isTrue);
+        expect(
+          File(p.join(configDir.path, '.env')).readAsStringSync(),
+          equals('FROM_PROGRAMDATA=1'),
+        );
+      },
+    );
+
     test('prefers .env over .env.example when both present', () async {
       File(p.join(appDir.path, '.env')).writeAsStringSync('REAL=1');
       File(p.join(appDir.path, '.env.example')).writeAsStringSync('TEMPLATE=1');

@@ -66,19 +66,15 @@ class MutexSecurityAttributes {
   }
 }
 
-/// Helper para construir `SECURITY_ATTRIBUTES` permissivo para mutex
-/// machine-global compartilhado entre processos rodando como contas
-/// diferentes (típico: UI = usuário; Service = LocalSystem).
-class MutexSecurityDescriptor {
-  MutexSecurityDescriptor._();
+class Win32SecurityDescriptor {
+  Win32SecurityDescriptor._();
 
-  /// Constrói um `SECURITY_ATTRIBUTES` com DACL que permite
-  /// `MUTEX_ALL_ACCESS` para Everyone.
-  ///
-  /// Retorna `null` se a construção falhar (ex.: API indisponível). O
-  /// caller deve então cair no comportamento legado (`nullptr` = DACL
-  /// default do token criador).
-  static MutexSecurityAttributes? buildEveryoneAccess() {
+  /// SDDL de named pipe: Generic All para Everyone (WD), o equivalente
+  /// de acesso ao mutex machine-global. Não usa a máscara
+  /// `MUTEX_ALL_ACCESS` (`0x1F0001`), que não se aplica a pipes.
+  static const String namedPipeEveryoneGenericAllSddl = 'D:(A;;GA;;;WD)';
+
+  static MutexSecurityAttributes? fromSddl(String sddl) {
     if (!Platform.isWindows) return null;
 
     DynamicLibrary advapi32;
@@ -104,7 +100,7 @@ class MutexSecurityDescriptor {
           )
         >('ConvertStringSecurityDescriptorToSecurityDescriptorW');
 
-    final sddlPtr = _mutexAllAccessForEveryoneSddl.toNativeUtf16();
+    final sddlPtr = sddl.toNativeUtf16();
     final outSdPtr = calloc<Pointer<NativeType>>();
     final outSizePtr = calloc<Uint32>();
 
@@ -133,5 +129,22 @@ class MutexSecurityDescriptor {
       calloc.free(outSdPtr);
       calloc.free(outSizePtr);
     }
+  }
+}
+
+/// Helper para construir `SECURITY_ATTRIBUTES` permissivo para mutex
+/// machine-global compartilhado entre processos rodando como contas
+/// diferentes (típico: UI = usuário; Service = LocalSystem).
+class MutexSecurityDescriptor {
+  MutexSecurityDescriptor._();
+
+  /// Constrói um `SECURITY_ATTRIBUTES` com DACL que permite
+  /// `MUTEX_ALL_ACCESS` para Everyone.
+  ///
+  /// Retorna `null` se a construção falhar (ex.: API indisponível). O
+  /// caller deve então cair no comportamento legado (`nullptr` = DACL
+  /// default do token criador).
+  static MutexSecurityAttributes? buildEveryoneAccess() {
+    return Win32SecurityDescriptor.fromSddl(_mutexAllAccessForEveryoneSddl);
   }
 }

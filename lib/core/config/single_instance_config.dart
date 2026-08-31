@@ -103,15 +103,11 @@ class SingleInstanceConfig {
 
   static const String lockScopeLogToken = 'lock_scope=$lockScopeMachineGlobal';
 
-  // IPC configuration
-  static const int ipcBasePort = 58724;
-  static const List<int> ipcAlternativePorts = [
-    58725,
-    58726,
-    58727,
-    58728,
-    58729,
-  ];
+  static const String ipcPipeName =
+      r'\\.\pipe\BackupDatabase_Ipc_{A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D}';
+  static const int ipcMaxPipeInstances = 8;
+  static const int ipcMaxLineBytes = 8192;
+  static const int ipcPipeBufferBytes = 4096;
 
   // Retry configuration
   ///
@@ -126,13 +122,9 @@ class SingleInstanceConfig {
   static const Duration defaultIpcConnectTimeout = Duration(seconds: 5);
   static const Duration defaultScheduledDelegationTimeout = Duration(hours: 24);
   static const Duration quickConnectionTimeout = Duration(milliseconds: 500);
-  static const Duration socketCloseDelay = Duration(milliseconds: 100);
-  static const Duration ipcDiscoveryFastTimeout = Duration(milliseconds: 150);
-  static const Duration ipcDiscoverySlowTimeout = Duration(milliseconds: 300);
-  static const Duration ipcPortCacheTtl = Duration(minutes: 2);
 
   /// Timeout para o comando `SHOW_WINDOW` enviado pela 2ª instância à
-  /// dona do lock. Mantido CURTO (loopback é local) para evitar a
+  /// dona do lock. Mantido CURTO (pipe local) para evitar a
   /// percepção de "app travado" quando o usuário clica no atalho —
   /// pior caso, `maxRetryAttempts * (this + retryDelay)` define o
   /// teto da janela morta antes do dialog de aviso aparecer.
@@ -149,7 +141,6 @@ class SingleInstanceConfig {
     fallback: defaultScheduledDelegationTimeout,
   );
 
-  // IPC commands (legacy ping/pong still accepted by server for older clients)
   static const String ipcProtocolId = 'BACKUP_DATABASE_IPC_V1';
   static const int ipcProtocolVersion = 1;
   static const String ipcInstanceRoleUi = 'ui';
@@ -160,6 +151,7 @@ class SingleInstanceConfig {
   static String get ipcUserInfoLinePrefix => '$ipcProtocolId|USER_INFO|';
   static String get ipcGetUserInfoMessage => '$ipcProtocolId|GET_USER_INFO';
   static String get ipcShowWindowMessage => '$ipcProtocolId|SHOW_WINDOW';
+  static String get ipcOkAckMessage => '$ipcProtocolId|OK';
   static const String ipcRunScheduleCommand = 'RUN_SCHEDULE';
   static const String ipcRunScheduleResultCommand = 'RUN_SCHEDULE_RESULT';
   static const String ipcRunScheduleMessageOk = 'ok';
@@ -171,15 +163,10 @@ class SingleInstanceConfig {
   static const String ipcRunScheduleMessageDelegationTimeout =
       'delegation_timeout';
   static String ipcRunScheduleMessage(String scheduleId) =>
-      '$ipcProtocolId|$ipcRunScheduleCommand|scheduleId=$scheduleId';
+      '$ipcProtocolId|$ipcRunScheduleCommand|'
+      'v=$ipcProtocolVersion|scheduleId=$scheduleId';
   static String get ipcRunScheduleResultLinePrefix =>
       '$ipcProtocolId|$ipcRunScheduleResultCommand|';
-
-  static const String showWindowCommand = 'SHOW_WINDOW';
-  static const String getUserInfoCommand = 'GET_USER_INFO';
-  static const String userInfoResponsePrefix = 'USER_INFO:';
-  static const String pingCommand = 'PING';
-  static const String pongResponse = 'PONG';
 
   // CLI arguments
   static const String minimizedArgument = '--minimized';

@@ -25,8 +25,6 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  static const double _dashboardStatsCardWidth = 280;
-
   static const String _dashboardStatIconAsset = AppImageAssets.database128;
 
   String? _selectedConnectionId;
@@ -263,52 +261,33 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     if (!isClientMode) const SizedBox(height: 4),
                     if (!isClientMode)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Total de Backups',
-                                value: provider.totalBackups.toString(),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Backups Hoje',
-                                value: provider.backupsToday.toString(),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsBackups,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Falharam Hoje',
-                                value: provider.failedToday.toString(),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsFailed,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Agendamentos Ativos',
-                                value: provider.activeSchedules.toString(),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsActive,
-                              ),
-                            ),
-                          ],
-                        ),
+                      DashboardStatsStrip(
+                        children: [
+                          StatsCard(
+                            title: 'Total de Backups',
+                            value: provider.totalBackups.toString(),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.primary,
+                          ),
+                          StatsCard(
+                            title: 'Backups Hoje',
+                            value: provider.backupsToday.toString(),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsBackups,
+                          ),
+                          StatsCard(
+                            title: 'Falharam Hoje',
+                            value: provider.failedToday.toString(),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsFailed,
+                          ),
+                          StatsCard(
+                            title: 'Agendamentos Ativos',
+                            value: provider.activeSchedules.toString(),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsActive,
+                          ),
+                        ],
                       ),
                     if (provider.serverMetrics != null) ...[
                       const SizedBox(height: 24),
@@ -317,64 +296,45 @@ class _DashboardPageState extends State<DashboardPage> {
                         style: FluentTheme.of(context).typography.subtitle,
                       ),
                       const SizedBox(height: 4),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Total de Backups (Servidor)',
-                                value: _serverMetric(
-                                  provider.serverMetrics!,
-                                  'totalBackups',
-                                ),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.primary,
-                              ),
+                      DashboardStatsStrip(
+                        children: [
+                          StatsCard(
+                            title: 'Total de Backups (Servidor)',
+                            value: _serverMetric(
+                              provider.serverMetrics!,
+                              'totalBackups',
                             ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Backups Hoje (Servidor)',
-                                value: _serverMetric(
-                                  provider.serverMetrics!,
-                                  'backupsToday',
-                                ),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsBackups,
-                              ),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.primary,
+                          ),
+                          StatsCard(
+                            title: 'Backups Hoje (Servidor)',
+                            value: _serverMetric(
+                              provider.serverMetrics!,
+                              'backupsToday',
                             ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Falharam Hoje (Servidor)',
-                                value: _serverMetric(
-                                  provider.serverMetrics!,
-                                  'failedToday',
-                                ),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsFailed,
-                              ),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsBackups,
+                          ),
+                          StatsCard(
+                            title: 'Falharam Hoje (Servidor)',
+                            value: _serverMetric(
+                              provider.serverMetrics!,
+                              'failedToday',
                             ),
-                            const SizedBox(width: 16),
-                            SizedBox(
-                              width: _dashboardStatsCardWidth,
-                              child: StatsCard(
-                                title: 'Agendamentos Ativos (Servidor)',
-                                value: _serverMetric(
-                                  provider.serverMetrics!,
-                                  'activeSchedules',
-                                ),
-                                iconAsset: _dashboardStatIconAsset,
-                                color: AppPalette.statsActive,
-                              ),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsFailed,
+                          ),
+                          StatsCard(
+                            title: 'Agendamentos Ativos (Servidor)',
+                            value: _serverMetric(
+                              provider.serverMetrics!,
+                              'activeSchedules',
                             ),
-                          ],
-                        ),
+                            iconAsset: _dashboardStatIconAsset,
+                            color: AppPalette.statsActive,
+                          ),
+                        ],
                       ),
                     ],
                     if (!isClientMode && provider.metricsReport != null) ...[

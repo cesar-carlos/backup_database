@@ -98,7 +98,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final features = getIt<FeatureAvailabilityService>();
 
     return SingleChildScrollView(
-      padding: AppSpacing.paddingLg,
+      padding: InheritedAppDensity.resolve(context).contentPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

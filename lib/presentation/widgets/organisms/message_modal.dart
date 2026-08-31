@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
@@ -133,6 +134,7 @@ class MessageModal extends StatelessWidget {
       transitionDuration: AppDuration.normal,
       builder: (BuildContext dialogContext) {
         return ContentDialog(
+          constraints: AppDialogConstraints.of(dialogContext),
           title: Text(title),
           content: Text(message),
           actions: [
@@ -220,6 +222,7 @@ class MessageModal extends StatelessWidget {
       namesRoute: true,
       label: title,
       child: ContentDialog(
+        constraints: AppDialogConstraints.of(context),
         title: Row(
           children: [
             ExcludeSemantics(
@@ -238,13 +241,10 @@ class MessageModal extends StatelessWidget {
           ],
         ),
         content: Padding(
-          padding: AppSpacing.paddingLg,
-          child: SizedBox(
-            width: 600,
-            child: SelectableText(
-              message,
-              style: FluentTheme.of(context).typography.body,
-            ),
+          padding: InheritedAppDensity.resolve(context).contentPadding,
+          child: SelectableText(
+            message,
+            style: FluentTheme.of(context).typography.body,
           ),
         ),
         actions: [
@@ -316,6 +316,7 @@ class _MessageModalInputConfirmState extends State<_MessageModalInputConfirm> {
   Widget build(BuildContext context) {
     final canConfirm = _controller.text.trim().isNotEmpty;
     return ContentDialog(
+      constraints: AppDialogConstraints.of(context),
       title: Text(widget.title),
       content: SingleChildScrollView(
         child: Column(

@@ -14,10 +14,11 @@
 #
 # 3. **Validação pós-merge**: chaves declaradas em `$criticalKeys`
 #    DEVEM estar presentes e não-vazias após o merge. Se faltarem, o
-#    script sai com `exit 2` para o instalador abortar (e o `setup.iss`
-#    pode loggar Warning para o usuário). Isso evita o caso da auditoria
-#    em que o `.env` foi escrito sem `AUTO_UPDATE_FEED_URL` e o
-#    auto-update ficou silenciosamente quebrado por semanas.
+#    script sai com `exit 2`. O `setup.iss` NAO aborta a instalacao:
+#    registra Warning no log e, no wizard interativo, mostra MsgBox.
+#    Isso evita o caso da auditoria em que o `.env` foi escrito sem
+#    `AUTO_UPDATE_FEED_URL` e o auto-update ficou silenciosamente
+#    quebrado por semanas.
 
 param(
     [Parameter(Mandatory = $true)]
@@ -228,6 +229,3 @@ if ($missingCritical.Count -gt 0) {
 }
 
 exit 0
-
-# Fallback dentro do primeiro early-exit do script (sem .env.example),
-# replicado aqui por consistencia caso o fluxo entre nele futuramente.

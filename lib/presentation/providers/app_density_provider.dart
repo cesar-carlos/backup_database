@@ -15,7 +15,7 @@ class InheritedAppDensity extends InheritedWidget {
   static AppDensity resolve(BuildContext context) {
     final scope = context
         .dependOnInheritedWidgetOfExactType<InheritedAppDensity>();
-    return scope?.density ?? AppDensity.comfortable;
+    return scope?.density ?? AppDensity.compact;
   }
 
   @override
@@ -31,7 +31,7 @@ class AppDensityProvider extends ChangeNotifier {
 
   final IUserPreferencesRepository _userPreferences;
 
-  AppDensity _density = AppDensity.comfortable;
+  AppDensity _density = AppDensity.compact;
   bool _isInitialized = false;
 
   AppDensity get density => _density;
@@ -46,7 +46,7 @@ class AppDensityProvider extends ChangeNotifier {
       _density = _parseStored(stored);
     } on Object catch (e, s) {
       LoggerService.warning('Erro ao carregar densidade da UI', e, s);
-      _density = AppDensity.comfortable;
+      _density = AppDensity.compact;
     } finally {
       _isInitialized = true;
       notifyListeners();
@@ -73,7 +73,7 @@ class AppDensityProvider extends ChangeNotifier {
       case 'comfortable':
         return AppDensity.comfortable;
       default:
-        return AppDensity.comfortable;
+        return AppDensity.compact;
     }
   }
 }

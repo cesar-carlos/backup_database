@@ -3,6 +3,7 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/email_config.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/notifications/notification_config_dialog/notification_attach_log_section.dart';
@@ -555,10 +556,9 @@ class _NotificationConfigDialogState extends State<NotificationConfigDialog> {
     final oauthModesAvailable = features.isExternalBrowserOAuthEnabled;
 
     return ContentDialog(
-      constraints: const BoxConstraints(
-        minWidth: 720,
-        maxWidth: 720,
-        maxHeight: 860,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 720,
       ),
       title: Row(
         children: [

@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -30,7 +31,7 @@ class AppSectionCard extends StatelessWidget {
     final captionStyle = FluentTheme.of(context).typography.caption;
 
     return AppCard(
-      padding: padding ?? AppSpacing.paddingLg,
+      padding: padding ?? InheritedAppDensity.resolve(context).contentPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

@@ -3,8 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/firebird_config_provider.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/tokens/app_palette.dart';
-import 'package:backup_database/core/theme/tokens/app_spacing.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/tool_path_help.dart';
 import 'package:backup_database/domain/entities/firebird_config.dart';
@@ -109,10 +108,9 @@ class _FirebirdConfigDialogState extends State<FirebirdConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      constraints: const BoxConstraints(
-        minWidth: 600,
-        maxWidth: 600,
-        maxHeight: 800,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 600,
       ),
       title: Row(
         children: [

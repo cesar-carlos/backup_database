@@ -286,6 +286,7 @@ AppBootstrapDependencies _buildDependencies({
             required onRunSchedule,
           }) async {
             events.add('ipc');
+            return true;
           },
       logInfo: _ignoreLog,
       logWarning: _ignoreLogWithError,

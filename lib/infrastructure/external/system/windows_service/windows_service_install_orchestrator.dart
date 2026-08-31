@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/external/system/windows_service/w
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_sc_client.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:result_dart/result_dart.dart' show unit;
 
@@ -31,6 +32,7 @@ class WindowsServiceInstallOrchestrator {
     required this._elevationController,
     required this._getStatus,
     IMetricsCollector? metricsCollector,
+    @visibleForTesting this.nssmPathOverride,
   }) : _metrics = metricsCollector;
 
   final ProcessService _processService;
@@ -43,22 +45,27 @@ class WindowsServiceInstallOrchestrator {
   final WindowsServiceElevationController _elevationController;
   final WindowsServiceStatusSupplier _getStatus;
   final IMetricsCollector? _metrics;
+  final String? nssmPathOverride;
 
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const int _successExitCode = 0;
   static const int _nssmServiceNotFoundExitCode = 3;
   static const String _nssmExeName = 'nssm.exe';
   static const String _toolsSubdir = 'tools';
-  static const String _logPath = WindowsServiceConstants.logPath;
+  static String get _logPath => WindowsServiceConstants.logPath;
 
   Future<rd.Result<void>> runPreflight({required String appDir}) async {
     final statusResult = await _getStatus();
     final statusFailure = statusResult.exceptionOrNull();
     if (statusFailure != null) {
-      final msg = failureUserMessage(statusFailure).toLowerCase();
-      if (msg.contains('acesso negado') ||
-          msg.contains('access denied') ||
-          msg.contains('administrator')) {
+      final msg = failureUserMessage(statusFailure);
+      if (_scClient.textContainsAccessDenied(msg) ||
+          msg.toLowerCase().contains('administrator')) {
+        LoggerService.warning(
+          'Preflight: consulta de status com acesso negado; '
+          'seguindo para instalação (UAC se necessário)',
+        );
+      } else {
         return rd.Failure(windowsServiceAsFailure(statusFailure));
       }
     }
@@ -67,41 +74,45 @@ class WindowsServiceInstallOrchestrator {
       appDir: appDir,
     );
     if (envCopyResult.isError()) {
-      return rd.Failure(
-        windowsServiceAsFailure(envCopyResult.exceptionOrNull()!),
-      );
+      final envFailure = envCopyResult.exceptionOrNull()!;
+      if (_isPreflightPermissionFailure(envFailure)) {
+        LoggerService.warning(
+          'Preflight: não foi possível gravar .env sem elevação; '
+          'o instalador elevado criará o arquivo',
+        );
+      } else {
+        return rd.Failure(windowsServiceAsFailure(envFailure));
+      }
     }
 
     try {
       Directory(_logPath).createSync(recursive: true);
     } on Object catch (e) {
-      return rd.Failure(
-        ValidationFailure(
-          message:
-              'Diretório de logs não pôde ser criado: $_logPath\n\n'
-              'Erro: $e\n\n'
-              'Tente:\n'
-              '1. Executar como Administrador\n'
-              '2. Verificar permissões da pasta $_logPath',
-        ),
+      LoggerService.warning(
+        'Preflight: diretório de logs não pôde ser criado '
+        '($_logPath): $e — seguindo para UAC se a instalação exigir',
       );
+      return const rd.Success(unit);
     }
 
     final hasWritePermission =
         await DirectoryPermissionCheck.hasWritePermissionForPath(_logPath);
     if (!hasWritePermission) {
-      return const rd.Failure(
-        ValidationFailure(
-          message:
-              'Diretório de logs não é gravável: $_logPath\n\n'
-              'Tente:\n'
-              '1. Executar como Administrador\n'
-              '2. Verificar permissões da pasta $_logPath',
-        ),
+      LoggerService.warning(
+        'Preflight: diretório de logs não é gravável ($_logPath); '
+        'seguindo para instalação (UAC se necessário)',
       );
     }
 
     return const rd.Success(unit);
+  }
+
+  bool _isPreflightPermissionFailure(Object failure) {
+    final msg = failureUserMessage(failure).toLowerCase();
+    return _scClient.textContainsAccessDenied(msg) ||
+        msg.contains('administrator') ||
+        msg.contains('administrador') ||
+        msg.contains('permiss');
   }
 
   Future<rd.Result<void>> install({
@@ -111,7 +122,8 @@ class WindowsServiceInstallOrchestrator {
     try {
       final appPath = Platform.resolvedExecutable;
       final appDir = File(appPath).parent.path;
-      final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
+      final nssmPath =
+          nssmPathOverride ?? '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
         _metrics?.incrementCounter(
@@ -142,13 +154,10 @@ class WindowsServiceInstallOrchestrator {
 
       LoggerService.info('Instalando serviço do Windows...');
 
-      final statusResult = await _getStatus();
-      final existingStatus = statusResult.getOrNull();
-
-      if (existingStatus?.isInstalled ?? false) {
-        LoggerService.info('Serviço já existe. Removendo versão anterior...');
-        await uninstall();
-        await Future.delayed(_timing.serviceDelay);
+      final existingResult = await removeExistingInstallIfNeeded();
+      final existingFailure = existingResult.exceptionOrNull();
+      if (existingFailure != null) {
+        return rd.Failure(windowsServiceAsFailure(existingFailure));
       }
 
       final installResult = await _processService.run(
@@ -284,7 +293,7 @@ class WindowsServiceInstallOrchestrator {
                 _metrics?.incrementCounter(
                   ObservabilityMetrics.windowsServiceInstallFailure,
                 );
-                return const rd.Failure(
+                return rd.Failure(
                   ServerFailure(
                     message:
                         'O comando de instalação foi executado, mas o serviço '
@@ -333,10 +342,68 @@ class WindowsServiceInstallOrchestrator {
     }
   }
 
+  @visibleForTesting
+  Future<rd.Result<void>> removeExistingInstallIfNeeded() async {
+    final statusResult = await _getStatus();
+    final statusFailure = statusResult.exceptionOrNull();
+    if (statusFailure != null) {
+      final msg = failureUserMessage(statusFailure);
+      if (!_scClient.textContainsAccessDenied(msg)) {
+        _metrics?.incrementCounter(
+          ObservabilityMetrics.windowsServiceInstallFailure,
+        );
+        return rd.Failure(
+          ServerFailure(
+            message:
+                'Não foi possível verificar se o serviço já está '
+                'instalado: $msg',
+          ),
+        );
+      }
+      return const rd.Success(unit);
+    }
+    if (!(statusResult.getOrNull()?.isInstalled ?? false)) {
+      return const rd.Success(unit);
+    }
+
+    LoggerService.info('Serviço já existe. Removendo versão anterior...');
+    final uninstallResult = await uninstall();
+    final uninstallFailure = uninstallResult.exceptionOrNull();
+    if (uninstallFailure != null) {
+      _metrics?.incrementCounter(
+        ObservabilityMetrics.windowsServiceInstallFailure,
+      );
+      return rd.Failure(
+        ServerFailure(
+          message:
+              'Não foi possível remover o serviço existente antes de '
+              'reinstalar: ${failureUserMessage(uninstallFailure)}',
+        ),
+      );
+    }
+    await Future.delayed(_timing.serviceDelay);
+    final afterUninstall = await _getStatus();
+    if (afterUninstall.getOrNull()?.isInstalled ?? false) {
+      _metrics?.incrementCounter(
+        ObservabilityMetrics.windowsServiceInstallFailure,
+      );
+      return rd.Failure(
+        ServerFailure(
+          message:
+              'O serviço anterior ainda está registrado após a remoção. '
+              'Não é seguro executar um segundo nssm install.\n\n'
+              '${WindowsServiceMessages.troubleshootingAdminLogs}',
+        ),
+      );
+    }
+    return const rd.Success(unit);
+  }
+
   Future<rd.Result<void>> uninstall() async {
     try {
       final appDir = File(Platform.resolvedExecutable).parent.path;
-      final nssmPath = '$appDir\\$_toolsSubdir\\$_nssmExeName';
+      final nssmPath =
+          nssmPathOverride ?? '$appDir\\$_toolsSubdir\\$_nssmExeName';
 
       if (!File(nssmPath).existsSync()) {
         _metrics?.incrementCounter(
@@ -390,7 +457,7 @@ class WindowsServiceInstallOrchestrator {
                 'Acesso negado ao remover serviço; solicitando elevação UAC',
               );
               final elevatedUninstallResult = await _elevationController
-                  .uninstallWithElevation();
+                  .uninstallWithElevation(nssmPath: nssmPath);
               return elevatedUninstallResult.fold(
                 (_) {
                   _metrics?.incrementCounter(

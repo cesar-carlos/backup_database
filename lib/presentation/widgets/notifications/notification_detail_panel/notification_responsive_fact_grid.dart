@@ -1,3 +1,4 @@
+import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Molecule** — responsive column grid for summary fact tiles.
@@ -11,8 +12,8 @@ class NotificationResponsiveFactGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = switch (constraints.maxWidth) {
-          >= 1180 => 4,
-          >= 720 => 2,
+          >= AppBreakpoints.wide => 4,
+          >= AppBreakpoints.compact => 2,
           _ => 1,
         };
 

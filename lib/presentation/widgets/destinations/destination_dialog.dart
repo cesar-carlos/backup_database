@@ -8,6 +8,7 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/constants/license_features.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/services/i_ftp_service.dart';
 import 'package:backup_database/domain/services/i_nextcloud_destination_service.dart';
@@ -240,10 +241,9 @@ class _DestinationDialogState extends State<DestinationDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      constraints: const BoxConstraints(
-        minWidth: 600,
-        maxWidth: 600,
-        maxHeight: 800,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 600,
       ),
       title: DestinationDialogTitle(
         selectedType: _selectedType,

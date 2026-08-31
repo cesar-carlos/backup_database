@@ -1,6 +1,7 @@
 export 'app_breakpoints.dart';
 export 'app_curves.dart';
 export 'app_density.dart';
+export 'app_dialog_constraints.dart';
 export 'app_duration.dart';
 export 'app_elevation.dart';
 export 'app_palette.dart';

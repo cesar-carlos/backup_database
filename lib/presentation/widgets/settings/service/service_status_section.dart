@@ -50,6 +50,16 @@ class ServiceStatusSection extends StatelessWidget {
                     'Name registered in the Windows Service Manager.',
                   ),
                 ),
+              if (provider.stateCode != null)
+                SettingsFactTile(
+                  label: appLocaleString(context, 'SCM', 'SCM'),
+                  value: provider.stateCode!.name,
+                  caption: appLocaleString(
+                    context,
+                    'Código de estado reportado pelo Service Control Manager.',
+                    'State code reported by the Service Control Manager.',
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

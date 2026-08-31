@@ -1,4 +1,6 @@
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
+import 'package:backup_database/core/theme/tokens/app_density.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_text_field.dart';
@@ -17,14 +19,17 @@ Widget _goldenApp({required Widget home}) {
   return FluentApp(
     theme: _goldenFluentTheme(),
     locale: const Locale('pt'),
-    home: ScaffoldPage(
-      content: Padding(
-        padding: const EdgeInsets.all(24),
-        child: RepaintBoundary(
-          key: const Key('golden_surface'),
-          child: Align(
-            alignment: Alignment.topLeft,
-            child: home,
+    home: InheritedAppDensity(
+      density: AppDensity.compact,
+      child: ScaffoldPage(
+        content: Padding(
+          padding: const EdgeInsets.all(24),
+          child: RepaintBoundary(
+            key: const Key('golden_surface'),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: home,
+            ),
           ),
         ),
       ),

@@ -17,22 +17,35 @@ enum WindowsServiceOperation {
   restart,
 }
 
+enum WindowsServiceInstallOutcome {
+  failed,
+  registeredAndRunning,
+  registeredBlockedByUiInstance,
+  registeredStartFailed,
+}
+
 class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   WindowsServiceProvider(
     this._service,
     this._eventLog, {
     IMetricsCollector? metricsCollector,
-  }) : _metrics = metricsCollector;
+  }) : _metrics = metricsCollector {
+    _service.setElevationWaitListener(_handleElevationWait);
+  }
   final IWindowsServiceService _service;
   final IWindowsServiceEventLogger _eventLog;
   final IMetricsCollector? _metrics;
 
   WindowsServiceStatus? _status;
   WindowsServiceOperation _operation = WindowsServiceOperation.none;
+  bool _isWaitingForUac = false;
 
   WindowsServiceStatus? _statusCache;
   DateTime? _statusCacheTimestamp;
   static const _statusCacheTtl = Duration(seconds: 2);
+
+  // startPollingTimeout (30s) + startPollingInitialDelay (3s)
+  static const Duration _scmStartEventLogTimeout = Duration(seconds: 33);
 
   // S15: dispose-aware. Embora o provider não possua timers nem
   // subscriptions explícitas, operações async em curso (`installService`,
@@ -47,6 +60,21 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   WindowsServiceOperation get operation => _operation;
   bool get isInstalled => _status?.isInstalled ?? false;
   bool get isRunning => _status?.isRunning ?? false;
+  bool get isWaitingForUac => _isWaitingForUac;
+  WindowsServiceStateCode? get stateCode => _status?.stateCode;
+  bool get isStopPending => stateCode == WindowsServiceStateCode.stopPending;
+  bool get isStartPending => stateCode == WindowsServiceStateCode.startPending;
+
+  void _handleElevationWait(bool waiting) {
+    if (_isDisposed) {
+      return;
+    }
+    if (_isWaitingForUac == waiting) {
+      return;
+    }
+    _isWaitingForUac = waiting;
+    notifyListeners();
+  }
 
   @override
   void notifyListeners() {
@@ -57,6 +85,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   @override
   void dispose() {
     _isDisposed = true;
+    _service.setElevationWaitListener(null);
     super.dispose();
   }
 
@@ -104,11 +133,13 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
     _statusCacheTimestamp = null;
   }
 
-  Future<bool> installService({String? user, String? password}) async {
-    if (isLoading) return false;
+  Future<WindowsServiceInstallOutcome> installService({
+    String? user,
+    String? password,
+  }) async {
+    if (isLoading) return WindowsServiceInstallOutcome.failed;
     await _eventLog.logInstallStarted();
 
-    // S16: medir tempo total install → RUNNING (install + auto-start).
     final installToRunningWatch = Stopwatch()..start();
 
     final success = await _runOperation<bool>(
@@ -125,21 +156,71 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
       },
     );
 
-    final ok = success ?? false;
-    if (ok) {
-      await _eventLog.logInstallSucceeded();
-      await startService();
-      if (_status?.isRunning ?? false) {
-        installToRunningWatch.stop();
-        _metrics?.recordHistogram(
-          ObservabilityMetrics.windowsServiceInstallToRunningSeconds,
-          installToRunningWatch.elapsedMilliseconds / 1000,
-        );
-      }
-    } else {
+    final registered = success ?? false;
+    if (!registered) {
       await _eventLog.logInstallFailed(error: error ?? 'Erro desconhecido');
+      return WindowsServiceInstallOutcome.failed;
     }
-    return ok;
+
+    await _eventLog.logInstallSucceeded();
+    final started = await startService();
+    if (started && (_status?.isRunning ?? false)) {
+      installToRunningWatch.stop();
+      _metrics?.recordHistogram(
+        ObservabilityMetrics.windowsServiceInstallToRunningSeconds,
+        installToRunningWatch.elapsedMilliseconds / 1000,
+      );
+      return WindowsServiceInstallOutcome.registeredAndRunning;
+    }
+
+    if (!started && _isLockBlockedStartFailure(error)) {
+      _metrics?.incrementCounter(
+        ObservabilityMetrics.windowsServiceInstallBlockedByUiInstance,
+      );
+      return WindowsServiceInstallOutcome.registeredBlockedByUiInstance;
+    }
+
+    return WindowsServiceInstallOutcome.registeredStartFailed;
+  }
+
+  Future<bool> scheduleStartAfterUiExit() async {
+    if (isLoading) return false;
+    final success = await _runOperation<bool>(
+      WindowsServiceOperation.start,
+      () async {
+        final result = await _service.scheduleStartAfterUiExit();
+        return result.fold(
+          (_) => true,
+          (failure) => throw failure,
+        );
+      },
+    );
+    return success ?? false;
+  }
+
+  static bool _isLockBlockedStartFailure(String? message) {
+    if (message == null || message.isEmpty) {
+      return true;
+    }
+    final lower = message.toLowerCase();
+    if (lower.contains('acesso negado') ||
+        lower.contains('access denied') ||
+        lower.contains('uac') ||
+        lower.contains('cancelad')) {
+      return false;
+    }
+    if (lower.contains('single_instance_lock') ||
+        lower.contains('lockdenied') ||
+        lower.contains('lock denied') ||
+        lower.contains('exit 77') ||
+        lower.contains('código 77') ||
+        lower.contains('codigo 77')) {
+      return true;
+    }
+    return lower.contains('não atingiu') ||
+        lower.contains('nao atingiu') ||
+        lower.contains('dentro do tempo esperado') ||
+        lower.contains('tempo esperado');
   }
 
   Future<bool> uninstallService() async {
@@ -198,7 +279,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   Future<void> _logStartFailureOrTimeout() async {
     final err = error ?? '';
     if (_isTimeoutMessage(err)) {
-      await _eventLog.logStartTimeout(timeout: const Duration(seconds: 60));
+      await _eventLog.logStartTimeout(timeout: _scmStartEventLogTimeout);
     } else {
       await _eventLog.logStartFailed(error: err);
     }
@@ -207,7 +288,7 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
   Future<void> _logStopFailureOrTimeout() async {
     final err = error ?? '';
     if (_isTimeoutMessage(err)) {
-      await _eventLog.logStopTimeout(timeout: const Duration(seconds: 60));
+      await _eventLog.logStopTimeout(timeout: _scmStartEventLogTimeout);
     } else {
       await _eventLog.logStopFailed(error: err);
     }
@@ -215,7 +296,11 @@ class WindowsServiceProvider extends ChangeNotifier with AsyncStateMixin {
 
   static bool _isTimeoutMessage(String msg) {
     final lower = msg.toLowerCase();
-    return lower.contains('timeout') || lower.contains('tempo esgotado');
+    return lower.contains('timeout') ||
+        lower.contains('tempo esgotado') ||
+        lower.contains('tempo esperado') ||
+        lower.contains('não atingiu') ||
+        lower.contains('nao atingiu');
   }
 
   Future<bool> stopService() async {

@@ -2,8 +2,8 @@ import 'dart:io';
 
 const String _designSystemRoot = 'lib/presentation/widgets';
 
-/// WCAG 2.1 AA / desktop guideline for minimum interactive target (logical px).
-const double _minInteractiveTarget = 44;
+/// WCAG 2.2 AA 2.5.8 minimum interactive target (logical px) for desktop.
+const double _minInteractiveTarget = 24;
 
 final List<_Rule> _rules = <_Rule>[
   _Rule(
@@ -190,7 +190,8 @@ List<_Finding> _scanTargetSize(
             ruleId: 'enforce_target_size',
             message:
                 'Interactive widget min dimension $value is below $_minInteractiveTarget; '
-                'use AppTargetSize.minimum or AppTargetSize.comfortable.',
+                'use AppTargetSize.minimum, AppTargetSize.desktop, or '
+                'AppTargetSize.comfortable.',
           ),
         );
       }
@@ -209,7 +210,8 @@ List<_Finding> _scanTargetSize(
             ruleId: 'enforce_target_size',
             message:
                 'minimumSize (${w}x$h) is below $_minInteractiveTarget; '
-                'use AppTargetSize.minimum or AppTargetSize.comfortable.',
+                'use AppTargetSize.minimum, AppTargetSize.desktop, or '
+                'AppTargetSize.comfortable.',
           ),
         );
       }

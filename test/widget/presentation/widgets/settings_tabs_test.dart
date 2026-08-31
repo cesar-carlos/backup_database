@@ -183,6 +183,13 @@ class _FakeWindowsServiceService implements IWindowsServiceService {
 
   @override
   Future<rd.Result<void>> uninstallService() async => const rd.Success(unit);
+
+  @override
+  Future<rd.Result<void>> scheduleStartAfterUiExit() async =>
+      const rd.Success(unit);
+
+  @override
+  void setElevationWaitListener(void Function(bool waiting)? listener) {}
 }
 
 class _FakeWindowsServiceEventLogger implements IWindowsServiceEventLogger {

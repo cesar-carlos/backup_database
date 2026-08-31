@@ -59,6 +59,31 @@ installer\dist\BackupDatabase-Setup-<versao>.exe
 installer\dist\BackupDatabase-Setup-<versao>.exe.sha256
 ```
 
+O `build_installer.py` **nao** chama `signtool`. Assinatura Authenticode e
+procedimento manual (veja a secao abaixo), fora do pipeline.
+
+## 3b. Assinar o instalador (Authenticode, opcional)
+
+Use um certificado de code signing da organizacao. Exemplo com timestamp RFC 3161:
+
+```powershell
+$setup = "installer\dist\BackupDatabase-Setup-<versao>.exe"
+signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /f <cert.pfx> /p <senha> $setup
+signtool verify /pa $setup
+```
+
+Regenere o sidecar `.sha256` **depois** de assinar (a assinatura altera o
+arquivo):
+
+```powershell
+Get-FileHash $setup -Algorithm SHA256 |
+  ForEach-Object { $_.Hash.ToLower() } |
+  Set-Content -NoNewline "$setup.sha256"
+```
+
+Sem certificado, publique o `.exe` nao assinado; SmartScreen pode alertar
+(ver `testing_auto_update.md`).
+
 ## 4. Publicar codigo
 
 Use branch curta e PR. Evite push direto em `main`.
@@ -154,4 +179,6 @@ Prefira sempre o fluxo oficial via `sync_appcast_from_releases.py`.
 - A configuracao ativa da maquina instalada fica em `C:\ProgramData\BackupDatabase\config\.env`.
 - Alterar `.env` dentro da pasta do aplicativo nao muda o runtime da maquina instalada.
 - Auto update silencioso em modo servico so e suportado quando o Windows Service esta em `LocalSystem` (ou aliases `System` / `NT AUTHORITY\SYSTEM`).
+- Restore apos update: conta customizada nao recria o NSSM; origem UI nao starta o servico.
+- Assinatura Authenticode e opcional e fica fora do `build_installer.py` (secao 3b).
 - Antes de abrir o PR, confirme a versao real em `pubspec.yaml` e reaproveite esse mesmo valor em branch, tag e nome do instalador.

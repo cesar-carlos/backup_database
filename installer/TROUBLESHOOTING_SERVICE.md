@@ -48,6 +48,12 @@ UI e servico compartilham o mesmo mutex global. Com o servico rodando, a UI
 nao sobe (dialog ou exit 0 no atalho de startup). `exit 77` no servico significa
 que outro processo ja detem o lock.
 
+Instalar o servico **com a UI aberta** registra o servico no SCM, mas o processo
+do servico nao consegue ficar RUNNING (o app segura o mutex). A tela de
+Configuracoes deve oferecer **Fechar o aplicativo e iniciar o servico** (handoff:
+prompt UAC se preciso, `sc start` atrasado, depois o app sai). Nao interprete
+essa falha de start como `.env` em falta.
+
 ## Problema: app entrou em modo UI
 
 Sintoma comum no `service_stderr.log`:
@@ -91,10 +97,10 @@ nssm restart BackupDatabaseService
 | 4 | Single instance | Outro processo (UI ou servico) manteve o mutex compartilhado |
 | 5 | Dependencias (DI) | Banco travado ou configuracao invalida |
 | 6 | Resolve servicos | Registro GetIt ausente |
-| 7 | IPC | Porta loopback 58724-58729 ocupada |
+| 7 | IPC | Named pipe `\\.\pipe\BackupDatabase_Ipc_*` ocupado, ACL ou processo peer recusado. IPC **nao** usa TCP; o instalador nao abre porta para isso. |
 | 8 | Event Log | Falta permissao para registrar fonte |
 | 9 | Shutdown handler | Falha ao registrar Ctrl+C / SCM stop |
-| 10 | Scheduler / health / fila / socket | Falha ao iniciar tarefas agendadas ou socket |
+| 10 | Scheduler / health / fila / socket | Falha ao iniciar tarefas agendadas ou socket remoto (TCP 9527) |
 | 11 | Auto update | Feed ou conta de servico bloqueada |
 
 ## Teste manual sem NSSM
@@ -139,7 +145,9 @@ C:\ProgramData\BackupDatabase\config\.env
 
 Se o servico usar conta customizada, a execucao pode continuar normal, mas o
 update silencioso nao sera restaurado automaticamente. Esse fluxo segue
-restrito a `LocalSystem`.
+restrito a `LocalSystem`. O `restore_update_state.ps1` **nao** chama
+`nssm remove`/`install` nesse caso (`exit 2`). Se o update veio da UI
+(`origin=ui`), o restore so relanca a UI e **nao** starta o servico.
 
 ## Reinstalar servico
 
@@ -160,8 +168,21 @@ Get-Content "C:\ProgramData\BackupDatabase\logs\service_stdout.log" -Wait
 
 1. Veja qual passo parou nos logs.
 2. Se travou no passo 5, valide banco e credenciais.
-3. Se travou no passo 10, valide scheduler, fila e socket.
+3. Se travou no passo 10, valide scheduler, fila e socket remoto (TCP 9527).
 4. Confirme que `C:\ProgramData\BackupDatabase\config\.env` existe.
+
+### Clientes remotos nao conectam (TCP 9527)
+
+IPC local e named pipe; nao precisa de firewall. O socket remoto escuta
+TCP **9527**. No wizard de instalacao (Server Mode) existe a task opcional
+(desmarcada) que cria a regra `Backup Database Remote Socket`. Sem ela:
+
+```powershell
+netsh advfirewall firewall add rule name="Backup Database Remote Socket" dir=in action=allow protocol=TCP localport=9527 profile=any
+```
+
+O atalho `{group}\Troubleshooting do Serviço` aponta para esta pagina em
+`{app}\docs\TROUBLESHOOTING_SERVICE.md`.
 
 ### "Servico nao retornou um erro"
 

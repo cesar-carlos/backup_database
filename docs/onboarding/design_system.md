@@ -28,9 +28,10 @@ Valores exatos estao no codigo-fonte; aqui a intencao de uso.
 | `AppElevation` | Profundidade numerica para sombras (ex. blur/offset) |
 | `AppDuration` | `fast`, `normal`, `slow` para transicoes |
 | `AppCurves` | Curvas padrao de animacao |
-| `AppBreakpoints` | Larguras `compact` / `medium` / `wide` + getters no `BuildContext` |
-| `AppDensity` | Enum com `spacingMultiplier` e `targetSize` por densidade |
-| `AppTargetSize` | `minimum` (44) e `comfortable` (48) para alvos |
+| `AppBreakpoints` | Larguras `compact` (900) / `medium` / `wide`; janela minima 800×600 |
+| `AppDensity` | Enum com `spacingMultiplier` e `targetSize` por densidade (default compact) |
+| `AppTargetSize` | `minimum` (24), `desktop`/`comfortable` (32), `spacious` (36) |
+| `AppDialogConstraints` | `maxWidth`/`maxHeight` de dialogos limitados ao viewport |
 | `AppZIndex` | Inteiros nomeados para empilhar overlays |
 
 ## Criar um widget novo
@@ -43,7 +44,7 @@ Valores exatos estao no codigo-fonte; aqui a intencao de uso.
    `context.colors.success`, etc.
 4. Cor de marca ou cor fixa de identidade (tipo de banco): `AppPalette`.
 5. Para janela estreita: `context.isCompactWindow` (e afins) em vez de
-   `MediaQuery.sizeOf(context).width < 720` espalhado.
+   `MediaQuery.sizeOf(context).width < 900` espalhado.
 6. No primeiro doc-comment do widget publico em `widgets/atoms/`,
    `widgets/molecules/` ou `widgets/organisms/`, indicar nivel **Atom** /
    **Molecule** / **Organism** quando fizer sentido.
@@ -67,7 +68,8 @@ Ver implementacao em `app_button.dart`.
 ## Checklist de acessibilidade (novo componente)
 
 - [ ] Alvo clicavel custom com area minima proxima de
-      `AppTargetSize.minimum` quando aplicavel.
+      `AppTargetSize.desktop` (32) e nunca abaixo de
+      `AppTargetSize.minimum` (24).
 - [ ] Botao ou acao so-icone: `Semantics(label: …)` (ou controle Fluent
       equivalente).
 - [ ] Texto de erro ou critico: cor semantica (`context.colors`) e

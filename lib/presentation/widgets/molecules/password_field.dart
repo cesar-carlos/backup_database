@@ -1,5 +1,6 @@
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_text_field.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
@@ -49,9 +50,9 @@ class _PasswordFieldState extends State<PasswordField> {
         child: Icon(FluentIcons.lock),
       ),
       suffixIcon: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: AppTargetSize.comfortable,
-          minHeight: AppTargetSize.comfortable,
+        constraints: BoxConstraints(
+          minWidth: InheritedAppDensity.resolve(context).targetSize,
+          minHeight: InheritedAppDensity.resolve(context).targetSize,
         ),
         child: Semantics(
           button: true,

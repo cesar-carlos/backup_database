@@ -28,7 +28,7 @@ abstract class ISingleInstanceService {
   /// Task Scheduler launches on the process that owns the global lock.
   Future<bool> startIpcServer({
     required String role,
-    Function()? onShowWindow,
+    Future<void> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   });
 

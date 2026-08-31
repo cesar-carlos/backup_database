@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -11,7 +12,7 @@ class AppDialogShell extends StatelessWidget {
     required this.actions,
     super.key,
     this.constraints,
-    this.padding = AppSpacing.paddingLg,
+    this.padding,
     this.scrollable = true,
     this.onSubmitIntent,
     this.onDismiss,
@@ -21,7 +22,7 @@ class AppDialogShell extends StatelessWidget {
   final Widget content;
   final List<Widget> actions;
   final BoxConstraints? constraints;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
   final bool scrollable;
   final VoidCallback? onSubmitIntent;
   final VoidCallback? onDismiss;
@@ -41,21 +42,23 @@ class AppDialogShell extends StatelessWidget {
       bindings[const SingleActivator(LogicalKeyboardKey.enter, control: true)] =
           onSubmitIntent!;
     }
+    final resolvedPadding =
+        padding ?? InheritedAppDensity.resolve(context).contentPadding;
 
     return CallbackShortcuts(
       bindings: bindings,
       child: Focus(
         autofocus: true,
         child: ContentDialog(
-          constraints: constraints ?? const BoxConstraints(),
+          constraints: constraints ?? AppDialogConstraints.of(context),
           title: title,
           content: scrollable
               ? SingleChildScrollView(
-                  padding: padding,
+                  padding: resolvedPadding,
                   child: content,
                 )
               : Padding(
-                  padding: padding,
+                  padding: resolvedPadding,
                   child: content,
                 ),
           actions: actions,

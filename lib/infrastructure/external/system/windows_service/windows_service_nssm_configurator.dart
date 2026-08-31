@@ -20,10 +20,8 @@ class WindowsServiceNssmConfigurator {
 
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const int _successExitCode = 0;
-  static const String _programDataEnv = 'ProgramData';
-  static const String _defaultProgramData = r'C:\ProgramData';
-  static const String _logSubdir = 'logs';
   static const String _localSystemAccount = 'LocalSystem';
+  static const String _cantOpenService = "Can't open service";
 
   Future<rd.Result<void>> configure({
     required String nssmPath,
@@ -31,9 +29,7 @@ class WindowsServiceNssmConfigurator {
     String? servicePassword,
   }) async {
     final appDir = File(Platform.resolvedExecutable).parent.path;
-    final programData =
-        Platform.environment[_programDataEnv] ?? _defaultProgramData;
-    final logPath = '$programData\\BackupDatabase\\$_logSubdir';
+    final logPath = WindowsServiceConstants.logPath;
 
     final logDir = Directory(logPath);
     if (!logDir.existsSync()) {
@@ -47,18 +43,15 @@ class WindowsServiceNssmConfigurator {
     final plan = NssmConfigPlan.build(appDir: appDir, logPath: logPath);
 
     for (final entry in plan.entries) {
-      final result = await _processService.run(
-        executable: nssmPath,
+      final result = await _runNssmSet(
+        nssmPath: nssmPath,
         arguments: entry.arguments(_serviceName),
-        timeout: _timing.shortTimeout,
       );
 
       final failure = result.fold(
         (processResult) {
           if (processResult.exitCode != _successExitCode) {
-            final msg = processResult.stderr.isNotEmpty
-                ? processResult.stderr
-                : processResult.stdout;
+            final msg = _nssmOutput(processResult);
             if (entry.critical) {
               return ServerFailure(
                 message:
@@ -73,10 +66,14 @@ class WindowsServiceNssmConfigurator {
         (f) {
           if (entry.critical) {
             return ServerFailure(
-              message: 'Erro ao configurar chave crítica "${entry.key}": $f',
+              message:
+                  'Erro ao configurar chave crítica "${entry.key}": '
+                  '${failureUserMessage(f)}',
             );
           }
-          LoggerService.warning('Erro ao configurar ${entry.key}: $f');
+          LoggerService.warning(
+            'Erro ao configurar ${entry.key}: ${failureUserMessage(f)}',
+          );
           return null;
         },
       );
@@ -90,29 +87,90 @@ class WindowsServiceNssmConfigurator {
       LoggerService.info(
         'Configurando serviço para rodar como LocalSystem (sem usuário logado)',
       );
-      await _processService.run(
-        executable: nssmPath,
+      final objectResult = await _runNssmSet(
+        nssmPath: nssmPath,
         arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
-        timeout: _timing.shortTimeout,
       );
+      _warnObjectNameLocalSystem(objectResult);
     } else if (servicePassword != null && servicePassword.isNotEmpty) {
-      await _runSetObjectNameWithCredentials(
+      final credsResult = await _runSetObjectNameWithCredentials(
         nssmPath: nssmPath,
         serviceUser: serviceUser,
         servicePassword: servicePassword,
       );
+      final credsFailure = credsResult.exceptionOrNull();
+      if (credsFailure != null) {
+        return rd.Failure(_asFailure(credsFailure));
+      }
+      final processResult = credsResult.getOrNull();
+      if (processResult != null && processResult.exitCode != _successExitCode) {
+        return const rd.Failure(
+          ServerFailure(
+            message:
+                'Falha ao configurar a conta do serviço (ObjectName). '
+                'Verifique o usuário e a senha.',
+          ),
+        );
+      }
     } else {
       LoggerService.warning(
         'Usuário "$serviceUser" fornecido sem senha — usando LocalSystem',
       );
-      await _processService.run(
-        executable: nssmPath,
+      final objectResult = await _runNssmSet(
+        nssmPath: nssmPath,
         arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
-        timeout: _timing.shortTimeout,
       );
+      _warnObjectNameLocalSystem(objectResult);
     }
 
     return const rd.Success(unit);
+  }
+
+  void _warnObjectNameLocalSystem(rd.Result<ProcessResult> result) {
+    result.fold(
+      (processResult) {
+        if (processResult.exitCode != _successExitCode) {
+          LoggerService.warning(
+            'nssm set ObjectName LocalSystem falhou '
+            '(exit ${processResult.exitCode}): ${_nssmOutput(processResult)}',
+          );
+        }
+      },
+      (failure) {
+        LoggerService.warning(
+          'nssm set ObjectName LocalSystem falhou: '
+          '${failureUserMessage(failure)}',
+        );
+      },
+    );
+  }
+
+  Future<rd.Result<ProcessResult>> _runNssmSet({
+    required String nssmPath,
+    required List<String> arguments,
+  }) async {
+    rd.Result<ProcessResult>? last;
+    for (var attempt = 1; attempt <= _timing.retryMaxAttempts; attempt++) {
+      last = await _processService.run(
+        executable: nssmPath,
+        arguments: arguments,
+        timeout: _timing.shortTimeout,
+      );
+      final processResult = last.getOrNull();
+      if (processResult != null && processResult.exitCode == _successExitCode) {
+        return last;
+      }
+      final msg = processResult != null
+          ? _nssmOutput(processResult)
+          : failureUserMessage(last.exceptionOrNull());
+      final canRetry =
+          msg.contains(_cantOpenService) && attempt < _timing.retryMaxAttempts;
+      if (!canRetry) {
+        return last;
+      }
+      await Future.delayed(_timing.nssmCantOpenRetryDelay);
+    }
+    return last!;
   }
 
   Future<rd.Result<ProcessResult>> _runSetObjectNameWithCredentials({
@@ -120,8 +178,8 @@ class WindowsServiceNssmConfigurator {
     required String serviceUser,
     required String servicePassword,
   }) async {
-    final result = await _processService.run(
-      executable: nssmPath,
+    final result = await _runNssmSet(
+      nssmPath: nssmPath,
       arguments: [
         'set',
         _serviceName,
@@ -129,7 +187,6 @@ class WindowsServiceNssmConfigurator {
         serviceUser,
         servicePassword,
       ],
-      timeout: _timing.shortTimeout,
     );
     return result.fold(
       (processResult) {
@@ -152,10 +209,16 @@ class WindowsServiceNssmConfigurator {
     );
   }
 
+  String _nssmOutput(ProcessResult processResult) {
+    return processResult.stderr.isNotEmpty
+        ? processResult.stderr
+        : processResult.stdout;
+  }
+
   Failure _asFailure(Object failure) {
     if (failure is Failure) return failure;
     return ServerFailure(
-      message: failure.toString(),
+      message: failureUserMessage(failure),
       originalError: failure,
     );
   }

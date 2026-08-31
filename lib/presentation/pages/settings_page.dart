@@ -59,7 +59,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return AppPageScaffold(
       title: appLocaleString(context, 'Configurações', 'Settings'),
-      bodyPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       body: TabView(
         currentIndex: safeIndex,
         onChanged: (index) {

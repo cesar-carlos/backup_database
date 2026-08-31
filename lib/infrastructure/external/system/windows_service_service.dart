@@ -125,8 +125,8 @@ class WindowsServiceService implements IWindowsServiceService {
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const String _displayName = WindowsServiceConstants.displayName;
   static const int _successExitCode = 0;
-  static const String _controlDiagnosticsPath =
-      r'C:\ProgramData\BackupDatabase\logs\service_control_diagnostics.log';
+  static String get _controlDiagnosticsPath =>
+      '${WindowsServiceConstants.logPath}\\service_control_diagnostics.log';
 
   static rd.Result<void> get _notSupportedOnPlatform => const rd.Failure(
     ValidationFailure(message: WindowsServiceMessages.notSupportedOnPlatform),
@@ -301,6 +301,20 @@ class WindowsServiceService implements IWindowsServiceService {
       return _notSupportedOnPlatform;
     }
     return _lifecycle.restart();
+  }
+
+  @override
+  Future<rd.Result<void>> scheduleStartAfterUiExit() async {
+    if (!Platform.isWindows) {
+      return _notSupportedOnPlatform;
+    }
+    return _elevationController.scheduleStartAfterUiExit();
+  }
+
+  @override
+  void setElevationWaitListener(void Function(bool waiting)? listener) {
+    _elevationInstaller.onElevationWaitChanged = listener;
+    _elevationController.onElevationWaitChanged = listener;
   }
 
   @visibleForTesting

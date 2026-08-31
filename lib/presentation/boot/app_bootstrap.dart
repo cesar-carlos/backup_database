@@ -18,6 +18,8 @@ import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_ipc_client.dart';
+import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -685,7 +687,7 @@ class AppBootstrap {
           }) async {
             final singleInstanceService = service_locator
                 .getIt<ISingleInstanceService>();
-            await singleInstanceService.startIpcServer(
+            return singleInstanceService.startIpcServer(
               role: SingleInstanceConfig.ipcInstanceRoleUi,
               onShowWindow: onShowWindow,
               onRunSchedule: onRunSchedule,

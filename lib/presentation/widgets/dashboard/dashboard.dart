@@ -1,3 +1,4 @@
+export 'dashboard_stats_strip.dart';
 export 'metrics_percentiles_card.dart';
 export 'recent_backups_list.dart';
 export 'schedule_status_card.dart';

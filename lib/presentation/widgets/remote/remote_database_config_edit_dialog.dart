@@ -285,7 +285,7 @@ class _RemoteDatabaseConfigEditDialogState
   Widget build(BuildContext context) {
     final typeLabel = remoteDatabaseTypeLabel(widget.databaseType);
     return AppDialogShell(
-      constraints: const BoxConstraints(maxWidth: 560),
+      constraints: AppDialogConstraints.of(context),
       title: Text(
         _isEdit
             ? appLocaleString(

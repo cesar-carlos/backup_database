@@ -9,12 +9,14 @@ class ServiceLocalScheduleTimerSection extends StatelessWidget {
     required this.isLoading,
     required this.enabled,
     required this.onChanged,
+    this.serviceOwnsScheduler = false,
     super.key,
   });
 
   final bool isLoading;
   final bool enabled;
   final ValueChanged<bool> onChanged;
+  final bool serviceOwnsScheduler;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +51,26 @@ class ServiceLocalScheduleTimerSection extends StatelessWidget {
               value: enabled,
               onChanged: onChanged,
             ),
-          if (!isLoading && !enabled) ...[
+          if (!isLoading && serviceOwnsScheduler) ...[
+            const SizedBox(height: AppSpacing.md),
+            InfoBar(
+              title: Text(
+                appLocaleString(
+                  context,
+                  'Serviço em execução',
+                  'Service is running',
+                ),
+              ),
+              content: Text(
+                appLocaleString(
+                  context,
+                  'O timer de agendamento é do serviço do Windows neste computador. A preferência foi salva; reinicie o serviço para aplicar. Este aplicativo não inicia o agendador local enquanto o serviço estiver RUNNING.',
+                  'The schedule timer belongs to the Windows service on this computer. The preference was saved; restart the service to apply it. This app does not start the local scheduler while the service is RUNNING.',
+                ),
+              ),
+              isLong: true,
+            ),
+          ] else if (!isLoading && !enabled) ...[
             const SizedBox(height: AppSpacing.md),
             InfoBar(
               title: Text(

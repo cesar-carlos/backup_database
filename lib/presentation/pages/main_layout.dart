@@ -15,8 +15,8 @@ import 'package:backup_database/core/config/app_mode_policy.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
-import 'package:backup_database/core/theme/tokens/app_palette.dart';
-import 'package:backup_database/core/theme/tokens/app_target_size.dart';
+import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/navigation/navigation_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -24,34 +24,52 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 class _NavigationBrandHeader extends StatelessWidget {
-  const _NavigationBrandHeader();
+  const _NavigationBrandHeader({required this.compact});
+
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final Widget logo = Image.asset(
+      AppImageAssets.database128,
+      width: AppTargetSize.desktop,
+      height: AppTargetSize.desktop,
+      cacheWidth: 64,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) {
+          return child;
+        }
+        return const Icon(
+          FluentIcons.database,
+          size: AppTargetSize.desktop,
+        );
+      },
+      errorBuilder: (_, _, _) => const Icon(
+        FluentIcons.database,
+        size: AppTargetSize.desktop,
+      ),
+    );
     return Semantics(
       label: 'Backup Database',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children: [
-            Image.asset(
-              AppImageAssets.database128,
-              width: 32,
-              height: 32,
-              cacheWidth: 64,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Backup Database',
-                style: FluentTheme.of(context).typography.bodyStrong,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+      child: compact
+          ? Center(child: logo)
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              child: Row(
+                children: [
+                  logo,
+                  const SizedBox(width: AppSpacing.sm + AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'Backup Database',
+                      style: FluentTheme.of(context).typography.bodyStrong,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -250,17 +268,18 @@ class _MainLayoutState extends State<MainLayout> {
     required Widget icon,
     required VoidCallback onPressed,
   }) {
+    final targetSize = InheritedAppDensity.resolve(context).targetSize;
     return Semantics(
       button: true,
       label: semanticsLabel,
       child: Tooltip(
         message: tooltip,
         child: SizedBox(
-          width: AppTargetSize.comfortable,
-          height: AppTargetSize.comfortable,
+          width: targetSize,
+          height: targetSize,
           child: Center(
             child: IconButton(
-              iconButtonMode: IconButtonMode.large,
+              iconButtonMode: IconButtonMode.small,
               icon: icon,
               onPressed: onPressed,
             ),
@@ -291,21 +310,30 @@ class _MainLayoutState extends State<MainLayout> {
 
   Widget _buildNavigationPane() {
     final items = _navigationItems(context);
+    final compact = context.isCompactWindow;
+    final targetSize = InheritedAppDensity.resolve(context).targetSize;
+    final paneWidth = compact
+        ? AppBreakpoints.compactPaneWidth
+        : AppBreakpoints.expandedPaneWidth;
     return Container(
-      width: 216,
+      width: paneWidth,
       color: FluentTheme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? AppSpacing.xs : AppSpacing.sm + AppSpacing.xs,
+            vertical: compact ? AppSpacing.sm : AppSpacing.md,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _NavigationBrandHeader(),
-              const SizedBox(height: 12),
+              _NavigationBrandHeader(compact: compact),
+              const SizedBox(height: AppSpacing.sm + AppSpacing.xs),
               Expanded(
                 child: ListView.separated(
                   itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 4),
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.xs),
                   itemBuilder: (context, index) {
                     final item = items[index];
                     final isSelected = index == _selectedIndex;
@@ -314,12 +342,37 @@ class _MainLayoutState extends State<MainLayout> {
                         : FluentTheme.of(
                             context,
                           ).resources.textFillColorSecondary;
+                    if (compact) {
+                      return Tooltip(
+                        message: item.label,
+                        child: Semantics(
+                          button: true,
+                          selected: isSelected,
+                          label: item.label,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppPalette.primary.withValues(alpha: 0.08)
+                                  : Colors.transparent,
+                              borderRadius: AppRadius.circularMd,
+                            ),
+                            child: IconButton(
+                              iconButtonMode: IconButtonMode.small,
+                              icon: ExcludeSemantics(
+                                child: Icon(item.icon, color: iconColor),
+                              ),
+                              onPressed: () => _onDestinationSelected(index),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
                     return DecoratedBox(
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppPalette.primary.withValues(alpha: 0.08)
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: AppRadius.circularMd,
                         border: Border.all(
                           color: isSelected
                               ? AppPalette.primary.withValues(alpha: 0.18)
@@ -327,9 +380,7 @@ class _MainLayoutState extends State<MainLayout> {
                         ),
                       ),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          minHeight: AppTargetSize.comfortable + 8,
-                        ),
+                        constraints: BoxConstraints(minHeight: targetSize),
                         child: ListTile(
                           semanticLabel: item.label,
                           leading: ExcludeSemantics(
@@ -356,11 +407,12 @@ class _MainLayoutState extends State<MainLayout> {
 
   Widget _buildAppBar() {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final items = _navigationItems(context);
+    final barHeight =
+        InheritedAppDensity.resolve(context).targetSize + AppSpacing.xs;
 
     return Container(
-      constraints: const BoxConstraints(minHeight: 64),
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      constraints: BoxConstraints(minHeight: barHeight),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: BoxDecoration(
         color: FluentTheme.of(context).scaffoldBackgroundColor,
         border: Border(
@@ -371,18 +423,7 @@ class _MainLayoutState extends State<MainLayout> {
       ),
       child: Row(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Text(
-                items[_selectedIndex].label,
-                style: FluentTheme.of(context).typography.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
+          const Spacer(),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -398,7 +439,7 @@ class _MainLayoutState extends State<MainLayout> {
                   icon: const Icon(FluentIcons.refresh),
                   onPressed: _handleRefresh,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 _toolbarIconButton(
                   context: context,
                   semanticsLabel: appLocaleString(

@@ -15,6 +15,14 @@ abstract class IWindowsServiceService {
   Future<Result<void>> stopService();
 
   Future<Result<void>> restartService();
+
+  /// Prompts for elevation if needed, then schedules `sc start` after a
+  /// short delay so the current UI process can release the instance mutex.
+  Future<Result<void>> scheduleStartAfterUiExit();
+
+  /// Called with `true` immediately before a UAC prompt and `false` after
+  /// the elevated process returns (or the prompt is cancelled/times out).
+  void setElevationWaitListener(void Function(bool waiting)? listener);
 }
 
 enum WindowsServiceStateCode {

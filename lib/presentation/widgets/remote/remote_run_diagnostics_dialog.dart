@@ -146,7 +146,10 @@ class _RemoteRunDiagnosticsDialogState
     final diagnostics = _diagnostics;
     final hasContent = diagnostics?.hasContent ?? false;
     return AppDialogShell(
-      constraints: const BoxConstraints(maxWidth: 760, maxHeight: 680),
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 760,
+      ),
       scrollable: false,
       title: Text(
         widget.scheduleName != null

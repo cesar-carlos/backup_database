@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// Constantes centralizadas do Windows Service.
 ///
 /// Antes da consolidação (S12 da auditoria), os mesmos literais
@@ -15,6 +17,10 @@
 /// e compara com [WindowsServiceConstants.serviceName] (em
 /// `update_installer_scripts_test.dart`).
 abstract final class WindowsServiceConstants {
+  static const String _programDataEnv = 'ProgramData';
+  static const String _defaultProgramData = r'C:\ProgramData';
+  static const String _appDataSubdir = 'BackupDatabase';
+
   /// Nome do serviço registrado no Windows Service Manager.
   /// **Não alterar sem migration**: serviços existentes em produção
   /// continuariam registrados sob o nome antigo.
@@ -30,10 +36,16 @@ abstract final class WindowsServiceConstants {
       'Servico de backup automatico para SQL Server, '
       'Sybase, PostgreSQL e Firebird';
 
+  static String get _programDataRoot {
+    final programData =
+        Platform.environment[_programDataEnv] ?? _defaultProgramData;
+    return '$programData\\$_appDataSubdir';
+  }
+
   /// Diretório padrão de logs do serviço (em ProgramData para sobreviver
   /// reinstalações e ser legível por administradores).
-  static const String logPath = r'C:\ProgramData\BackupDatabase\logs';
+  static String get logPath => '$_programDataRoot\\logs';
 
   /// Diretório padrão de configuração do serviço.
-  static const String configPath = r'C:\ProgramData\BackupDatabase\config';
+  static String get configPath => '$_programDataRoot\\config';
 }

@@ -13,7 +13,7 @@ Marque o que se aplica; se N/A, explique em uma linha no comentario do PR.
 
 - [ ] **UI**: mudanca nao introduz overflow obvio com texto maior (se tocou em layout, rode testes de `textScaler` existentes ou adicione cobertura)
 - [ ] **Contraste**: textos novos/alterados usam tema (`AppSemanticColors` / tipografia do tema), sem cores literais soltas para texto sobre fundo
-- [ ] **Alvos**: acoes clicaveis novas respeitam `AppTargetSize` onde couber (minimo confortavel 48px para controles densos)
+- [ ] **Alvos**: acoes clicaveis novas respeitam `AppTargetSize` onde couber (desktop 32px; minimo a11y 24px)
 - [ ] **Semantica**: botoes so-icone tem `Semantics`/`Tooltip` com rotulo; icones puramente decorativos ao lado de texto nao duplicam leitura (`ExcludeSemantics` quando aplicavel)
 - [ ] **Teclado**: fluxo tocado continua navegavel por Tab e acionavel (Enter/Esc em modais)
 

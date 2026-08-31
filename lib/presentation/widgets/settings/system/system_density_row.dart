@@ -21,8 +21,8 @@ class SystemDensityRow extends StatelessWidget {
             Text(
               appLocaleString(
                 context,
-                'Densidade das tabelas',
-                'Table density',
+                'Densidade da interface',
+                'Interface density',
               ),
               style: FluentTheme.of(context).typography.bodyStrong,
             ),
@@ -30,8 +30,8 @@ class SystemDensityRow extends StatelessWidget {
             Text(
               appLocaleString(
                 context,
-                'Controla o espacamento visual de listas e grades.',
-                'Controls the visual spacing of lists and data grids.',
+                'Controla o tamanho de botoes, listas e grades.',
+                'Controls the size of buttons, lists and data grids.',
               ),
               style: FluentTheme.of(context).typography.caption,
             ),
@@ -42,8 +42,8 @@ class SystemDensityRow extends StatelessWidget {
                 compact: true,
                 label: appLocaleString(
                   context,
-                  'Densidade das tabelas',
-                  'Table density',
+                  'Densidade da interface',
+                  'Interface density',
                 ),
                 value: densityProvider.density,
                 items: [

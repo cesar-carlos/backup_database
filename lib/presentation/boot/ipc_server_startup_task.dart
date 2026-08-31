@@ -3,7 +3,7 @@ import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 
 typedef IpcRunScheduleHandler = Future<int> Function(String scheduleId);
 
-typedef IpcServerStarter = Future<void> Function({
+typedef IpcServerStarter = Future<bool> Function({
   required Future<void> Function() onShowWindow,
   required IpcRunScheduleHandler onRunSchedule,
 });
@@ -42,11 +42,19 @@ class IpcServerStartupTask {
     }
 
     try {
-      await startIpcServer(
+      final started = await startIpcServer(
         onShowWindow: _handleShowWindow,
         onRunSchedule: runSchedule,
       );
-      logInfo('IPC Server inicializado e pronto');
+      if (started) {
+        logInfo('IPC Server inicializado e pronto');
+      } else {
+        logWarning(
+          'IPC Server nao iniciou (named pipe indisponivel)',
+          null,
+          null,
+        );
+      }
     } on Object catch (e, stackTrace) {
       logWarning('Erro ao inicializar IPC Server: $e', e, stackTrace);
     }

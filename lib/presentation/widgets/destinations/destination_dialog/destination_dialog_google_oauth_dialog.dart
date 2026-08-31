@@ -80,7 +80,10 @@ class _OAuthConfigDialogState extends State<OAuthConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      constraints: const BoxConstraints(maxWidth: 800, maxHeight: 760),
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 800,
+      ),
       title: Row(
         children: [
           const Icon(FluentIcons.cloud),

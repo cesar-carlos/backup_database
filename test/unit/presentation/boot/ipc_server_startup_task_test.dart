@@ -48,6 +48,7 @@ IpcServerStartupTask _buildTask({
       }
       await onShowWindow();
       await onRunSchedule('schedule-1');
+      return true;
     },
     logInfo: logInfo ?? _ignoreLog,
     logWarning: logWarning ?? _ignoreLogWithError,
@@ -87,6 +88,37 @@ void main() {
       expect(events, equals(['start_ipc', 'run:schedule-1']));
     });
 
+    test(
+      'logs warning and does not claim ready when start returns false',
+      () async {
+        final events = <String>[];
+        final infoLogs = <String>[];
+        final warnings = <String>[];
+
+        await IpcServerStartupTask(
+          isWindowManagementEnabled: () => true,
+          isWindowReady: () => true,
+          showWindow: () async {},
+          runSchedule: (id) async => 0,
+          startIpcServer:
+              ({required onShowWindow, required onRunSchedule}) async {
+                events.add('start_ipc');
+                return false;
+              },
+          logInfo: infoLogs.add,
+          logWarning: (message, [_, _]) => warnings.add(message),
+          logError: _ignoreLogWithError,
+        ).start(_config());
+
+        expect(events, equals(['start_ipc']));
+        expect(
+          infoLogs.where((line) => line.contains('inicializado e pronto')),
+          isEmpty,
+        );
+        expect(warnings.first, contains('IPC Server nao iniciou'));
+      },
+    );
+
     test('logs warning and swallows start failure', () async {
       final events = <String>[];
       final warnings = <String>[];
@@ -122,6 +154,7 @@ void main() {
           startIpcServer:
               ({required onShowWindow, required onRunSchedule}) async {
                 capturedShow = onShowWindow;
+                return true;
               },
           logInfo: infoLogs.add,
           logWarning: _ignoreLogWithError,
@@ -168,6 +201,7 @@ void main() {
           startIpcServer:
               ({required onShowWindow, required onRunSchedule}) async {
                 capturedShow = onShowWindow;
+                return true;
               },
           logInfo: _ignoreLog,
           logWarning: _ignoreLogWithError,

@@ -55,6 +55,11 @@ O comportamento esperado e o mesmo da UI: download, validacao, instalacao silenc
 Depois da troca, o servico deve continuar instalado e voltar a rodar sem abrir UI.
 Se o servico estiver configurado com conta customizada, o auto update silencioso deve ser bloqueado com mensagem operacional explicita e sem alterar o servico existente.
 
+Restore (`restore_update_state.ps1`):
+
+- `origin=ui` (mesmo com `serviceExists=true`): exit 0, **sem** `nssm install`/`start`; a UI relanca.
+- conta customizada no contexto do servico: exit 2, stderr menciona LocalSystem, **sem** `nssm remove`/`install`.
+
 ## Smoke E2E recomendado
 
 1. Instale a versao N em uma VM Windows limpa.
@@ -93,7 +98,9 @@ Se o servico estiver configurado com conta customizada, o auto update silencioso
 1. Habilitar `SmartScreen for Apps and Files` em modo "Block".
 2. Confirmar que o `.exe` baixado nao e familiar (release nova).
 3. Esperado: similar ao UAC negado — spawn morre cedo, app preserva UI/servico, snapshot vira `error`.
-4. Mitigacao operacional: assinar o instalador (`signtool sign /tr ...`). A assinatura tambem aparece no `service_stdout.log` via `restore_update_state.ps1`.
+4. Mitigacao operacional: assinar o instalador com `signtool` **antes** de publicar
+   (procedimento em `release_guide.md`). O `build_installer.py` **nao** assina.
+   A assinatura tambem aparece no `service_stdout.log` via `restore_update_state.ps1`.
 
 ### Disco cheio em `staging/updates`
 

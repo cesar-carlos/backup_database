@@ -35,4 +35,6 @@ class ObservabilityMetrics {
   /// representando UX real (S16 da auditoria).
   static const windowsServiceInstallToRunningSeconds =
       'windows_service_install_to_running_seconds';
+  static const windowsServiceInstallBlockedByUiInstance =
+      'windows_service_install_blocked_by_ui_instance';
 }

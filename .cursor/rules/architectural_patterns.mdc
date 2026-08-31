@@ -793,7 +793,7 @@ Localização dos tokens: `lib/core/theme/tokens/` (barrel
 | Curvas de animação | `AppCurves` |
 | Layout responsivo na janela (desktop redimensionável) | `AppBreakpoints` + extensão `AppBreakpointsX` em `BuildContext` |
 | Densidade informacional (multiplicador / alvo) | `AppDensity` (enum com campos) |
-| Tamanho mínimo de alvo clicável | `AppTargetSize` |
+| Tamanho mínimo de alvo clicável | `AppTargetSize` (desktop 32 / min 24) |
 | Ordem explícita em `Stack` / overlay | `AppZIndex` |
 | Cor de marca / identidade (fixa entre temas) | `AppPalette` |
 | Cor semântica (sucesso, erro, superfície, tema claro/escuro) | `context.colors` (ou `context.appSemanticColors`) |
@@ -856,10 +856,10 @@ quebras de layout. Use `context.isCompactWindow` /
 
 ### 8.7 Acessibilidade mínima
 
-- **Alvo**: `AppButton` usa altura mínima `AppTargetSize.comfortable`
-  (48 logical pixels) para alinhar ao `androidTapTargetGuideline`; WCAG
-  AA continua atendido (48 ≥ 44). Outros controles custom: preferir
-  `AppTargetSize.minimum` / `comfortable` conforme o caso.
+- **Alvo**: `AppButton` usa altura `AppTargetSize.desktop` (32 logical
+  pixels, padrão WinUI/Fluent) via `InheritedAppDensity.targetSize`.
+  Mínimo a11y é `AppTargetSize.minimum` (24, WCAG 2.2 AA 2.5.8). Não
+  usar `androidTapTargetGuideline` (48) em app Windows desktop.
 - **Semântica**: `Semantics` em superfícies interativas custom
   (cartão clicável, botão só ícone, empty state com ação).
 - **Contraste**: seguir WCAG (AA: 4.5:1 texto normal; 3:1 texto grande)

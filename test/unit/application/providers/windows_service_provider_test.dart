@@ -34,9 +34,16 @@ const _notInstalledStatus = WindowsServiceStatus(
   isRunning: false,
 );
 
+void _elevationWaitFallback(bool _) {}
+
+void _stubElevationWait(_MockService service) {
+  when(() => service.setElevationWaitListener(any())).thenReturn(null);
+}
+
 void main() {
   setUpAll(() {
     registerFallbackValue(const Duration(seconds: 1));
+    registerFallbackValue(_elevationWaitFallback);
   });
 
   group('WindowsServiceProvider.checkStatus', () {
@@ -47,6 +54,7 @@ void main() {
     setUp(() {
       service = _MockService();
       eventLog = _MockEventLog();
+      _stubElevationWait(service);
       provider = WindowsServiceProvider(service, eventLog);
     });
 
@@ -139,6 +147,7 @@ void main() {
       service = _MockService();
       eventLog = _MockEventLog();
       metrics = _MockMetrics();
+      _stubElevationWait(service);
       provider = WindowsServiceProvider(
         service,
         eventLog,
@@ -155,6 +164,12 @@ void main() {
       when(
         () => eventLog.logStartFailed(error: any(named: 'error')),
       ).thenAnswer((_) async {});
+      when(
+        () => eventLog.logStartTimeout(timeout: any(named: 'timeout')),
+      ).thenAnswer((_) async {});
+      when(
+        () => metrics.incrementCounter(any()),
+      ).thenReturn(null);
     });
 
     test('calls startService after successful install', () async {
@@ -171,9 +186,12 @@ void main() {
         (_) async => const rd.Success(_runningStatus),
       );
 
-      final ok = await provider.installService();
+      final outcome = await provider.installService();
 
-      expect(ok, isTrue);
+      expect(
+        outcome,
+        WindowsServiceInstallOutcome.registeredAndRunning,
+      );
       verify(service.startService).called(1);
       verify(() => eventLog.logStartStarted()).called(1);
       verify(() => eventLog.logStartSucceeded()).called(1);
@@ -193,9 +211,12 @@ void main() {
         (_) async => const rd.Success(_runningStatus),
       );
 
-      final ok = await provider.installService();
+      final outcome = await provider.installService();
 
-      expect(ok, isTrue);
+      expect(
+        outcome,
+        WindowsServiceInstallOutcome.registeredAndRunning,
+      );
       verify(() => eventLog.logInstallStarted()).called(1);
       verify(() => eventLog.logInstallSucceeded()).called(1);
       verify(
@@ -220,9 +241,12 @@ void main() {
         (_) async => const rd.Success(_stoppedStatus),
       );
 
-      final ok = await provider.installService();
+      final outcome = await provider.installService();
 
-      expect(ok, isTrue);
+      expect(
+        outcome,
+        WindowsServiceInstallOutcome.registeredStartFailed,
+      );
       verify(service.startService).called(1);
       verifyNever(
         () => metrics.recordHistogram(
@@ -231,6 +255,80 @@ void main() {
         ),
       );
     });
+
+    test(
+      'returns registeredBlockedByUiInstance when start fails on mutex/lock',
+      () async {
+        when(
+          () => service.installService(
+            serviceUser: any(named: 'serviceUser'),
+            servicePassword: any(named: 'servicePassword'),
+          ),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+        when(service.startService).thenAnswer(
+          (_) async => const rd.Failure(
+            ServerFailure(
+              message:
+                  'Serviço não atingiu estado RUNNING dentro do tempo '
+                  'esperado (30s).',
+            ),
+          ),
+        );
+        when(service.getStatus).thenAnswer(
+          (_) async => const rd.Success(_stoppedStatus),
+        );
+
+        final outcome = await provider.installService();
+
+        expect(
+          outcome,
+          WindowsServiceInstallOutcome.registeredBlockedByUiInstance,
+        );
+        verify(
+          () => metrics.incrementCounter(
+            'windows_service_install_blocked_by_ui_instance',
+          ),
+        ).called(1);
+        verifyNever(
+          () => metrics.recordHistogram(
+            'windows_service_install_to_running_seconds',
+            any(),
+          ),
+        );
+      },
+    );
+
+    test(
+      'returns registeredStartFailed when start fails with access denied',
+      () async {
+        when(
+          () => service.installService(
+            serviceUser: any(named: 'serviceUser'),
+            servicePassword: any(named: 'servicePassword'),
+          ),
+        ).thenAnswer((_) async => const rd.Success(rd.unit));
+        when(service.startService).thenAnswer(
+          (_) async => const rd.Failure(
+            ServerFailure(message: 'access denied'),
+          ),
+        );
+        when(service.getStatus).thenAnswer(
+          (_) async => const rd.Success(_stoppedStatus),
+        );
+
+        final outcome = await provider.installService();
+
+        expect(
+          outcome,
+          WindowsServiceInstallOutcome.registeredStartFailed,
+        );
+        verifyNever(
+          () => metrics.incrementCounter(
+            'windows_service_install_blocked_by_ui_instance',
+          ),
+        );
+      },
+    );
 
     test('logs install failure when service returns Failure', () async {
       when(
@@ -242,9 +340,9 @@ void main() {
         (_) async => const rd.Failure(ServerFailure(message: 'NSSM not found')),
       );
 
-      final ok = await provider.installService();
+      final outcome = await provider.installService();
 
-      expect(ok, isFalse);
+      expect(outcome, WindowsServiceInstallOutcome.failed);
       verify(
         () => eventLog.logInstallFailed(error: any(named: 'error')),
       ).called(1);
@@ -286,7 +384,7 @@ void main() {
         expect(provider.isLoading, isTrue);
 
         final secondResult = await provider.installService();
-        expect(secondResult, isFalse);
+        expect(secondResult, WindowsServiceInstallOutcome.failed);
 
         firstReleased.complete();
         await f1;
@@ -302,6 +400,7 @@ void main() {
     setUp(() {
       service = _MockService();
       eventLog = _MockEventLog();
+      _stubElevationWait(service);
       provider = WindowsServiceProvider(service, eventLog);
 
       when(() => eventLog.logStartStarted()).thenAnswer((_) async {});
@@ -349,6 +448,30 @@ void main() {
       ).called(1);
     });
 
+    test(
+      'logs StartTimeout when lifecycle copy uses tempo esperado',
+      () async {
+        when(service.startService).thenAnswer(
+          (_) async => const rd.Failure(
+            ServerFailure(
+              message:
+                  'Serviço não atingiu estado RUNNING dentro do tempo '
+                  'esperado (30s).',
+            ),
+          ),
+        );
+        when(service.getStatus).thenAnswer(
+          (_) async => const rd.Success(_stoppedStatus),
+        );
+
+        await provider.startService();
+
+        verify(
+          () => eventLog.logStartTimeout(timeout: any(named: 'timeout')),
+        ).called(1);
+      },
+    );
+
     test('logs StartFailed for non-timeout errors', () async {
       when(service.startService).thenAnswer(
         (_) async => const rd.Failure(ServerFailure(message: 'access denied')),
@@ -372,6 +495,7 @@ void main() {
     test('subsequent notifyListeners is a no-op after dispose', () async {
       final service = _MockService();
       final eventLog = _MockEventLog();
+      _stubElevationWait(service);
       final provider = WindowsServiceProvider(service, eventLog);
       var notifyCount = 0;
       provider.addListener(() => notifyCount++);

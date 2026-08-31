@@ -63,8 +63,17 @@ void main() {
         expect(setup, contains('-StartAfterInstall'));
         expect(setup, contains('RUNNING confirmed'));
         expect(setup, contains('did not reach RUNNING within polling timeout'));
+        expect(setup, contains('nao confirmou RUNNING no tempo de espera'));
         expect(setup, contains('WaitForServiceStopped'));
+        expect(setup, contains('WaitForServiceRemoved'));
         expect(setup, contains('Wait-ServiceStopped'));
+        expect(setup, contains('Wait-ServiceRemoved'));
+        expect(setup, contains('ShouldRemoveMachineConfig'));
+        expect(setup, contains('ConfigureRemoteSocketFirewall'));
+        expect(setup, contains('openfirewall'));
+        expect(setup, contains('localport=9527'));
+        expect(setup, contains('TROUBLESHOOTING_SERVICE.md'));
+        expect(setup, contains('Troubleshooting do Serviço'));
         expect(setup, contains('STOPPED confirmed'));
         expect(
           setup,
@@ -91,6 +100,10 @@ void main() {
         expect(
           setup,
           contains('instalacao silenciosa segue apos merge_env.ps1 exit 2'),
+        );
+        expect(
+          setup,
+          contains('A chave AUTO_UPDATE_FEED_URL nao ficou preenchida'),
         );
         expect(setup, isNot(contains('Abort;')));
         expect(
@@ -503,7 +516,24 @@ void main() {
         ).readAsString();
 
         expect(install, contains('Wait-ServiceRemoved'));
+        expect(install, contains('Wait-ServiceStopped'));
+        expect(install, contains('Set-NssmCritical -Key "AppNoConsole"'));
+        expect(
+          install,
+          contains(
+            'Set-NssmCritical -Key "AppExit" -ExtraArgs @("77", "Exit")',
+          ),
+        );
+        expect(
+          install,
+          contains(
+            'Set-NssmCritical -Key "AppExit" -ExtraArgs @("78", "Exit")',
+          ),
+        );
         expect(restore, contains('Wait-ServiceRemoved'));
+        expect(restore, contains('Wait-ServiceStopped'));
+        expect(restore, contains('Test-SupportedServiceAccount'));
+        expect(restore, contains('RUNNING nao foi confirmado por polling'));
         expect(uninstall, contains('Wait-ServiceRemoved'));
         expect(uninstall, contains('NonInteractive'));
         expect(capture, contains('service_utils.ps1'));
@@ -864,6 +894,7 @@ void main() {
           await File(nssmPath).writeAsString(
             '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
           );
+          await _writeStubServiceUtils(tempDir);
           await File(contextPath).writeAsString(
             jsonEncode(<String, Object?>{
               'schemaVersion': 2,
@@ -988,12 +1019,91 @@ void main() {
           environment: <String, String>{'NSSM_LOG_PATH': nssmLogPath},
         );
 
-        expect(result.exitCode, isNot(0));
+        expect(result.exitCode, 2);
         expect(
           result.stderr.toString(),
           contains('LocalSystem'),
           reason: 'Error message should mention LocalSystem requirement',
         );
+        expect(await File(nssmLogPath).exists(), isFalse);
+        expect(await File(contextPath).exists(), isTrue);
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'restore_update_state skips service replay for UI origin',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'restore_ui_skips_service_test',
+        );
+        final nssmLogPath = p.join(tempDir.path, 'nssm.log');
+        final nssmPath = p.join(tempDir.path, 'nssm.cmd');
+        final markerPath = p.join(tempDir.path, 'relaunch_args.txt');
+        final appScriptPath = p.join(tempDir.path, 'write_args.ps1');
+        final contextPath = p.join(tempDir.path, 'update_context.json');
+
+        await File(nssmPath).writeAsString(
+          '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
+        );
+        await File(appScriptPath).writeAsString(
+          r'Set-Content -Path "$env:MARKER_PATH" -Value ($args -join "`n")',
+        );
+        await File(contextPath).writeAsString(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 2,
+            'contextId': 'ui-skips-service',
+            'origin': 'ui',
+            'appMode': 'server',
+            'currentVersion': '3.0.1',
+            'targetVersion': '3.0.2',
+            'relaunchArguments': <String>[
+              '-NoProfile',
+              '-ExecutionPolicy',
+              'Bypass',
+              '-File',
+              appScriptPath,
+              '--mode=server',
+            ],
+            'executablePath': 'powershell.exe',
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'expiresAt': DateTime.now()
+                .add(const Duration(minutes: 30))
+                .toUtc()
+                .toIso8601String(),
+            'serviceName': 'BackupDatabaseService',
+            'serviceExists': true,
+            'serviceConfig': <String, Object?>{
+              'ObjectName': 'LocalSystem',
+            },
+          }),
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'restore_update_state.ps1'),
+          arguments: <String>[
+            '-ContextPath',
+            contextPath,
+            '-AppPath',
+            'powershell.exe',
+            '-AppDirectory',
+            tempDir.path,
+            '-NssmPath',
+            nssmPath,
+          ],
+          environment: <String, String>{
+            'NSSM_LOG_PATH': nssmLogPath,
+            'MARKER_PATH': markerPath,
+          },
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(await File(nssmLogPath).exists(), isFalse);
+        expect(await File(contextPath).exists(), isFalse);
+        final markerFile = await _waitForFile(markerPath);
+        expect(await markerFile.readAsString(), contains('--mode=server'));
 
         await _deleteTempDirBestEffort(tempDir);
       },
@@ -1013,6 +1123,7 @@ void main() {
         await File(nssmPath).writeAsString(
           '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
         );
+        await _writeStubServiceUtils(tempDir);
         await File(contextPath).writeAsString(
           jsonEncode(<String, Object?>{
             'schemaVersion': 2,
@@ -1151,6 +1262,16 @@ void main() {
 
 File _repoFile(String relativePath) {
   return File(p.join(Directory.current.path, relativePath));
+}
+
+Future<void> _writeStubServiceUtils(Directory appDir) async {
+  final toolsDir = Directory(p.join(appDir.path, 'tools'));
+  await toolsDir.create(recursive: true);
+  await File(p.join(toolsDir.path, 'service_utils.ps1')).writeAsString(
+    'function Wait-ServiceRunning { param([string]\$ServiceName) return \$true }\n'
+    'function Wait-ServiceStopped { param([string]\$ServiceName) return \$true }\n'
+    'function Wait-ServiceRemoved { param([string]\$ServiceName) return \$true }\n',
+  );
 }
 
 Future<void> _deleteTempDirBestEffort(Directory directory) async {

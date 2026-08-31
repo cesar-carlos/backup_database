@@ -57,8 +57,8 @@ class WidgetbookApp extends StatelessWidget {
             WidgetbookTheme(name: 'Spacious', data: AppDensity.spacious),
           ],
           initialTheme: WidgetbookTheme(
-            name: 'Comfortable',
-            data: AppDensity.comfortable,
+            name: 'Compact',
+            data: AppDensity.compact,
           ),
           themeBuilder:
               (BuildContext context, AppDensity density, Widget child) {

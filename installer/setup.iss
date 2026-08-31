@@ -40,6 +40,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; commit ee94182 que so foi detectado no build 3.4.0).
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
 Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
+Name: "openfirewall"; Description: "Liberar porta TCP 9527 no Firewall do Windows (clientes remotos)"; GroupDescription: "Rede"; Flags: unchecked; Check: IsServerMode
 
 [Dirs]
 Name: "{commonappdata}\BackupDatabase\config"
@@ -51,6 +52,7 @@ Source: "..\.env.example"; DestDir: "{commonappdata}\BackupDatabase\config"; Fla
 Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\requirements.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "TROUBLESHOOTING_SERVICE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
@@ -74,6 +76,7 @@ Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters:
 Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
+Name: "{group}\Troubleshooting do Serviço"; Filename: "{app}\docs\TROUBLESHOOTING_SERVICE.md"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 ; Desktop icon (one per mode — explicit --mode= flag avoids relying on
 ; {app}\.install_mode being present/valid at launch time).
@@ -87,6 +90,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 
 [UninstallDelete]
 Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
+Name: "{commonappdata}\BackupDatabase"; Type: filesandordirs; Check: ShouldRemoveMachineConfig
 ; dirifempty so remove se estiver realmente vazia, entao binarios
 ; nao tocados pelo Inno (downloads, plugins externos) ficam preservados.
 Name: "{app}"; Type: dirifempty
@@ -97,10 +101,13 @@ var
   VCRedistNeeded: Boolean;
   ModePage: TInputOptionWizardPage;
   SelectedMode: String;
+  RemoveMachineConfig: Boolean;
 
 function IsServiceInstalled(const ServiceName: String): Boolean; forward;
 function WaitForServiceStopped(const ServiceName: String): Boolean; forward;
+function WaitForServiceRemoved(const ServiceName: String): Boolean; forward;
 function StopService(const ServiceName: String): Boolean; forward;
+function ShouldRemoveMachineConfig(): Boolean; forward;
 function RunTempPowerShellScriptEx(const ScriptName, Parameters: String; var ExitCode: Integer): Boolean; forward;
 function ShouldLaunchPostInstall(): Boolean; forward;
 function NormalizeInstallMode(const Raw: String): String; forward;
@@ -115,6 +122,8 @@ procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, Ns
 procedure RefreshWindowsIconCache(); forward;
 procedure RemoveExistingDesktopShortcut(); forward;
 procedure TouchDesktopShortcut(); forward;
+procedure ConfigureRemoteSocketFirewall(); forward;
+procedure DeleteRemoteSocketFirewall(); forward;
 
 function GetUpdateContextPath(): String;
 begin
@@ -585,7 +594,16 @@ begin
           'corrigir ' + EnvPath
         );
         if WizardSilent() then
-          Log('Warning: instalacao silenciosa segue apos merge_env.ps1 exit 2');
+          Log('Warning: instalacao silenciosa segue apos merge_env.ps1 exit 2')
+        else
+          MsgBox(
+            'A chave AUTO_UPDATE_FEED_URL nao ficou preenchida em:' + #13#10 +
+            EnvPath + #13#10#13#10 +
+            'A instalacao continua, mas o auto-update ficara desabilitado ' +
+            'ate corrigir o arquivo .env.',
+            mbError,
+            MB_OK
+          );
       end
       else
         Log('Warning: merge_env.ps1 failed, exit=' + IntToStr(MergeExitCode));
@@ -620,6 +638,9 @@ begin
     end
     else
       DeleteClientStartupTask();
+
+    if WizardIsTaskSelected('openfirewall') then
+      ConfigureRemoteSocketFirewall();
 
     if WizardSilent() and FileExists(UpdateContextPath) then
     begin
@@ -676,6 +697,55 @@ end;
 function ShouldLaunchPostInstall(): Boolean;
 begin
   Result := not ((SelectedMode = 'server') and WizardIsTaskSelected('startup'));
+end;
+
+function ShouldRemoveMachineConfig(): Boolean;
+begin
+  Result := RemoveMachineConfig;
+end;
+
+procedure ConfigureRemoteSocketFirewall();
+var
+  ResultCode: Integer;
+begin
+  Exec(
+    'netsh.exe',
+    'advfirewall firewall delete rule name="Backup Database Remote Socket"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+  if Exec(
+    'netsh.exe',
+    'advfirewall firewall add rule name="Backup Database Remote Socket" dir=in action=allow protocol=TCP localport=9527 profile=any',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+  begin
+    if ResultCode = 0 then
+      Log('Firewall rule added for TCP 9527 (Backup Database Remote Socket)')
+    else
+      Log('Warning: failed to add firewall rule for TCP 9527, exit=' + IntToStr(ResultCode));
+  end
+  else
+    Log('Warning: failed to launch netsh to add firewall rule for TCP 9527');
+end;
+
+procedure DeleteRemoteSocketFirewall();
+var
+  ResultCode: Integer;
+begin
+  Exec(
+    'netsh.exe',
+    'advfirewall firewall delete rule name="Backup Database Remote Socket"',
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
 end;
 
 procedure RemoveLegacyStartupEntries();
@@ -756,12 +826,32 @@ begin
     if ResultCode = 0 then
       Log('BackupDatabaseService installed and RUNNING confirmed')
     else if ResultCode = 2 then
-      Log('Warning: BackupDatabaseService installed but did not reach RUNNING within polling timeout')
+    begin
+      Log('Warning: BackupDatabaseService installed but did not reach RUNNING within polling timeout');
+      if not WizardSilent() then
+        MsgBox('O servico foi instalado, mas nao confirmou RUNNING no tempo de espera.'
+          + #13#10 + #13#10
+          + 'Verifique o status em Servicos do Windows ou reinstale o servico pelo aplicativo.',
+          mbError, MB_OK);
+    end
     else
+    begin
       Log('Warning: install_service.ps1 failed, exit=' + IntToStr(ResultCode));
+      if not WizardSilent() then
+        MsgBox('Falha ao instalar o servico do Windows (codigo '
+          + IntToStr(ResultCode) + ').'
+          + #13#10 + #13#10
+          + 'Consulte o log do instalador e tente novamente.',
+          mbError, MB_OK);
+    end;
   end
   else
+  begin
     Log('Warning: failed to launch install_service.ps1 from installer');
+    if not WizardSilent() then
+      MsgBox('Nao foi possivel executar o script de instalacao do servico.',
+        mbError, MB_OK);
+  end;
 end;
 
 function IsServiceInstalled(const ServiceName: String): Boolean;
@@ -778,38 +868,21 @@ end;
 function RemoveService(const ServiceName: String): Boolean;
 var
   ResultCode: Integer;
-  Retries: Integer;
-  MaxRetries: Integer;
 begin
   Result := False;
-  Retries := 0;
-  MaxRetries := 5;
-  
   if not IsServiceInstalled(ServiceName) then
   begin
     Result := True;
     Exit;
   end;
-  
-  while (Retries < MaxRetries) do
-  begin
-    Exec('sc.exe', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    Sleep(2000);
-    
-    Exec('sc.exe', 'delete ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-    
-    if ResultCode = 0 then
-    begin
-      Result := True;
-      Sleep(1000);
-      Exit;
-    end;
-    
-    Retries := Retries + 1;
-    Sleep(1000);
-  end;
-  
-  Result := not IsServiceInstalled(ServiceName);
+
+  Exec('sc.exe', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  WaitForServiceStopped(ServiceName);
+
+  Exec('sc.exe', 'delete ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Result := WaitForServiceRemoved(ServiceName);
+  if not Result then
+    Result := not IsServiceInstalled(ServiceName);
 end;
 
 function WaitForServiceStopped(const ServiceName: String): Boolean;
@@ -840,6 +913,36 @@ begin
   end
   else
     Log('Warning: failed to launch Wait-ServiceStopped for ' + ServiceName);
+end;
+
+function WaitForServiceRemoved(const ServiceName: String): Boolean;
+var
+  ResultCode: Integer;
+  ScriptPath: String;
+  Args: String;
+begin
+  Result := False;
+  ExtractTemporaryFile('service_utils.ps1');
+  ScriptPath := ExpandConstant('{tmp}\service_utils.ps1');
+  Args :=
+    '-NoProfile -ExecutionPolicy Bypass -Command ". ''' + ScriptPath +
+    '''; if (Wait-ServiceRemoved -ServiceName ''' + ServiceName +
+    ''') { exit 0 } else { exit 1 }"';
+  if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    if ResultCode = 0 then
+    begin
+      Log('Service ' + ServiceName + ' removed from SCM');
+      Result := True;
+    end
+    else
+      Log(
+        'Warning: Service ' + ServiceName +
+        ' still marked for deletion within polling timeout'
+      );
+  end
+  else
+    Log('Warning: failed to launch Wait-ServiceRemoved for ' + ServiceName);
 end;
 
 function StopService(const ServiceName: String): Boolean;
@@ -881,52 +984,60 @@ var
   ServiceName: String;
 begin
   Result := True;
+  RemoveMachineConfig := False;
   AppExe := ExpandConstant('{#MyAppExeName}');
   ServiceName := 'BackupDatabaseService';
 
   if IsServiceInstalled(ServiceName) then
     StopService(ServiceName);
 
-  if not IsAppRunning(AppExe) then
-    Exit;
-
-  if UninstallSilent then
+  if IsAppRunning(AppExe) then
   begin
-    CloseApp(AppExe);
-    if IsAppRunning(AppExe) then
+    if UninstallSilent then
     begin
-      Log('Uninstall silent: ' + AppExe + ' still running after CloseApp');
+      CloseApp(AppExe);
+      if IsAppRunning(AppExe) then
+      begin
+        Log('Uninstall silent: ' + AppExe + ' still running after CloseApp');
+        Result := False;
+      end;
+    end
+    else if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
+              'É necessário fechar o aplicativo para continuar com a desinstalação.' + #13#10 + #13#10 +
+              'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      if not CloseApp(AppExe) then
+      begin
+        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
+               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        Result := False;
+      end
+      else
+      begin
+        Sleep(1000);
+        if IsAppRunning(AppExe) then
+        begin
+          MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
+                 'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+          Result := False;
+        end;
+      end;
+    end
+    else
       Result := False;
-    end;
-    Exit;
   end;
 
-  if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
-            'É necessário fechar o aplicativo para continuar com a desinstalação.' + #13#10 + #13#10 +
-            'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+  if Result and (not UninstallSilent) then
   begin
-    if not CloseApp(AppExe) then
-    begin
-      MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
-             'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-
-    Sleep(1000);
-
-    if IsAppRunning(AppExe) then
-    begin
-      MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
-             'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
-      Result := False;
-      Exit;
-    end;
-  end
-  else
-  begin
-    Result := False;
-    Exit;
+    if MsgBox(
+         'Deseja tambem remover a configuracao da maquina em ' +
+         ExpandConstant('{commonappdata}\BackupDatabase') +
+         ' (incluindo .env, staging e locks)?' + #13#10#13#10 +
+         'Escolha Nao para preservar a configuracao para uma reinstalacao.',
+         mbConfirmation,
+         MB_YESNO or MB_DEFBUTTON2
+       ) = IDYES then
+      RemoveMachineConfig := True;
   end;
 end;
 
@@ -942,5 +1053,6 @@ begin
       RemoveService(ServiceName);
 
     DeleteClientStartupTask();
+    DeleteRemoteSocketFirewall();
   end;
 end;

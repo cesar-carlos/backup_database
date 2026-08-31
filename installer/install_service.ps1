@@ -14,7 +14,7 @@ param(
     [switch]$StartAfterInstall
 )
 
-function Pause-IfInteractive {
+function Wait-IfInteractive {
     param([string]$Message = "Pressione Enter para sair")
     if (-not $NonInteractive) {
         Read-Host $Message
@@ -27,7 +27,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIde
 if (-not $isAdmin) {
     Write-Host "ERRO: Este script deve ser executado como Administrador!" -ForegroundColor Red
     Write-Host "Clique com botão direito e selecione 'Executar como administrador'" -ForegroundColor Yellow
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 1
 }
 
@@ -48,14 +48,14 @@ if ([string]::IsNullOrEmpty($NssmPath)) {
 if (-not (Test-Path $NssmPath)) {
     Write-Host "ERRO: NSSM não encontrado em: $NssmPath" -ForegroundColor Red
     Write-Host "Verifique se o aplicativo foi instalado corretamente." -ForegroundColor Yellow
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 1
 }
 
 # Verificar se o executável existe
 if (-not (Test-Path $AppPath)) {
     Write-Host "ERRO: Executável não encontrado em: $AppPath" -ForegroundColor Red
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 1
 }
 
@@ -63,17 +63,29 @@ Write-Host "Instalando serviço do Windows..." -ForegroundColor Green
 Write-Host "Nome do serviço: $ServiceName" -ForegroundColor Cyan
 Write-Host "Caminho do executável: $AppPath" -ForegroundColor Cyan
 
+$serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
+$hasServiceUtils = Test-Path $serviceUtilsPath
+if ($hasServiceUtils) {
+    . $serviceUtilsPath
+}
+
 # Verificar se o serviço já existe
 $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existingService) {
     Write-Host "Serviço já existe. Removendo versão anterior..." -ForegroundColor Yellow
+    if ($hasServiceUtils) {
+        sc.exe stop $ServiceName | Out-Null
+        if (-not (Wait-ServiceStopped -ServiceName $ServiceName)) {
+            Write-Host "ERRO: serviço '$ServiceName' nao atingiu STOPPED antes da remocao." -ForegroundColor Red
+            Wait-IfInteractive
+            exit 1
+        }
+    }
     & $NssmPath remove $ServiceName confirm
-    $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
-    if (Test-Path $serviceUtilsPath) {
-        . $serviceUtilsPath
+    if ($hasServiceUtils) {
         if (-not (Wait-ServiceRemoved -ServiceName $ServiceName)) {
             Write-Host "ERRO: serviço '$ServiceName' ainda marcado para exclusao." -ForegroundColor Red
-            Pause-IfInteractive
+            Wait-IfInteractive
             exit 1
         }
     } else {
@@ -87,7 +99,7 @@ Write-Host "Instalando serviço..." -ForegroundColor Green
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "ERRO: Falha ao instalar serviço!" -ForegroundColor Red
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 1
 }
 
@@ -101,7 +113,10 @@ function Set-NssmCritical {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "ERRO CRÍTICO: falha ao configurar NSSM $Key (exit $LASTEXITCODE). Abortando." -ForegroundColor Red
         & $NssmPath remove $ServiceName confirm | Out-Null
-        Pause-IfInteractive
+        if ($hasServiceUtils) {
+            Wait-ServiceRemoved -ServiceName $ServiceName | Out-Null
+        }
+        Wait-IfInteractive
         exit 1
     }
 }
@@ -124,7 +139,7 @@ Set-NssmCritical -Key "AppEnvironmentExtra" -ExtraArgs @("SERVICE_MODE=server")
 & $NssmPath set $ServiceName DisplayName $DisplayName
 & $NssmPath set $ServiceName Description $Description
 & $NssmPath set $ServiceName Start SERVICE_AUTO_START
-& $NssmPath set $ServiceName AppNoConsole 1
+Set-NssmCritical -Key "AppNoConsole" -ExtraArgs @("1")
 
 # Configurar redirecionamento de logs
 $logPath = "$env:ProgramData\BackupDatabase\logs"
@@ -139,10 +154,10 @@ Set-NssmCritical -Key "AppStderr" -ExtraArgs @("$logPath\service_stderr.log")
 # Configurar auto-restart em caso de crash
 & $NssmPath set $ServiceName AppExit Default Restart
 # 77 = lockDenied (single-instance) — nao reiniciar
-& $NssmPath set $ServiceName AppExit 77 Exit
+Set-NssmCritical -Key "AppExit" -ExtraArgs @("77", "Exit")
 # 78 = handoffForInstaller (auto update silencioso) — nao reiniciar enquanto
 # o setup.iss substitui binarios; restore_update_state.ps1 reativa o servico.
-& $NssmPath set $ServiceName AppExit 78 Exit
+Set-NssmCritical -Key "AppExit" -ExtraArgs @("78", "Exit")
 & $NssmPath set $ServiceName AppRestartDelay 60000
 
 # Configurar usuário do serviço
@@ -171,7 +186,7 @@ $verifyService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if (-not $verifyService) {
     Write-Host "ERRO: Serviço '$ServiceName' não encontrado após instalação!" -ForegroundColor Red
     Write-Host "Verifique o log do NSSM e tente novamente." -ForegroundColor Yellow
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 1
 }
 
@@ -195,7 +210,7 @@ if ($StartAfterInstall) {
     $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
     if (-not (Test-Path $serviceUtilsPath)) {
         Write-Host "ERRO: service_utils.ps1 nao encontrado em: $serviceUtilsPath" -ForegroundColor Red
-        Pause-IfInteractive
+        Wait-IfInteractive
         exit 1
     }
 
@@ -208,13 +223,13 @@ if ($StartAfterInstall) {
             "AVISO: servico instalado mas nao confirmou RUNNING dentro de " +
             "$script:ServiceStartPollingTimeoutSeconds segundos."
         ) -ForegroundColor Yellow
-        Pause-IfInteractive
+        Wait-IfInteractive
         exit 2
     }
 
     Write-Host "Servico em execucao (RUNNING confirmado)." -ForegroundColor Green
     Write-Host ""
-    Pause-IfInteractive
+    Wait-IfInteractive
     exit 0
 }
 
@@ -223,4 +238,4 @@ Write-Host "  sc start $ServiceName" -ForegroundColor White
 Write-Host ""
 Write-Host "Ou use o Gerenciador de Serviços do Windows (services.msc)" -ForegroundColor Cyan
 Write-Host ""
-Pause-IfInteractive
+Wait-IfInteractive

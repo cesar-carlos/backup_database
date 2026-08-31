@@ -1,4 +1,4 @@
-import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 /// **Atom** — icon-only control with tooltip and semantics.
@@ -16,6 +16,7 @@ class AppIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final targetSize = InheritedAppDensity.resolve(context).targetSize;
     return Tooltip(
       message: label,
       child: Semantics(
@@ -24,11 +25,12 @@ class AppIconButton extends StatelessWidget {
         enabled: onPressed != null,
         child: ExcludeSemantics(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              minWidth: AppTargetSize.minimum,
-              minHeight: AppTargetSize.minimum,
+            constraints: BoxConstraints(
+              minWidth: targetSize,
+              minHeight: targetSize,
             ),
             child: IconButton(
+              iconButtonMode: IconButtonMode.small,
               icon: Icon(icon),
               onPressed: onPressed,
             ),

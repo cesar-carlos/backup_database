@@ -1,7 +1,15 @@
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/domain/services/i_windows_service_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_controller.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_installer.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_env_provisioner.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_install_orchestrator.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_nssm_configurator.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_sc_client.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -519,7 +527,7 @@ void main() {
           () => mockProcessService.run(
             executable: 'powershell',
             arguments: any(named: 'arguments'),
-            timeout: _longTimeout,
+            timeout: any(named: 'timeout'),
           ),
         ).thenAnswer(
           (_) async => const rd.Success(
@@ -606,6 +614,69 @@ void main() {
             arguments: ['stop', 'BackupDatabaseService'],
             timeout: any(named: 'timeout'),
           ),
+        );
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'stopService after sc stop fails if status stays STOP_PENDING',
+      () async {
+        const timing = WindowsServiceTimingConfig(
+          shortTimeout: Duration(milliseconds: 50),
+          longTimeout: Duration(milliseconds: 120),
+          startPollingInterval: Duration(milliseconds: 20),
+          serviceDelay: Duration.zero,
+          startPollingTimeout: Duration(milliseconds: 80),
+          startPollingInitialDelay: Duration.zero,
+        );
+        windowsServiceService = WindowsServiceService(
+          mockProcessService,
+          timingConfig: timing,
+        );
+
+        var queryCount = 0;
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['query', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((_) async {
+          queryCount++;
+          if (queryCount == 1) {
+            return const rd.Success(_runningQueryResult);
+          }
+          return const rd.Success(_stopPendingQueryResult);
+        });
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: ['stop', 'BackupDatabaseService'],
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 0,
+              stdout: 'STATE: 3  STOP_PENDING',
+              stderr: '',
+              duration: Duration(milliseconds: 10),
+            ),
+          ),
+        );
+
+        final result = await windowsServiceService.stopService();
+
+        expect(result.isSuccess(), isFalse);
+        result.fold(
+          (_) => fail('STOP_PENDING must not count as stopped'),
+          (failure) {
+            expect(
+              (failure as Failure).message.toLowerCase(),
+              contains('stopped'),
+            );
+          },
         );
       },
       skip: !Platform.isWindows,
@@ -909,5 +980,138 @@ void main() {
       },
       skip: !Platform.isWindows,
     );
+  });
+
+  group('WindowsServiceInstallOrchestrator.removeExistingInstallIfNeeded', () {
+    late MockProcessService mockProcessService;
+
+    setUp(() {
+      mockProcessService = MockProcessService();
+    });
+
+    WindowsServiceInstallOrchestrator orchestratorFor(
+      Future<rd.Result<WindowsServiceStatus>> Function() getStatus, {
+      String? nssmPath,
+    }) {
+      const timing = WindowsServiceTimingConfig(
+        serviceDelay: Duration.zero,
+        longTimeout: Duration(seconds: 5),
+        shortTimeout: Duration(seconds: 2),
+        startPollingInterval: Duration(milliseconds: 20),
+        startPollingTimeout: Duration(milliseconds: 80),
+        startPollingInitialDelay: Duration.zero,
+      );
+      final scClient = WindowsServiceScClient(
+        processService: mockProcessService,
+        timing: timing,
+      );
+      final scmPoller = WindowsServiceScmPoller(
+        getStatus: getStatus,
+        appendDiagnostics: (_, {output}) {},
+      );
+      return WindowsServiceInstallOrchestrator(
+        processService: mockProcessService,
+        timing: timing,
+        nssmConfigurator: WindowsServiceNssmConfigurator(
+          processService: mockProcessService,
+          timing: timing,
+        ),
+        envProvisioner: const WindowsServiceEnvProvisioner(),
+        scClient: scClient,
+        scmPoller: scmPoller,
+        elevationInstaller: WindowsServiceElevationInstaller(
+          processService: mockProcessService,
+          getStatus: getStatus,
+          timing: timing,
+        ),
+        elevationController: WindowsServiceElevationController(
+          processService: mockProcessService,
+          getStatus: getStatus,
+          scmPoller: scmPoller,
+          timing: timing,
+        ),
+        getStatus: getStatus,
+        nssmPathOverride: nssmPath,
+      );
+    }
+
+    test('aborts when getStatus fails (not treated as absent)', () async {
+      final orchestrator = orchestratorFor(
+        () async => const rd.Failure(ServerFailure(message: 'scm busy')),
+      );
+
+      final result = await orchestrator.removeExistingInstallIfNeeded();
+
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('should abort when status is unknown'),
+        (failure) {
+          expect(
+            (failure as Failure).message.toLowerCase(),
+            contains('verificar'),
+          );
+        },
+      );
+    });
+
+    test('aborts when uninstall of existing service fails', () async {
+      final tempDir = await Directory.systemTemp.createTemp('bd_nssm');
+      addTearDown(() => tempDir.delete(recursive: true));
+      final nssmFile = File('${tempDir.path}${Platform.pathSeparator}nssm.exe');
+      await nssmFile.writeAsString('dummy');
+
+      Future<rd.Result<WindowsServiceStatus>> getStatus() async =>
+          const rd.Success(
+            WindowsServiceStatus(
+              isInstalled: true,
+              isRunning: false,
+              stateCode: WindowsServiceStateCode.stopped,
+            ),
+          );
+
+      when(
+        () => mockProcessService.run(
+          executable: 'sc',
+          arguments: any(named: 'arguments'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer(
+        (_) async => const rd.Success(_stoppedQueryResult),
+      );
+      when(
+        () => mockProcessService.run(
+          executable: nssmFile.path,
+          arguments: any(named: 'arguments'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer(
+        (_) async => const rd.Success(
+          ProcessResult(
+            exitCode: 1,
+            stdout: '',
+            stderr: 'remove failed',
+            duration: Duration(milliseconds: 10),
+          ),
+        ),
+      );
+
+      final orchestrator = orchestratorFor(
+        getStatus,
+        nssmPath: nssmFile.path,
+      );
+
+      final result = await orchestrator.removeExistingInstallIfNeeded();
+
+      expect(result.isError(), isTrue);
+      result.fold(
+        (_) => fail('should abort when uninstall fails'),
+        (failure) {
+          expect(
+            (failure as Failure).message.toLowerCase(),
+            contains('remover'),
+          );
+        },
+      );
+    });
   });
 }

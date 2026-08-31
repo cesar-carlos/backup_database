@@ -21,12 +21,12 @@ void main() {
       expect(provider.density, AppDensity.compact);
     });
 
-    test('initialize uses comfortable for unknown stored value', () async {
+    test('initialize uses compact for unknown stored value', () async {
       prefs.uiDensity = 'unknown';
 
       await provider.initialize();
 
-      expect(provider.density, AppDensity.comfortable);
+      expect(provider.density, AppDensity.compact);
     });
 
     test('setDensity updates state and persists', () async {

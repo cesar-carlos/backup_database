@@ -47,6 +47,7 @@ class NssmConfigPlan {
       const NssmConfigEntry(
         key: 'AppNoConsole',
         values: ['1'],
+        critical: true,
       ),
       NssmConfigEntry(
         key: 'AppStdout',
@@ -65,10 +66,12 @@ class NssmConfigPlan {
       const NssmConfigEntry(
         key: 'AppExit',
         values: ['77', 'Exit'],
+        critical: true,
       ),
       const NssmConfigEntry(
         key: 'AppExit',
         values: ['78', 'Exit'],
+        critical: true,
       ),
       const NssmConfigEntry(
         key: 'AppRestartDelay',
@@ -79,6 +82,27 @@ class NssmConfigPlan {
 
   List<List<String>> installCommandsFor(String serviceName) =>
       entries.map((e) => e.arguments(serviceName)).toList();
+
+  /// Gera `nssm set` para o script PowerShell elevado, usando
+  /// `Set-NssmKeyWithRetry` nas chaves [NssmConfigEntry.critical] e
+  /// `Set-NssmKeyOptional` nas demais.
+  String toElevatedPowerShellSets() {
+    final buffer = StringBuffer();
+    for (final entry in entries) {
+      final valuesLiteral = entry.values.map(_psSingleQuoted).join(', ');
+      final fn = entry.critical
+          ? 'Set-NssmKeyWithRetry'
+          : 'Set-NssmKeyOptional';
+      buffer.writeln(
+        '$fn -KeyName "${entry.key}" -Values @($valuesLiteral)',
+      );
+    }
+    return buffer.toString();
+  }
+
+  static String _psSingleQuoted(String value) {
+    return "'${value.replaceAll("'", "''")}'";
+  }
 }
 
 class NssmConfigEntry {

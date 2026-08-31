@@ -98,9 +98,9 @@ class _EmailTargetDialogState extends State<EmailTargetDialog> {
     final theme = FluentTheme.of(context);
 
     return ContentDialog(
-      constraints: const BoxConstraints(
-        minWidth: 620,
-        maxWidth: 620,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 620,
       ),
       title: Row(
         children: [

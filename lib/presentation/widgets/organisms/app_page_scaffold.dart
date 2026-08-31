@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -32,12 +33,7 @@ class AppPageScaffold extends StatelessWidget {
     super.key,
     this.actions = const <AppPageAction>[],
     this.commandBar,
-    this.bodyPadding = const EdgeInsets.fromLTRB(
-      AppSpacing.lg,
-      _headerContentGap,
-      AppSpacing.lg,
-      AppSpacing.lg,
-    ),
+    this.bodyPadding,
     this.headerBottom,
   });
 
@@ -45,7 +41,7 @@ class AppPageScaffold extends StatelessWidget {
   final Widget body;
   final List<AppPageAction> actions;
   final Widget? commandBar;
-  final EdgeInsetsGeometry bodyPadding;
+  final EdgeInsetsGeometry? bodyPadding;
   final Widget? headerBottom;
 
   @override
@@ -53,6 +49,7 @@ class AppPageScaffold extends StatelessWidget {
     final resolvedCommandBar =
         commandBar ??
         (actions.isEmpty ? null : _AppPageActionBar(actions: actions));
+    final padding = bodyPadding ?? _bodyPaddingFor(context);
 
     return ScaffoldPage(
       header: PageHeader(
@@ -60,7 +57,7 @@ class AppPageScaffold extends StatelessWidget {
         commandBar: resolvedCommandBar,
       ),
       content: Padding(
-        padding: bodyPadding,
+        padding: padding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -72,6 +69,18 @@ class AppPageScaffold extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  static EdgeInsets _bodyPaddingFor(BuildContext context) {
+    final inset = context.isCompactWindow
+        ? AppSpacing.md
+        : InheritedAppDensity.resolve(context).contentPadding.left;
+    return EdgeInsets.fromLTRB(
+      inset,
+      _headerContentGap,
+      inset,
+      inset,
     );
   }
 }

@@ -5,6 +5,8 @@ import 'package:backup_database/presentation/widgets/organisms/message_modal.dar
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../../support/desktop_tap_target_guideline.dart';
+
 FluentThemeData _a11yFluentTheme() {
   return FluentThemeData.light().copyWith(
     extensions: const [AppSemanticColors.light],
@@ -32,8 +34,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-        await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(desktopTapTargetGuideline));
         await expectLater(tester, meetsGuideline(textContrastGuideline));
       } finally {
         semantics.dispose();
@@ -58,8 +59,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-        await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(desktopTapTargetGuideline));
         await expectLater(tester, meetsGuideline(textContrastGuideline));
       } finally {
         semantics.dispose();
@@ -88,8 +88,7 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-        await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(desktopTapTargetGuideline));
         await expectLater(tester, meetsGuideline(textContrastGuideline));
       } finally {
         semantics.dispose();

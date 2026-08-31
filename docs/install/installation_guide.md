@@ -7,19 +7,20 @@ minima para colocar backups em funcionamento.
 
 Voce precisa de:
 
-1. Windows 8.1 ou superior, ou Windows Server 2012 ou superior
-2. Arquitetura x64
-3. Permissao de administrador
-4. Conexao com a internet para baixar dependencias, quando necessario
+1. Windows 8 ou superior, ou Windows Server 2012 ou superior (x64)
+2. Permissao de administrador
+3. Conexao com a internet para baixar dependencias, quando necessario
 
-> **Atencao**: auto update silencioso requer Windows 8.1+ ou Server 2016+.
-> Em Windows Server 2012 / 2012 R2 o app instala e roda normalmente, mas o
-> updater fica desabilitado (a UI mostra um `InfoBar` explicando). Use
-> atualizacao manual via instalador nesses sistemas. Detalhes em
-> `auto_update_setup.md` ("Matriz de plataformas suportadas").
+A fonte de verdade do SO minimo e `WindowsCompatibilityPolicy`
+(`MinVersion=6.2` no `setup.iss`): o app instala em Windows 8 / Server 2012+.
+Auto update silencioso fica **desabilitado** em Server 2012 / 2012 R2 e
+**habilitado** em Windows 8+ cliente e Server 2016+. Em servidores legados a
+UI mostra um `InfoBar`; use o instalador manual. Detalhes em
+`auto_update_setup.md` ("Matriz de plataformas suportadas").
 
-Para detalhes de requisitos e ferramentas por banco, consulte
-`requirements.md`.
+Requisitos canonicos (GitHub / clone): [`docs/requirements.md`](../requirements.md)
+e [`docs/path_setup.md`](../path_setup.md). Os stubs nesta pasta (`requirements.md`,
+`path_setup.md`) so redirecionam para esses arquivos.
 
 ## Passo 1: baixar o instalador
 
@@ -41,9 +42,18 @@ O instalador oferece dois modos:
   aceitar clientes remotos.
 - `Client Mode`
   Use quando esta maquina apenas vai conectar a um servidor remoto ja
-  configurado.
+  configurado. O wizard **nao** cria atalho de Windows Service nesse modo;
+  o script `{app}\tools\install_service.ps1` ainda instala o servico se
+  voce precisar depois.
 
 Se voce vai operar localmente e quer a instalacao padrao, use `Server Mode`.
+
+IPC local usa named pipe Win32 (`\\.\pipe\BackupDatabase_Ipc_*`); o
+instalador **nao** abre porta TCP para IPC. O socket remoto (Server Mode)
+escuta TCP **9527** (`SocketConfig.defaultPort`). No wizard, a task
+opcional (desmarcada por padrao) "Liberar porta TCP 9527 no Firewall do
+Windows" cria a regra `Backup Database Remote Socket` via `netsh`. Sem
+ela, clientes remotos precisam de regra manual.
 
 Comportamento de startup com Windows (quando voce marca "Iniciar com o Windows"):
 
@@ -111,8 +121,8 @@ Se alguma ferramenta estiver ausente, siga `path_setup.md`.
 Resumo por banco:
 
 - SQL Server: `sqlcmd`
-- Sybase SQL Anywhere: `dbisql`, `dbbackup`
-- PostgreSQL: `psql`, `pg_basebackup`, `pg_verifybackup`
+- Sybase SQL Anywhere: `dbisql`, `dbbackup`; `dbvalid` / `dbverify` recomendados para verificacao
+- PostgreSQL: `psql`, `pg_basebackup`; `pg_verifybackup` recomendado para verificacao
 - Firebird: `gbak`, `nbackup`, `gstat`, `isql`
 
 ### 3. Configurar o banco de dados no app
@@ -159,10 +169,29 @@ Fluxo recomendado:
 Se preferir o fluxo manual com NSSM, use o `README.md` da raiz do repositorio
 como referencia complementar.
 
+## Desinstalacao
+
+O desinstalador (menu Iniciar ou Painel de Controle):
+
+- sempre remove o Windows Service (espera `STOPPED` e depois a exclusao no SCM)
+- sempre apaga logs em `C:\ProgramData\BackupDatabase\logs`
+- **preserva** `C:\ProgramData\BackupDatabase` (`.env`, staging, locks) no
+  uninstall silencioso
+- no wizard interativo, pergunta se tambem remove essa pasta (padrao:
+  **Nao**)
+
+Marque Sim so se quiser limpar a maquina por completo.
+
 ## Auto update
 
 O produto suporta atualizacao automatica quando `AUTO_UPDATE_FEED_URL` estiver
-configurada no ambiente da maquina. Para detalhes operacionais:
+configurada no ambiente da maquina. Apos o instalador silencioso, o
+`restore_update_state.ps1` relanca a UI se `origin=ui` (sem mexer no servico)
+e so recria/starta o NSSM quando a origem e o servico e a conta e LocalSystem.
+Conta customizada: exit 2, SCM intacto. Assinatura Authenticode e procedimento
+manual (`release_guide.md`); o pipeline de build nao chama `signtool`.
+
+Para detalhes operacionais:
 
 - `auto_update_setup.md`
 - `testing_auto_update.md`

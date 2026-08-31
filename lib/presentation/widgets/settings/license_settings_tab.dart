@@ -6,6 +6,7 @@ import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/theme/theme.dart';
 import 'package:backup_database/core/utils/clipboard_service.dart';
+import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/license/license_auth_dialog.dart';
 import 'package:backup_database/presentation/widgets/settings/license/license_features_list.dart';
@@ -146,7 +147,7 @@ class _LicenseSettingsTabState extends State<LicenseSettingsTab> {
     return Consumer<LicenseProvider>(
       builder: (_, licenseProvider, child) {
         return SingleChildScrollView(
-          padding: AppSpacing.paddingLg,
+          padding: InheritedAppDensity.resolve(context).contentPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

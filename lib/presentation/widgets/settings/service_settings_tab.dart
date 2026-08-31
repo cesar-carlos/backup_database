@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/core/compatibility/feature_availability_service.dart';
@@ -11,6 +11,8 @@ import 'package:backup_database/core/utils/clipboard_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
+import 'package:backup_database/presentation/providers/providers.dart';
 import 'package:backup_database/presentation/utils/compatibility_reason_localizer.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_actions_section.dart';
@@ -20,7 +22,6 @@ import 'package:backup_database/presentation/widgets/settings/service/service_in
 import 'package:backup_database/presentation/widgets/settings/service/service_local_schedule_timer_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_status_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service/service_uac_waiting_banner.dart';
-import 'package:backup_database/presentation/widgets/settings/service/windows_service_uac.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
@@ -77,12 +78,16 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       return;
     }
     setState(() => _localScheduleTimerEnabled = enabled);
+    final serviceRunning = context.read<WindowsServiceProvider>().isRunning;
     await getIt<IUserPreferencesRepository>().setLocalScheduleTimerEnabled(
       enabled,
     );
     if (getIt.isRegistered<ISchedulerService>()) {
       final scheduler = getIt<ISchedulerService>();
       scheduler.stop();
+      if (serviceRunning) {
+        return;
+      }
       if (enabled) {
         await scheduler.start();
       }
@@ -191,11 +196,11 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     return Consumer<WindowsServiceProvider>(
       builder: (context, provider, _) {
         return SingleChildScrollView(
-          padding: AppSpacing.paddingLg,
+          padding: InheritedAppDensity.resolve(context).contentPadding,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_isUacElevatedOperation(provider)) ...[
+              if (provider.isWaitingForUac) ...[
                 ServiceUacWaitingBanner(operation: provider.operation),
                 AppSpacing.gapLg,
               ],
@@ -245,6 +250,7 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
               ServiceLocalScheduleTimerSection(
                 isLoading: _isLoadingScheduleTimerPref,
                 enabled: _localScheduleTimerEnabled,
+                serviceOwnsScheduler: provider.isRunning,
                 onChanged: (bool enabled) {
                   unawaited(_setLocalScheduleTimerEnabled(enabled));
                 },
@@ -277,43 +283,92 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
 
   String _getStatusText(WindowsServiceProvider provider) {
     if (provider.isLoading) {
+      if (provider.isWaitingForUac) {
+        return switch (provider.operation) {
+          WindowsServiceOperation.install => appLocaleString(
+            context,
+            'Instalando... aguardando confirmação do UAC',
+            'Installing... waiting for UAC confirmation',
+          ),
+          WindowsServiceOperation.uninstall => appLocaleString(
+            context,
+            'Removendo... aguardando confirmação do UAC',
+            'Removing... waiting for UAC confirmation',
+          ),
+          WindowsServiceOperation.start => appLocaleString(
+            context,
+            'Iniciando... aguardando confirmação do UAC',
+            'Starting... waiting for UAC confirmation',
+          ),
+          WindowsServiceOperation.stop => appLocaleString(
+            context,
+            'Parando... aguardando confirmação do UAC',
+            'Stopping... waiting for UAC confirmation',
+          ),
+          WindowsServiceOperation.restart => appLocaleString(
+            context,
+            'Reiniciando... aguardando confirmação do UAC',
+            'Restarting... waiting for UAC confirmation',
+          ),
+          WindowsServiceOperation.check => appLocaleString(
+            context,
+            'Verificando...',
+            'Checking...',
+          ),
+          WindowsServiceOperation.none => appLocaleString(
+            context,
+            'Verificando...',
+            'Checking...',
+          ),
+        };
+      }
       return switch (provider.operation) {
         WindowsServiceOperation.install => appLocaleString(
           context,
-          'Instalando... aguardando confirmação do UAC',
-          'Installing... waiting for UAC confirmation',
+          'Instalando...',
+          'Installing...',
         ),
         WindowsServiceOperation.uninstall => appLocaleString(
           context,
-          'Removendo... aguardando confirmação do UAC',
-          'Removing... waiting for UAC confirmation',
+          'Removendo...',
+          'Removing...',
         ),
         WindowsServiceOperation.start => appLocaleString(
           context,
-          'Iniciando... aguardando confirmação do UAC',
-          'Starting... waiting for UAC confirmation',
+          'Iniciando...',
+          'Starting...',
         ),
         WindowsServiceOperation.stop => appLocaleString(
           context,
-          'Parando... aguardando confirmação do UAC',
-          'Stopping... waiting for UAC confirmation',
+          'Parando...',
+          'Stopping...',
         ),
         WindowsServiceOperation.restart => appLocaleString(
           context,
-          'Reiniciando... aguardando confirmação do UAC',
-          'Restarting... waiting for UAC confirmation',
+          'Reiniciando...',
+          'Restarting...',
         ),
-        WindowsServiceOperation.check => appLocaleString(
-          context,
-          'Verificando...',
-          'Checking...',
-        ),
+        WindowsServiceOperation.check ||
         WindowsServiceOperation.none => appLocaleString(
           context,
           'Verificando...',
           'Checking...',
         ),
       };
+    }
+    if (provider.isStopPending) {
+      return appLocaleString(
+        context,
+        'Parando (STOP_PENDING)',
+        'Stopping (STOP_PENDING)',
+      );
+    }
+    if (provider.isStartPending) {
+      return appLocaleString(
+        context,
+        'Iniciando (START_PENDING)',
+        'Starting (START_PENDING)',
+      );
     }
     if (provider.isInstalled) {
       return provider.isRunning
@@ -325,13 +380,6 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
           : appLocaleString(context, 'Instalado', 'Installed');
     }
     return appLocaleString(context, 'Não instalado', 'Not installed');
-  }
-
-  bool _isUacElevatedOperation(WindowsServiceProvider provider) {
-    if (!provider.isLoading) {
-      return false;
-    }
-    return isUacElevatedOperationType(provider.operation);
   }
 
   Future<void> _installService(
@@ -347,8 +395,8 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
       title: appLocaleString(context, 'Instalar serviço', 'Install service'),
       message: appLocaleString(
         context,
-        'Deseja instalar o Backup Database como serviço do Windows?\n\nO serviço será configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuário logado\n- Rodar com conta LocalSystem\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissões de administrador',
-        'Do you want to install Backup Database as a Windows service?\n\nThe service will be configured to:\n- Start automatically with Windows\n- Run without logged-in user\n- Run under LocalSystem account\n\nRequirements:\n- Configure backups before installing\n- Ensure you have administrator permissions',
+        'Deseja instalar o Backup Database como serviço do Windows?\n\nO serviço será configurado para:\n- Iniciar automaticamente com o Windows\n- Executar sem usuário logado\n- Rodar com conta LocalSystem\n\nEnquanto este aplicativo estiver aberto, o serviço não consegue ficar em execução (mutex de instância única). Depois de registrar, use "Fechar o aplicativo e iniciar o serviço".\n\nRequisitos:\n- Configure os backups antes de instalar\n- Certifique-se de ter permissões de administrador',
+        'Do you want to install Backup Database as a Windows service?\n\nThe service will be configured to:\n- Start automatically with Windows\n- Run without a logged-in user\n- Run under the LocalSystem account\n\nWhile this app is open the service cannot stay running (single-instance mutex). After registration, use "Close the app and start the service".\n\nRequirements:\n- Configure backups before installing\n- Ensure you have administrator permissions',
       ),
       confirmLabel: appLocaleString(context, 'Instalar', 'Install'),
       confirmIcon: FluentIcons.download,
@@ -356,31 +404,90 @@ class _ServiceSettingsTabState extends State<ServiceSettingsTab> {
     if (!confirmed || !mounted) {
       return;
     }
-    final successText = provider.isRunning
-        ? appLocaleString(
-            this.context,
-            'Serviço instalado com sucesso!\n\nO serviço está em execução e iniciará automaticamente com o Windows.',
-            'Service installed successfully!\n\nThe service is running and will start automatically with Windows.',
-          )
-        : appLocaleString(
-            this.context,
-            'Serviço instalado com sucesso!\n\nClique em "Iniciar" para colocar o serviço em execução agora. Ele também iniciará automaticamente com o Windows.',
-            'Service installed successfully!\n\nClick "Start" to run the service now. It will also start automatically with Windows.',
-          );
     final fallbackError = appLocaleString(
       this.context,
       'Erro desconhecido ao instalar serviço.',
       'Unknown error while installing service.',
     );
-    final success = await provider.installService();
+    final outcome = await provider.installService();
     if (!mounted) {
       return;
     }
-    await _showOperationResult(
-      success: success,
-      successMessage: successText,
-      errorMessage: provider.error ?? fallbackError,
+    await _showInstallOutcome(
+      provider: provider,
+      outcome: outcome,
+      fallbackError: fallbackError,
     );
+  }
+
+  Future<void> _showInstallOutcome({
+    required WindowsServiceProvider provider,
+    required WindowsServiceInstallOutcome outcome,
+    required String fallbackError,
+  }) async {
+    switch (outcome) {
+      case WindowsServiceInstallOutcome.failed:
+        await MessageModal.showError(
+          context,
+          message: provider.error ?? fallbackError,
+        );
+      case WindowsServiceInstallOutcome.registeredAndRunning:
+        await MessageModal.showSuccess(
+          context,
+          message: appLocaleString(
+            context,
+            'Serviço instalado com sucesso!\n\nO serviço está em execução e iniciará automaticamente com o Windows.',
+            'Service installed successfully!\n\nThe service is running and will start automatically with Windows.',
+          ),
+        );
+      case WindowsServiceInstallOutcome.registeredStartFailed:
+        await MessageModal.showError(
+          context,
+          message: provider.error ?? fallbackError,
+        );
+      case WindowsServiceInstallOutcome.registeredBlockedByUiInstance:
+        final closeAndStart = await MessageModal.showConfirm(
+          context,
+          title: appLocaleString(
+            context,
+            'Serviço instalado',
+            'Service installed',
+          ),
+          message: appLocaleString(
+            context,
+            'O serviço foi registrado, mas não pode ficar em execução enquanto este aplicativo estiver aberto (mutex de instância única, exit 77).\n\nFeche o aplicativo para o serviço iniciar. Ele também iniciará automaticamente com o Windows.',
+            'The service was registered, but it cannot stay running while this app is open (single-instance mutex, exit 77).\n\nClose the app so the service can start. It will also start automatically with Windows.',
+          ),
+          confirmLabel: appLocaleString(
+            context,
+            'Fechar o aplicativo e iniciar o serviço',
+            'Close the app and start the service',
+          ),
+          confirmIcon: FluentIcons.play,
+        );
+        if (!closeAndStart || !mounted) {
+          return;
+        }
+        final handedOff = await provider.scheduleStartAfterUiExit();
+        if (!mounted) {
+          return;
+        }
+        if (!handedOff) {
+          await MessageModal.showError(
+            context,
+            message:
+                provider.error ??
+                appLocaleString(
+                  context,
+                  'Não foi possível agendar o início do serviço. Feche o aplicativo e use Iniciar, ou confirme o prompt UAC.',
+                  'Could not schedule the service start. Close the app and click Start, or confirm the UAC prompt.',
+                ),
+          );
+          return;
+        }
+        await AppCleanup.cleanup();
+        exit(0);
+    }
   }
 
   Future<void> _uninstallService(

@@ -112,7 +112,7 @@ class NotificationRecipientListItem extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth >= 720) {
+          if (constraints.maxWidth >= AppBreakpoints.compact) {
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

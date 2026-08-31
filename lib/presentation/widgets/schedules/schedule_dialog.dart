@@ -328,10 +328,9 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      constraints: const BoxConstraints(
-        minWidth: 550,
-        maxWidth: 650,
-        maxHeight: 750,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 650,
       ),
       scrollable: false,
       title: Row(
@@ -350,7 +349,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         ],
       ),
       content: Container(
-        constraints: const BoxConstraints(maxHeight: 700),
+        constraints: AppDialogConstraints.bodyOf(context),
         child: _isLoading
             ? const Center(child: ProgressRing())
             : Form(

@@ -1,7 +1,6 @@
 import 'package:backup_database/application/providers/windows_service_provider.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/presentation/widgets/common/common.dart';
-import 'package:backup_database/presentation/widgets/settings/service/windows_service_uac.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 class ServicePrimaryAction extends StatelessWidget {
@@ -38,7 +37,7 @@ class ServicePrimaryAction extends StatelessWidget {
     }
 
     final String idleLabel;
-    final VoidCallback onPressed;
+    final VoidCallback? onPressed;
     if (!provider.isInstalled) {
       idleLabel = appLocaleString(
         context,
@@ -46,6 +45,20 @@ class ServicePrimaryAction extends StatelessWidget {
         'Install service',
       );
       onPressed = onInstall;
+    } else if (provider.isStopPending) {
+      idleLabel = appLocaleString(
+        context,
+        'Parando...',
+        'Stopping...',
+      );
+      onPressed = null;
+    } else if (provider.isStartPending) {
+      idleLabel = appLocaleString(
+        context,
+        'Iniciando...',
+        'Starting...',
+      );
+      onPressed = null;
     } else if (!provider.isRunning) {
       idleLabel = appLocaleString(context, 'Iniciar', 'Start');
       onPressed = onStart;
@@ -54,8 +67,7 @@ class ServicePrimaryAction extends StatelessWidget {
       onPressed = onRestart;
     }
 
-    final isUacWait =
-        provider.isLoading && isUacElevatedOperationType(provider.operation);
+    final isUacWait = provider.isWaitingForUac;
 
     return AppButton.primary(
       label: idleLabel,

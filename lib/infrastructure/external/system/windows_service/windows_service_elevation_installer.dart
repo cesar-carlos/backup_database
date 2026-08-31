@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:backup_database/core/constants/windows_service_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
 import 'package:path/path.dart' as p;
@@ -20,26 +22,23 @@ class WindowsServiceElevationInstaller {
   final WindowsServiceStatusSupplier _getStatus;
   final WindowsServiceTimingConfig _timing;
 
+  void Function(bool waiting)? onElevationWaitChanged;
+
   static const String _serviceName = WindowsServiceConstants.serviceName;
-  static const String _displayName = WindowsServiceConstants.displayName;
-  static const String _description = WindowsServiceConstants.description;
-  static const int _successExitCode = 0;
-  static const String _programDataEnv = 'ProgramData';
-  static const String _defaultProgramData = r'C:\ProgramData';
-  static const String _logSubdir = 'logs';
   static const String _localSystemAccount = 'LocalSystem';
-  static const String _logPath = WindowsServiceConstants.logPath;
-
-  static const String _troubleshootingWithEnv =
-      'Tente:\n'
-      '1. Executar como Administrador\n'
-      r'2. Verificar se existe C:\ProgramData\BackupDatabase\config\.env'
-      '\n'
-      '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
-      '4. Atualizar o status e tentar novamente';
-
+  static const int _successExitCode = 0;
+  static const int _scriptTimeoutExitCode = 124;
   static const int _elevatedLogTailMaxChars = 2000;
   static const int _elevatedLogFilesToRead = 5;
+
+  static String get _logPath => WindowsServiceConstants.logPath;
+
+  static String get _troubleshootingWithEnv =>
+      'Tente:\n'
+      '1. Executar como Administrador\n'
+      '2. Verificar se existe ${WindowsServiceConstants.configPath}\\.env\n'
+      '3. Verificar logs em $_logPath (service_stdout.log, service_stderr.log)\n'
+      '4. Atualizar o status e tentar novamente';
 
   Future<rd.Result<void>> install({
     required String nssmPath,
@@ -48,35 +47,30 @@ class WindowsServiceElevationInstaller {
     required String? serviceUser,
     required String? servicePassword,
   }) async {
-    final programData =
-        Platform.environment[_programDataEnv] ?? _defaultProgramData;
-    final logPath = '$programData\\BackupDatabase\\$_logSubdir';
-    final logDir = '$programData\\BackupDatabase';
+    final logPath = WindowsServiceConstants.logPath;
+    final configPath = WindowsServiceConstants.configPath;
+    final logDir = Directory(logPath).parent.path;
 
-    final installScriptDir = '$programData\\BackupDatabase\\install';
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final randomSuffix = DateTime.now().microsecondsSinceEpoch.toRadixString(
       16,
     );
     final scriptPath = p.join(
-      installScriptDir,
+      Directory.systemTemp.path,
       'backup_db_install_${timestamp}_$randomSuffix.ps1',
     );
-    final installLogPath =
-        '$programData\\BackupDatabase\\logs\\install_elevated_${timestamp}_$randomSuffix.log';
-
-    try {
-      Directory(installScriptDir).createSync(recursive: true);
-    } on Object catch (e) {
-      return rd.Failure(
-        ServerFailure(
-          message:
-              'Não foi possível criar diretório de scripts de instalação: $e',
-        ),
-      );
-    }
+    final installLogPath = p.join(
+      Directory.systemTemp.path,
+      'backup_db_install_${timestamp}_$randomSuffix.log',
+    );
 
     String safePath(String s) => s.replaceAll("'", "''");
+    final includePassword =
+        servicePassword != null && servicePassword.isNotEmpty;
+    final plan = NssmConfigPlan.build(appDir: appDir, logPath: logPath);
+    final planSets = plan.toElevatedPowerShellSets();
+    final scriptTimeoutMs = _timing.elevatedInstallTimeout.inMilliseconds;
+
     final scriptContent =
         '''
 \$ErrorActionPreference = "Stop"
@@ -89,9 +83,10 @@ if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyCo
 \$appPath = '${safePath(appPath)}'
 \$appDir = '${safePath(appDir)}'
 \$serviceUser = '${safePath(serviceUser ?? '')}'
-\$servicePassword = '${safePath(servicePassword ?? '')}'
+\$servicePassword = '${includePassword ? safePath(servicePassword) : ''}'
 \$logPath = '${safePath(logPath)}'
 \$logDir = '${safePath(logDir)}'
+\$configPath = '${safePath(configPath)}'
 
 function Write-InstallLog { param(\$msg) Add-Content -Path \$installLog -Value \$msg }
 function Fail { param(\$step,\$err) Write-InstallLog "ERRO em \$step`: \$err"; exit 1 }
@@ -121,15 +116,56 @@ function Set-NssmKeyWithRetry {
   Fail \$KeyName "Can't open service apos \$MaxAttempts tentativas: \$lastErr"
 }
 
+function Set-NssmKeyOptional {
+  param(
+    [string]\$KeyName,
+    [string[]]\$Values,
+    [int]\$MaxAttempts = 3
+  )
+  \$lastErr = \$null
+  for (\$attempt = 1; \$attempt -le \$MaxAttempts; \$attempt++) {
+    \$r = & \$nssmPath set $_serviceName \$KeyName @Values 2>&1
+    if (\$LASTEXITCODE -eq 0) { return }
+    \$lastErr = \$r -join " "
+    if (\$lastErr -notmatch "Can't open service") {
+      Write-InstallLog "AVISO \$KeyName`: \$lastErr"
+      return
+    }
+    Start-Sleep -Seconds 2
+  }
+  Write-InstallLog "AVISO \$KeyName`: Can't open service apos \$MaxAttempts tentativas: \$lastErr"
+}
+
 if (-not (Test-Path \$logDir)) { New-Item -ItemType Directory -Path \$logDir -Force | Out-Null }
 if (-not (Test-Path \$logPath)) { New-Item -ItemType Directory -Path \$logPath -Force | Out-Null }
+if (-not (Test-Path \$configPath)) { New-Item -ItemType Directory -Path \$configPath -Force | Out-Null }
 Restrict-Acl \$installLog
 Restrict-Acl \$selfScript
+Restrict-Acl \$logPath
+Restrict-Acl \$configPath
+
+\$envDest = Join-Path \$configPath '.env'
+if (-not (Test-Path \$envDest)) {
+  \$envCandidates = @(
+    (Join-Path \$appDir '.env'),
+    (Join-Path \$appDir '.env.example'),
+    (Join-Path \$configPath '.env.example')
+  )
+  foreach (\$candidate in \$envCandidates) {
+    if (Test-Path \$candidate) {
+      Copy-Item -Path \$candidate -Destination \$envDest -Force
+      Write-InstallLog "Copiado \$candidate -> \$envDest"
+      break
+    }
+  }
+}
 
 try {
   try {
     sc.exe query $_serviceName 2>\$null | Out-Null
     if (\$LASTEXITCODE -eq 0) {
+      sc.exe stop $_serviceName 2>\$null | Out-Null
+      Start-Sleep -Seconds 2
       & \$nssmPath remove $_serviceName confirm 2>\$null | Out-Null
       Start-Sleep -Seconds 2
     }
@@ -139,23 +175,11 @@ try {
 
     Start-Sleep -Seconds 5
 
-    Set-NssmKeyWithRetry -KeyName "AppParameters" -Values @("--mode=server --minimized --run-as-service")
-    Set-NssmKeyWithRetry -KeyName "AppDirectory" -Values @(\$appDir)
-    Set-NssmKeyWithRetry -KeyName "AppEnvironmentExtra" -Values @("SERVICE_MODE=server")
-    Set-NssmKeyWithRetry -KeyName "AppStdout" -Values @("\$logPath\\service_stdout.log")
-    Set-NssmKeyWithRetry -KeyName "AppStderr" -Values @("\$logPath\\service_stderr.log")
-    & \$nssmPath set $_serviceName DisplayName "$_displayName" | Out-Null
-    & \$nssmPath set $_serviceName Description "$_description" | Out-Null
-    & \$nssmPath set $_serviceName Start SERVICE_AUTO_START | Out-Null
-    & \$nssmPath set $_serviceName AppNoConsole 1 | Out-Null
-    & \$nssmPath set $_serviceName AppExit Default Restart | Out-Null
-    & \$nssmPath set $_serviceName AppExit 77 Exit | Out-Null
-    & \$nssmPath set $_serviceName AppExit 78 Exit | Out-Null
-    & \$nssmPath set $_serviceName AppRestartDelay 60000 | Out-Null
+$planSets
     if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
-      & \$nssmPath set $_serviceName ObjectName \$serviceUser \$servicePassword | Out-Null
+      Set-NssmKeyWithRetry -KeyName "ObjectName" -Values @(\$serviceUser, \$servicePassword)
     } else {
-      & \$nssmPath set $_serviceName ObjectName $_localSystemAccount | Out-Null
+      Set-NssmKeyOptional -KeyName "ObjectName" -Values @("$_localSystemAccount")
     }
 
     exit 0
@@ -179,23 +203,38 @@ try {
       );
     }
 
+    await _restrictScriptAcl(scriptPath);
+
     final scriptPathEscaped = scriptPath.replaceAll('"', '`"');
     final elevatedCommand =
         r'$p = Start-Process -FilePath "powershell.exe" '
         '-ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","$scriptPathEscaped" '
-        r'-Verb RunAs -WindowStyle Hidden -PassThru -Wait; exit $p.ExitCode';
+        '-Verb RunAs -WindowStyle Hidden -PassThru; '
+        r'if ($null -eq $p) { exit 1223 }; '
+        'if (-not \$p.WaitForExit($scriptTimeoutMs)) { '
+        r'try { $p.Kill() } catch {}; exit 124 }; '
+        r'exit $p.ExitCode';
 
-    final result = await _processService.run(
-      executable: 'powershell',
-      arguments: [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        elevatedCommand,
-      ],
-      timeout: _timing.elevatedInstallTimeout,
-    );
+    final launchTimeout =
+        _timing.uacPromptTimeout + _timing.elevatedInstallTimeout;
+
+    onElevationWaitChanged?.call(true);
+    rd.Result<ProcessResult> result;
+    try {
+      result = await _processService.run(
+        executable: 'powershell',
+        arguments: [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          elevatedCommand,
+        ],
+        timeout: launchTimeout,
+      );
+    } finally {
+      onElevationWaitChanged?.call(false);
+    }
 
     String? logContent;
     try {
@@ -217,7 +256,7 @@ try {
             ? processResult.stderr
             : processResult.stdout;
 
-        if (_wasUacCancelled(output)) {
+        if (_wasUacCancelled(output) || processResult.exitCode == 1223) {
           return const rd.Failure(
             ValidationFailure(
               message:
@@ -227,7 +266,11 @@ try {
           );
         }
 
+        final timedOut = processResult.exitCode == _scriptTimeoutExitCode;
         if (processResult.exitCode != _successExitCode) {
+          if (timedOut) {
+            await _rollbackPartialInstall(nssmPath);
+          }
           var detail = logContent != null && logContent.isNotEmpty
               ? logContent.trim()
               : (output.isNotEmpty ? output : '');
@@ -248,7 +291,7 @@ try {
         return postStatus.fold(
           (status) {
             if (!status.isInstalled) {
-              return const rd.Failure(
+              return rd.Failure(
                 ServerFailure(
                   message:
                       'O comando elevado foi executado, mas o serviço não está '
@@ -261,16 +304,58 @@ try {
           rd.Failure.new,
         );
       },
-      (failure) => Future.value(
-        rd.Failure(
+      (failure) async {
+        await _rollbackPartialInstall(nssmPath);
+        return rd.Failure(
           ServerFailure(
             message:
                 'Não foi possível solicitar elevação UAC para instalar '
-                'o serviço: $failure',
+                'o serviço: ${failureUserMessage(failure)}',
           ),
-        ),
-      ),
+        );
+      },
     );
+  }
+
+  Future<void> _restrictScriptAcl(String scriptPath) async {
+    try {
+      await _processService.run(
+        executable: 'icacls',
+        arguments: [
+          scriptPath,
+          '/inheritance:r',
+          '/grant:r',
+          r'NT AUTHORITY\SYSTEM:(F)',
+          r'BUILTIN\Administrators:(F)',
+        ],
+        timeout: _timing.shortTimeout,
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Não foi possível restringir ACL do script UAC em $scriptPath',
+        e,
+        s,
+      );
+    }
+  }
+
+  Future<void> _rollbackPartialInstall(String nssmPath) async {
+    LoggerService.warning(
+      'Instalação elevada incompleta ou em timeout; tentando nssm remove',
+    );
+    try {
+      await _processService.run(
+        executable: nssmPath,
+        arguments: ['remove', _serviceName, 'confirm'],
+        timeout: _timing.longTimeout,
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Rollback nssm remove falhou (o filho elevado pode ainda existir)',
+        e,
+        s,
+      );
+    }
   }
 
   Future<String> _readLogsFromProgramData() async {

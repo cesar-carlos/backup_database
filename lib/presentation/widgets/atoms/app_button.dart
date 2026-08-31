@@ -1,4 +1,5 @@
 import 'package:backup_database/core/theme/tokens/tokens.dart';
+import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 enum _AppButtonVariant { standard, primary }
@@ -157,13 +158,18 @@ class AppButton extends StatelessWidget {
           : Text(label);
     }
 
+    const desktopStyle = ButtonStyle(
+      padding: WidgetStatePropertyAll(kDefaultButtonPadding),
+    );
     final Widget button = switch (_variant) {
       _AppButtonVariant.primary => FilledButton(
         onPressed: onPressed,
+        style: desktopStyle,
         child: child,
       ),
       _AppButtonVariant.standard => Button(
         onPressed: onPressed,
+        style: desktopStyle,
         child: child,
       ),
     };
@@ -177,14 +183,14 @@ class AppButton extends StatelessWidget {
       semanticsLabel = label;
     }
 
+    final minHeight = InheritedAppDensity.resolve(context).targetSize;
+
     return Semantics(
       button: true,
       label: semanticsLabel,
       enabled: onPressed != null,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minHeight: AppTargetSize.comfortable,
-        ),
+        constraints: BoxConstraints(minHeight: minHeight),
         child: button,
       ),
     );

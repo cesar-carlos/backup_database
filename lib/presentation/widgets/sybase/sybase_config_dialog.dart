@@ -291,10 +291,9 @@ class _SybaseConfigDialogState extends State<SybaseConfigDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      constraints: const BoxConstraints(
-        minWidth: 600,
-        maxWidth: 600,
-        maxHeight: 800,
+      constraints: AppDialogConstraints.of(
+        context,
+        preferredWidth: 600,
       ),
       title: Row(
         children: [

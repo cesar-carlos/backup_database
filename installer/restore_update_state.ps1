@@ -163,6 +163,35 @@ function Set-NssmValue {
     }
 }
 
+function Test-SupportedServiceAccount {
+    param(
+        [string]$ObjectName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ObjectName)) {
+        return $true
+    }
+    $normalized = $ObjectName.Trim().ToLowerInvariant()
+    $supportedAccounts = @(
+        'localsystem',
+        'system',
+        'nt authority\system'
+    )
+    return $supportedAccounts -contains $normalized
+}
+
+function Get-RestoreServiceUtilsPath {
+    $candidate = Join-Path $AppDirectory 'tools\service_utils.ps1'
+    if (Test-Path $candidate) {
+        return $candidate
+    }
+    $fallback = Join-Path $PSScriptRoot 'service_utils.ps1'
+    if (Test-Path $fallback) {
+        return $fallback
+    }
+    return $null
+}
+
 if (-not (Test-Path $ContextPath)) {
     exit 0
 }
@@ -192,8 +221,17 @@ if ($null -eq $expiresAt -or $expiresAt -lt (Get-Date).ToUniversalTime()) {
 $origin = [string]$context.origin
 $serviceExists = [bool]$context.serviceExists
 $serviceConfig = $context.serviceConfig
+$shouldRestoreService = $serviceExists -and ($origin -ne 'ui')
 
-if ($serviceExists) {
+if ($shouldRestoreService) {
+    $objectName = Get-ConfigValue -Config $serviceConfig -Name "ObjectName" -Default "LocalSystem"
+    if (-not (Test-SupportedServiceAccount -ObjectName $objectName)) {
+        Write-RestoreError -Message ("Restauracao automatica do Windows Service so e " +
+            "suportada para LocalSystem. Conta detectada: $objectName. " +
+            "Reinstale o servico manualmente via 'Instalar como Servico do Windows'.")
+        exit 2
+    }
+
     if (-not (Test-Path $NssmPath)) {
         throw "NSSM nao encontrado em $NssmPath"
     }
@@ -203,17 +241,23 @@ if ($serviceExists) {
         New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
     }
 
+    $serviceUtilsPath = Get-RestoreServiceUtilsPath
+    if ($null -ne $serviceUtilsPath) {
+        . $serviceUtilsPath
+    }
+
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($null -ne $existingService) {
         & $NssmPath stop $ServiceName 2>$null | Out-Null
-        Start-Sleep -Seconds 2
-        & $NssmPath remove $ServiceName confirm 2>$null | Out-Null
-        $serviceUtilsPath = Join-Path $AppDirectory 'tools\service_utils.ps1'
-        if (-not (Test-Path $serviceUtilsPath)) {
-            $serviceUtilsPath = Join-Path $PSScriptRoot 'service_utils.ps1'
+        if ($null -ne $serviceUtilsPath) {
+            if (-not (Wait-ServiceStopped -ServiceName $ServiceName)) {
+                throw "Servico $ServiceName nao atingiu STOPPED antes do nssm remove"
+            }
+        } else {
+            Start-Sleep -Seconds 2
         }
-        if (Test-Path $serviceUtilsPath) {
-            . $serviceUtilsPath
+        & $NssmPath remove $ServiceName confirm 2>$null | Out-Null
+        if ($null -ne $serviceUtilsPath) {
             if (-not (Wait-ServiceRemoved -ServiceName $ServiceName)) {
                 throw "Servico $ServiceName ainda marcado para exclusao apos nssm remove"
             }
@@ -309,18 +353,6 @@ if ($serviceExists) {
         (Get-ConfigValue -Config $serviceConfig -Name "AppNoConsole" -Default "1")
     )
 
-    $objectName = Get-ConfigValue -Config $serviceConfig -Name "ObjectName" -Default "LocalSystem"
-    $normalizedAccount = $objectName.Trim().ToLowerInvariant()
-    $supportedAccounts = @('localsystem', 'system', 'nt authority\system')
-    if ($supportedAccounts -notcontains $normalizedAccount) {
-        # Antes era `throw` — agora loga em arquivo dedicado para que o
-        # operador descubra o problema no painel de updates da app
-        # (audit 2026-05-28). exit 2 sinaliza "config incompativel".
-        Write-RestoreError -Message ("Restauracao automatica do Windows Service so e " +
-            "suportada para LocalSystem. Conta detectada: $objectName. " +
-            "Reinstale o servico manualmente via 'Instalar como Servico do Windows'.")
-        exit 2
-    }
     Set-NssmValue -Arguments @("set", $ServiceName, "ObjectName", "LocalSystem")
 
     & $NssmPath start $ServiceName | Out-Null
@@ -328,23 +360,22 @@ if ($serviceExists) {
         throw "Falha ao iniciar servico $ServiceName via NSSM (exit $LASTEXITCODE)"
     }
 
-    $serviceUtilsPath = Join-Path $AppDirectory 'tools\service_utils.ps1'
-    if (-not (Test-Path $serviceUtilsPath)) {
+    if ($null -eq $serviceUtilsPath) {
         Write-RestoreError -Message (
-            "service_utils.ps1 ausente em $serviceUtilsPath; " +
+            "service_utils.ps1 ausente em $(Join-Path $AppDirectory 'tools\service_utils.ps1'); " +
             "servico iniciado mas RUNNING nao foi confirmado por polling."
         )
-    } else {
-        . $serviceUtilsPath
-        $isRunning = Wait-ServiceRunning -ServiceName $ServiceName
-        if (-not $isRunning) {
-            Write-RestoreError -Message (
-                "Servico $ServiceName restaurado mas nao atingiu RUNNING dentro de " +
-                "$script:ServiceStartPollingTimeoutSeconds segundos apos NSSM start. " +
-                "Exit 2: update_context.json preservado para retry."
-            )
-            exit 2
-        }
+        exit 2
+    }
+
+    $isRunning = Wait-ServiceRunning -ServiceName $ServiceName
+    if (-not $isRunning) {
+        Write-RestoreError -Message (
+            "Servico $ServiceName restaurado mas nao atingiu RUNNING dentro de " +
+            "$script:ServiceStartPollingTimeoutSeconds segundos apos NSSM start. " +
+            "Exit 2: update_context.json preservado para retry."
+        )
+        exit 2
     }
 }
 

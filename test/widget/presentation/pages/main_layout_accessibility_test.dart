@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../../support/desktop_tap_target_guideline.dart';
 import '../../../support/feature_availability_test_support.dart';
 
 class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
@@ -100,11 +101,6 @@ void main() {
     await registerTestFeatureAvailability();
   });
 
-  tearDown(() async {
-    await unregisterTestFeatureAvailability();
-    setAppMode(AppMode.unified);
-  });
-
   // meetsGuideline on full MainLayout exceeds practical CI runtime;
   // covered by atom/molecule a11y tests.
   testWidgets(
@@ -132,8 +128,7 @@ void main() {
         );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
-        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
-        await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(desktopTapTargetGuideline));
       } finally {
         semantics.dispose();
       }

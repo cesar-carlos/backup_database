@@ -1,3 +1,5 @@
+import 'package:backup_database/core/constants/windows_service_constants.dart';
+
 class AppConstants {
   static const Duration ftpTimeout = Duration(minutes: 60);
   static const Duration httpTimeout = Duration(minutes: 5);
@@ -71,8 +73,7 @@ class AppConstants {
 
   static const int logRotationDays = 90;
 
-  static const String windowsServiceLogPath =
-      r'C:\ProgramData\BackupDatabase\logs';
+  static String get windowsServiceLogPath => WindowsServiceConstants.logPath;
 
   static const bool allowInsecureSmtp = bool.fromEnvironment(
     'ALLOW_INSECURE_SMTP',

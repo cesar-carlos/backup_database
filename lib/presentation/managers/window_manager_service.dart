@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:backup_database/core/theme/tokens/app_breakpoints.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
@@ -21,8 +22,8 @@ class WindowManagerService with WindowListener {
   bool get isInitialized => _isInitialized;
 
   Future<void> initialize({
-    ui.Size size = const ui.Size(1280, 800),
-    ui.Size minimumSize = const ui.Size(900, 650),
+    ui.Size size = AppBreakpoints.initialWindow,
+    ui.Size minimumSize = AppBreakpoints.minimumWindow,
     bool center = true,
     String title = 'Backup Database',
     bool startMinimized = false,

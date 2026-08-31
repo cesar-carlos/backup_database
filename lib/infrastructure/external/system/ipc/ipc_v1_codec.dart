@@ -2,10 +2,22 @@ import 'dart:convert';
 import 'dart:io' show pid;
 
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/utils/uuid_validator.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 
 class IpcV1Codec {
   IpcV1Codec._();
+
+  static final RegExp _protocolVersionField = RegExp(
+    r'(?:^|\|)'
+    'v=${SingleInstanceConfig.ipcProtocolVersion}'
+    r'(?:\||$)',
+  );
+
+  static final RegExp _runSchedulePrefix = RegExp(
+    '^${RegExp.escape(SingleInstanceConfig.ipcProtocolId)}\\|'
+    '${RegExp.escape(SingleInstanceConfig.ipcRunScheduleCommand)}\\|',
+  );
 
   static String normalizeRole(String role) {
     final normalized = role.trim().toLowerCase();
@@ -15,9 +27,35 @@ class IpcV1Codec {
     return SingleInstanceConfig.ipcInstanceRoleUi;
   }
 
+  static String stripLine(String raw) {
+    return raw.replaceAll('\r', '').replaceAll('\n', '').trim();
+  }
+
+  static bool exceedsMaxLineBytes(List<int> bytes) {
+    return bytes.length > SingleInstanceConfig.ipcMaxLineBytes;
+  }
+
+  static bool hasProtocolVersion(String message) {
+    return _protocolVersionField.hasMatch(message);
+  }
+
+  static bool isOkAck(String? message) {
+    return message == SingleInstanceConfig.ipcOkAckMessage;
+  }
+
   static String? parseRunScheduleRequest(String message) {
+    if (!_runSchedulePrefix.hasMatch(message)) {
+      return null;
+    }
+    if (!hasProtocolVersion(message)) {
+      return null;
+    }
     final match = RegExp(r'(?:^|\|)scheduleId=([^|\s]+)').firstMatch(message);
-    return match?.group(1);
+    final scheduleId = match?.group(1);
+    if (scheduleId == null || !UuidValidator.isValid(scheduleId)) {
+      return null;
+    }
+    return scheduleId;
   }
 
   static String buildRunScheduleResultLine({
@@ -42,7 +80,7 @@ class IpcV1Codec {
     )) {
       return null;
     }
-    if (!message.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
+    if (!hasProtocolVersion(message)) {
       return null;
     }
     final exitMatch = RegExp(r'(?:^|\|)exitCode=(-?\d+)').firstMatch(message);
@@ -94,11 +132,10 @@ class IpcV1Codec {
     if (!response.startsWith(SingleInstanceConfig.ipcPongLinePrefix)) {
       return false;
     }
-    if (!response.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
+    if (!hasProtocolVersion(response)) {
       return false;
     }
-    final role = parseRoleFromV1Line(response);
-    if (role == null) {
+    if (parseRoleFromV1Line(response) == null) {
       return false;
     }
     if (!response.contains('pid=')) {
@@ -126,31 +163,24 @@ class IpcV1Codec {
   }
 
   static String? parseUserInfoResponse(String message) {
-    if (message.startsWith(SingleInstanceConfig.ipcUserInfoLinePrefix)) {
-      if (!message.contains('v=${SingleInstanceConfig.ipcProtocolVersion}')) {
-        return null;
-      }
-      if (parseRoleFromV1Line(message) == null) {
-        return null;
-      }
-      final match = RegExp(r'u64=([^|\s]+)').firstMatch(message);
-      if (match == null) {
-        return null;
-      }
-      try {
-        return utf8.decode(base64Url.decode(match.group(1)!));
-      } on Object {
-        return null;
-      }
+    if (!message.startsWith(SingleInstanceConfig.ipcUserInfoLinePrefix)) {
+      return null;
     }
-
-    if (message.startsWith(SingleInstanceConfig.userInfoResponsePrefix)) {
-      return message.substring(
-        SingleInstanceConfig.userInfoResponsePrefix.length,
-      );
+    if (!hasProtocolVersion(message)) {
+      return null;
     }
-
-    return null;
+    if (parseRoleFromV1Line(message) == null) {
+      return null;
+    }
+    final match = RegExp(r'u64=([^|\s]+)').firstMatch(message);
+    if (match == null) {
+      return null;
+    }
+    try {
+      return utf8.decode(base64Url.decode(match.group(1)!));
+    } on Object {
+      return null;
+    }
   }
 
   static String? parseRoleFromV1Line(String message) {

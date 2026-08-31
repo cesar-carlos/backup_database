@@ -34,7 +34,7 @@ class WindowsServiceLifecycleOrchestrator {
 
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const int _successExitCode = 0;
-  static const String _logPath = WindowsServiceConstants.logPath;
+  static String get _logPath => WindowsServiceConstants.logPath;
   static const int _accessDeniedWinError = 5;
 
   Future<rd.Result<void>> start({
@@ -89,7 +89,7 @@ class WindowsServiceLifecycleOrchestrator {
         _metrics?.incrementCounter(
           ObservabilityMetrics.windowsServiceStartFailure,
         );
-        return const rd.Failure(
+        return rd.Failure(
           ServerFailure(
             message:
                 'Serviço permaneceu em START_PENDING e não atingiu RUNNING '
@@ -207,7 +207,7 @@ class WindowsServiceLifecycleOrchestrator {
                     '2. Verificar os logs em $_logPath '
                     '(service_stdout.log e service_stderr.log)\n'
                     '3. Se o serviço falha ao iniciar: verifique se existe '
-                    r'arquivo .env em C:\ProgramData\BackupDatabase\config '
+                    'arquivo .env em ${WindowsServiceConstants.configPath} '
                     '(copie de .env.example se necessario)',
               ),
             );
@@ -338,19 +338,6 @@ class WindowsServiceLifecycleOrchestrator {
 
       return result.fold(
         (processResult) async {
-          await Future.delayed(_timing.serviceDelay);
-
-          final statusAfterResult = await _getStatus();
-          final statusAfter = statusAfterResult.getOrNull();
-
-          if (statusAfter?.isRunning != true) {
-            _metrics?.incrementCounter(
-              ObservabilityMetrics.windowsServiceStopSuccess,
-            );
-            LoggerService.info('Serviço parado com sucesso');
-            return const rd.Success(unit);
-          }
-
           final errorMessage = processResult.stderr.isNotEmpty
               ? processResult.stderr
               : processResult.stdout;
@@ -387,18 +374,20 @@ class WindowsServiceLifecycleOrchestrator {
             );
           }
 
-          if (processResult.exitCode == _successExitCode) {
-            await Future.delayed(_timing.serviceDelay);
-            final finalStatusResult = await _getStatus();
-            final finalStatus = finalStatusResult.getOrNull();
-
-            if (finalStatus?.isRunning != true) {
-              _metrics?.incrementCounter(
-                ObservabilityMetrics.windowsServiceStopSuccess,
-              );
-              LoggerService.info('Serviço parado com sucesso');
-              return const rd.Success(unit);
-            }
+          final stoppedAfterPoll = await _scmPoller.pollUntilStopped(
+            timeout: _timing.longTimeout,
+            interval: _timing.startPollingInterval,
+            onConvergence: (d) => _metrics?.recordHistogram(
+              ObservabilityMetrics.windowsServiceStopConvergenceSeconds,
+              d.inMilliseconds / 1000,
+            ),
+          );
+          if (stoppedAfterPoll) {
+            _metrics?.incrementCounter(
+              ObservabilityMetrics.windowsServiceStopSuccess,
+            );
+            LoggerService.info('Serviço parado com sucesso');
+            return const rd.Success(unit);
           }
 
           _metrics?.incrementCounter(
@@ -407,7 +396,9 @@ class WindowsServiceLifecycleOrchestrator {
           return rd.Failure(
             ServerFailure(
               message:
-                  'Erro ao parar serviço: $errorMessage\n\n'
+                  'O serviço não atingiu STOPPED dentro do tempo esperado'
+                  '${errorMessage.trim().isEmpty ? '' : ': $errorMessage'}'
+                  '\n\n'
                   '${WindowsServiceMessages.troubleshootingAdminLogs}',
             ),
           );

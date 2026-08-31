@@ -54,8 +54,9 @@ class SingleInstanceService implements ISingleInstanceService {
        _securityAttributesProvider =
            securityAttributesProvider ??
            MutexSecurityDescriptor.buildEveryoneAccess,
-       _ipcService = ipcService ?? IpcService(),
-       _ipcServerProbe = ipcServerProbe ?? IpcService.checkServerRunning;
+       _ipcService = ipcService ?? IpcService() {
+    _ipcServerProbe = ipcServerProbe ?? _ipcService.checkServerRunning;
+  }
   static final SingleInstanceService _instance = SingleInstanceService._();
 
   SingleInstanceService.forTest({
@@ -94,7 +95,7 @@ class SingleInstanceService implements ISingleInstanceService {
   final SingleInstanceLockFallbackMode Function() _lockFallbackModeProvider;
   final SecurityAttributesProvider _securityAttributesProvider;
   final IpcService _ipcService;
-  final Future<bool> Function() _ipcServerProbe;
+  late final Future<bool> Function() _ipcServerProbe;
 
   @override
   Future<bool> checkAndLock({
@@ -298,7 +299,7 @@ class SingleInstanceService implements ISingleInstanceService {
   @override
   Future<bool> startIpcServer({
     required String role,
-    Function()? onShowWindow,
+    Future<void> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   }) async {
     try {

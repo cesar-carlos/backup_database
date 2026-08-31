@@ -384,7 +384,7 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
   @override
   Future<bool> startIpcServer({
     required String role,
-    Function()? onShowWindow,
+    Future<void> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   }) async {
     return true;

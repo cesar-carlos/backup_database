@@ -35,19 +35,34 @@ C:\ProgramData\BackupDatabase\staging\updates\update_context.json
 Esse contexto e consumido pelo instalador (`setup.iss`) e por `restore_update_state.ps1` para relancar a UI ou re-registrar o Windows Service apos a troca de versao.
 
 > O `restore_update_state.ps1` tambem registra a assinatura Authenticode do
-> binario alvo no log do servico (`service_stdout.log`). Hoje e' apenas
-> trilha (best-effort) — assinatura ainda nao bloqueia o restore.
+> binario alvo no log do servico (`service_stdout.log`). E' apenas trilha
+> (best-effort) — assinatura **nao** bloqueia o restore. O pipeline
+> (`build_installer.py`) **nao** chama `signtool`; o procedimento esta em
+> `release_guide.md`.
+
+### Restore apos o instalador silencioso
+
+- `origin=ui`: o script **nao** para, remove, reinstala nem starta o Windows
+  Service (os binarios em `{app}` ja foram trocados; o `InitializeSetup` ja
+  parou o servico se existia). So relanca a UI.
+- `origin=service` + conta LocalSystem (aliases `System` /
+  `NT AUTHORITY\SYSTEM`): `nssm stop` → espera STOPPED → remove → replay
+  `nssm install` / `ObjectName LocalSystem` / `start`.
+- Conta customizada: `exit 2`, `update_context.json` preservado, **nenhuma**
+  chamada NSSM (`install`/`remove`/`start`). Reinstale o servico manualmente.
 
 ## Matriz de plataformas suportadas
 
-Auto update silencioso requer Windows 8.1+ ou Server 2016+ (Windows 10 e' a fronteira interna usada por `WindowsCompatibilityPolicy`).
+Auto update silencioso segue `WindowsCompatibilityPolicy`: habilitado em
+Windows 8+ cliente e Server 2016+; **desabilitado** em Server 2012 / 2012 R2.
+O app em si instala em Windows 8 / Server 2012+ (`MinVersion=6.2`).
 
 | Plataforma | App roda? | Auto update silencioso? |
 | --- | --- | --- |
-| Windows 8.1 / 10 / 11 | Sim | Sim |
+| Windows 8 / 8.1 / 10 / 11 | Sim | Sim |
 | Windows Server 2016 ou superior | Sim | Sim |
 | Windows Server 2012 / 2012 R2 | Sim | **Nao** (`autoUpdateUnsupportedLegacyServer`) |
-| Windows 8 ou anterior | Nao | Nao |
+| Windows 7 ou anterior | Nao | Nao |
 | Sessao nao interativa (Session 0 puro) | Sim como servico | Sim, apenas quando o servico esta em `LocalSystem` |
 
 Em servidores legados (2012 / 2012 R2), a UI mostra um `InfoBar` explicando
@@ -177,6 +192,8 @@ O workflow reconstroi o `appcast.xml` sem as versoes bloqueadas.
 - O updater e Windows-only.
 - UI e Windows Service usam o mesmo pipeline.
 - Em modo servico, auto update silencioso so e suportado quando o Windows Service esta em `LocalSystem` (ou aliases `System` / `NT AUTHORITY\SYSTEM`).
+- Restore: conta customizada nao recria o NSSM; origem UI nao starta o servico.
+- Assinatura Authenticode e opcional e **fora** do `build_installer.py`. Ver `release_guide.md`.
 - A instalacao e forcada e silenciosa.
 - Em modo UI, se o usuario logado nao for administrador, o instalador silencioso pode disparar prompt UAC (o `/VERYSILENT` nao suprime UAC). Quando o prompt e negado, o spawn morre cedo: o app NAO encerra, e o snapshot vira `error` com a mensagem do `setup.iss`.
 - Alterar `.env` dentro da pasta `{app}` nao muda o runtime da maquina instalada.
