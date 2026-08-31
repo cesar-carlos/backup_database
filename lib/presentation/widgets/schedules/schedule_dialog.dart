@@ -678,7 +678,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       unawaited(
         FluentInfoBarFeedback.showWarning(
           context,
-          message: 'Pasta de backup Ã© obrigatÃ³ria',
+          message: 'Pasta de backup é obrigatória',
         ),
       );
       return false;
@@ -690,8 +690,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       final shouldCreate = await showDialog<bool>(
         context: context,
         builder: (context) => ContentDialog(
-          title: const Text('Pasta nÃ£o existe'),
-          content: Text('A pasta "$path" nÃ£o existe. Deseja criÃ¡-la?'),
+          title: const Text('Pasta não existe'),
+          content: Text('A pasta "$path" não existe. Deseja criá-la?'),
           actions: [
             Button(
               onPressed: () => Navigator.of(context).pop(false),
@@ -734,8 +734,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           MessageModal.showError(
             context,
             message:
-                'Sem permissÃ£o de escrita na pasta selecionada.\n'
-                'Verifique as permissÃµes do diretÃ³rio.',
+                'Sem permissão de escrita na pasta selecionada.\n'
+                'Verifique as permissões do diretório.',
           ),
         );
       }
@@ -745,10 +745,10 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
     return true;
   }
 
-  /// Antes este mÃ©todo tinha probe inline de caminhos do WinRAR â€” quando
-  /// o setup mudasse (ex.: novo path de instalaÃ§Ã£o), seria necessÃ¡rio
+  /// Antes este método tinha probe inline de caminhos do WinRAR — quando
+  /// o setup mudasse (ex.: novo path de instalação), seria necessário
   /// atualizar 2 lugares. Agora delega ao `WinRarService.isInstalledInSystem`,
-  /// mantendo a lista canÃ´nica em uma Ãºnica fonte.
+  /// mantendo a lista canônica em uma única fonte.
   Future<bool> _checkWinRarAvailable() =>
       WinrarInstallProbe.isInstalledInSystem();
 
@@ -763,7 +763,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       unawaited(
         FluentInfoBarFeedback.showWarning(
           context,
-          message: 'Nome do agendamento Ã© obrigatÃ³rio',
+          message: 'Nome do agendamento é obrigatório',
         ),
       );
       return;
@@ -780,7 +780,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
       unawaited(
         FluentInfoBarFeedback.showWarning(
           context,
-          message: 'Selecione uma configuraÃ§Ã£o de banco de dados',
+          message: 'Selecione uma configuração de banco de dados',
         ),
       );
       return;
@@ -819,8 +819,8 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         MessageModal.showError(
           context,
           message:
-              'A configuraÃ§Ã£o de banco selecionada nÃ£o existe mais. '
-              'Por favor, selecione outra configuraÃ§Ã£o.',
+              'A configuração de banco selecionada não existe mais. '
+              'Por favor, selecione outra configuração.',
         ),
       );
       return;
@@ -835,7 +835,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               context,
               message:
                   'Formato RAR requer WinRAR instalado.\n\n'
-                  'WinRAR nÃ£o foi encontrado no sistema.\n'
+                  'WinRAR não foi encontrado no sistema.\n'
                   'Por favor, instale o WinRAR ou escolha o formato ZIP.',
             ),
           );
@@ -868,7 +868,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
               context,
               message:
                   'Nivel nbackup: use um inteiro de 0 a 9 ou deixe vazio '
-                  '(automÃ¡tico).',
+                  '(automático).',
             ),
           );
           return;
@@ -896,7 +896,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         unawaited(
           FluentInfoBarFeedback.showWarning(
             context,
-            message: 'OpÃ§Ãµes Sybase invÃ¡lidas: ${validation.errorMessage}',
+            message: 'Opções Sybase inválidas: ${validation.errorMessage}',
           ),
         );
         return;
@@ -953,7 +953,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
           FluentInfoBarFeedback.showWarning(
             context,
             message:
-                'OpÃ§Ãµes SQL Server invÃ¡lidas: ${validation.errorMessage}',
+                'Opções SQL Server inválidas: ${validation.errorMessage}',
           ),
         );
         return;
