@@ -1,5 +1,5 @@
 #define MyAppName "Backup Database"
-#define MyAppVersion "3.6.0"
+#define MyAppVersion "3.6.1"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -193,6 +193,21 @@ begin
   end;
 end;
 
+function GetInstallModeFilePath(): String;
+var
+  AppDir: String;
+begin
+  // {app} is not initialized during InitializeWizard. Expanding it here
+  // aborts Setup with: Internal error: An attempt was made to expand the
+  // 'app' constant before it was initialized.
+  AppDir := ExpandConstant('{autopf}\{#MyAppName}');
+  if WizardForm.PrevAppDir <> '' then
+    AppDir := WizardForm.PrevAppDir
+  else if WizardForm.DirEdit.Text <> '' then
+    AppDir := WizardForm.DirEdit.Text;
+  Result := AddBackslash(AppDir) + '.install_mode';
+end;
+
 function ResolveSelectedMode(): String;
 var
   ParamMode: String;
@@ -217,7 +232,7 @@ begin
     Exit;
   end;
 
-  ModeFilePath := ExpandConstant('{app}\.install_mode');
+  ModeFilePath := GetInstallModeFilePath();
   if FileExists(ModeFilePath) then
   begin
     ModeFile := TStringList.Create;
