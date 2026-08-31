@@ -952,8 +952,7 @@ class _ScheduleDialogState extends State<ScheduleDialog> {
         unawaited(
           FluentInfoBarFeedback.showWarning(
             context,
-            message:
-                'Opções SQL Server inválidas: ${validation.errorMessage}',
+            message: 'Opções SQL Server inválidas: ${validation.errorMessage}',
           ),
         );
         return;
