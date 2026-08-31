@@ -5,6 +5,39 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.1</title>
+      <pubDate>Mon, 31 Aug 2026 11:34:49 +0000</pubDate>
+      <description>## Highlights
+
+Corrige o crash do instalador na abertura do wizard: o Inno Setup tentava expandir `{app}` em `InitializeWizard`, antes da pasta de destino existir.
+
+**Erro:** `Runtime error: Internal error: An attempt was made to expand the 'app' constant before it was initialized`
+
+## Instalador
+
+- `ResolveSelectedMode` deixa de chamar `ExpandConstant('{app}')` na abertura do wizard
+- O modo (server/client) é lido da instalação anterior (`WizardForm.PrevAppDir`) ou da pasta do wizard
+- `{app}` continua sendo usado só depois da cópia dos arquivos
+- Teste de contrato impede regressão
+
+## Instalação
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.6.1.exe -Algorithm SHA256
+# deve coincidir com BackupDatabase-Setup-3.6.1.exe.sha256
+```
+
+SHA-256: `a4e1903ee51076a078800ed415beba2391138a98ab5c669cbdfc63d261ec4d4f`
+
+Instalação silenciosa (`/SILENT` ou `/VERYSILENT`). Auto-update entrega esta versão depois do workflow `update-appcast` reconstruir o feed.
+
+## Artefatos
+
+- `BackupDatabase-Setup-3.6.1.exe` (36.35 MB)
+- `BackupDatabase-Setup-3.6.1.exe.sha256`</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.1/BackupDatabase-Setup-3.6.1.exe" sparkle:version="3.6.1" sparkle:os="windows" length="38116145" type="application/octet-stream" sha256="a4e1903ee51076a078800ed415beba2391138a98ab5c669cbdfc63d261ec4d4f" />
+    </item>
+    <item>
       <title>Version 3.6.0</title>
       <pubDate>Mon, 31 Aug 2026 00:33:40 +0000</pubDate>
       <description>## Highlights
