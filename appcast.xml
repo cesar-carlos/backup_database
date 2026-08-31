@@ -5,6 +5,49 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.0</title>
+      <pubDate>Mon, 31 Aug 2026 00:33:40 +0000</pubDate>
+      <description>## Highlights
+
+IPC local deixa de usar TCP e passa a um **named pipe Win32**. O instalador restaura o Windows Service só em LocalSystem, não recria o serviço quando o update veio da UI, e no uninstall espera a remoção no SCM.
+
+## IPC
+
+- Pipe local `\\.\pipe\BackupDatabase_Ipc_*` com autenticação do processo peer
+- Sem porta TCP no instalador para IPC
+- Transporte in-memory no CI Linux
+
+## Instalador e auto-update
+
+- `restore_update_state.ps1`: conta customizada sai com código 2 **sem** `nssm remove`/`install`; origem UI só relança o app
+- Uninstall espera `STOPPED` e `REMOVED`; pergunta se apaga `C:\ProgramData\BackupDatabase` (silent preserva)
+- Task opcional (Server Mode) libera TCP **9527** no firewall
+- Troubleshooting do serviço empacotado em `{app}\docs`
+- `check_dependencies` inclui `pg_verifybackup`, `dbvalid` e `dbverify`
+
+## Desktop
+
+- Alvos de toque e constraints de diálogo alinhados ao design system
+- Layout compacto do `MainLayout`
+
+## Instalação
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.6.0.exe -Algorithm SHA256
+# deve coincidir com BackupDatabase-Setup-3.6.0.exe.sha256
+```
+
+SHA-256: `1c44f5b3f98739026db427ec1b6c50dbf63573d54855b512b9701dd42bad4bbf`
+
+Instalação silenciosa (`/SILENT` ou `/VERYSILENT`). Auto-update entrega esta versão depois do workflow `update-appcast` reconstruir o feed.
+
+## Artefatos
+
+- `BackupDatabase-Setup-3.6.0.exe` (36.35 MB)
+- `BackupDatabase-Setup-3.6.0.exe.sha256`</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.0/BackupDatabase-Setup-3.6.0.exe" sparkle:version="3.6.0" sparkle:os="windows" length="38112334" type="application/octet-stream" sha256="1c44f5b3f98739026db427ec1b6c50dbf63573d54855b512b9701dd42bad4bbf" />
+    </item>
+    <item>
       <title>Version 3.5.2</title>
       <pubDate>Fri, 12 Jun 2026 12:53:27 +0000</pubDate>
       <description>## Highlights
