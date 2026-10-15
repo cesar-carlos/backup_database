@@ -11,6 +11,9 @@
 # 2. **Resto** mantém o comportamento original: só adiciona chaves
 #    novas, preserva customização do usuário (ex.: FTP_IT_HOST,
 #    BACKUP_DATABASE_LICENSE_*, SINGLE_INSTANCE_ENABLED=false em dev).
+#    Uma chave crítica que já existe, mas está vazia, recebe o valor do
+#    example — o mesmo que uma chave ausente. Valor não-vazio não é
+#    sobrescrito (segredos e overrides permanecem).
 #
 # 3. **Validação pós-merge**: chaves declaradas em `$criticalKeys`
 #    DEVEM estar presentes e não-vazias após o merge. Se faltarem, o
@@ -121,6 +124,14 @@ if (-not (Test-Path $TargetPath) -and -not [string]::IsNullOrWhiteSpace($LegacyP
     if (-not [string]::IsNullOrWhiteSpace($BackupPath) -and -not (Test-Path $BackupPath)) {
         Copy-Item -Path $LegacyPath -Destination $BackupPath -Force
     }
+    if (Test-Path $TargetPath) {
+        try {
+            Remove-Item -LiteralPath $LegacyPath -Force -ErrorAction Stop
+            Write-Host "Removido .env legado apos copia para ProgramData: $LegacyPath"
+        } catch {
+            Write-Warning "Nao foi possivel remover .env legado '$LegacyPath': $($_.Exception.Message)"
+        }
+    }
 }
 
 if (-not (Test-Path $TargetPath) -and (Test-Path $ExamplePath)) {
@@ -203,6 +214,20 @@ if ($missingLines.Count -gt 0) {
         [void]$merged.AppendLine($line)
     }
     Write-Utf8NoBomFile -Path $TargetPath -Value $merged.ToString()
+}
+
+# 3b) Chave critica existente porem vazia recebe o valor do example.
+# Nao sobrescreve valor nao-vazio (segredos e overrides do usuario).
+$targetMap = ConvertTo-KeyMap -Path $TargetPath
+foreach ($key in $script:CriticalKeys) {
+    if (-not $exampleMap.ContainsKey($key)) { continue }
+    if (-not $targetMap.ContainsKey($key)) { continue }
+    $currentValue = Get-KeyValue -Line $targetMap[$key]
+    $exampleValue = Get-KeyValue -Line $exampleMap[$key]
+    if ([string]::IsNullOrWhiteSpace($currentValue) -and -not [string]::IsNullOrWhiteSpace($exampleValue)) {
+        Set-KeyInTargetFile -TargetPath $TargetPath -Key $key -NewLine $exampleMap[$key]
+        Write-Host "Preenchida chave critica vazia: $key"
+    }
 }
 
 # 4) Validação final — chaves críticas DEVEM estar presentes e não-vazias.

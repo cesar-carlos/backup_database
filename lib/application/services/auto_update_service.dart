@@ -1042,12 +1042,57 @@ class AutoUpdateService {
     String executable,
     List<String> arguments,
   ) async {
-    final process = await Process.start(
-      executable,
-      arguments,
-      mode: ProcessStartMode.detached,
-    );
-    return DetachedProcessHandle(pid: process.pid);
+    try {
+      final process = await Process.start(
+        executable,
+        arguments,
+        mode: ProcessStartMode.detached,
+      );
+      return DetachedProcessHandle(pid: process.pid);
+    } on ProcessException catch (error) {
+      if (!Platform.isWindows || !_requiresElevation(error)) {
+        rethrow;
+      }
+      final pid = await _startInstallerElevated(executable, arguments);
+      if (pid == null) {
+        return null;
+      }
+      return DetachedProcessHandle(pid: pid);
+    }
+  }
+
+  static bool _requiresElevation(ProcessException error) {
+    return error.errorCode == 740 || error.toString().contains('740');
+  }
+
+  /// `CreateProcess` não mostra o UAC. `Start-Process -Verb RunAs` mostra
+  /// e devolve o PID sem esperar o instalador terminar, para o app poder sair.
+  static Future<int?> _startInstallerElevated(
+    String executable,
+    List<String> arguments,
+  ) async {
+    final escapedExe = executable.replaceAll("'", "''");
+    final argumentList = arguments
+        .map((argument) => "'${argument.replaceAll("'", "''")}'")
+        .join(',');
+    final command =
+        "\$p = Start-Process -FilePath '$escapedExe' "
+        "-ArgumentList $argumentList -Verb RunAs -PassThru "
+        '-WindowStyle Hidden; Write-Output \$p.Id';
+    final result = await Process.run('powershell.exe', <String>[
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      command,
+    ]);
+    if (result.exitCode != 0) {
+      LoggerService.warning(
+        'Falha ao iniciar instalador elevado: ${result.stderr}',
+      );
+      return null;
+    }
+    final match = RegExp(r'\d+').firstMatch(result.stdout.toString());
+    return match == null ? null : int.tryParse(match.group(0)!);
   }
 
   /// Estimativa de espaco livre, em bytes, na particao em que `directory`

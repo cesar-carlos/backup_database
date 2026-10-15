@@ -160,17 +160,146 @@ Set-NssmCritical -Key "AppExit" -ExtraArgs @("77", "Exit")
 Set-NssmCritical -Key "AppExit" -ExtraArgs @("78", "Exit")
 & $NssmPath set $ServiceName AppRestartDelay 60000
 
-# Configurar usuário do serviço
+function Remove-ServiceAfterAccountFailure {
+    param([string]$Reason)
+    Write-Host "ERRO CRÍTICO: $Reason. Abortando." -ForegroundColor Red
+    & $NssmPath remove $ServiceName confirm | Out-Null
+    if ($hasServiceUtils) {
+        Wait-ServiceRemoved -ServiceName $ServiceName | Out-Null
+    }
+    Wait-IfInteractive
+    exit 1
+}
+
+function New-LockedServicePasswordFile {
+    param([string]$Password)
+    $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $suffix = [guid]::NewGuid().ToString('N').Substring(0, 12)
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) "backup_db_svc_pwd_${stamp}_$suffix.txt"
+    try {
+        [System.IO.File]::WriteAllText($path, '')
+    } catch {
+        return $null
+    }
+    & icacls.exe $path /inheritance:r /grant:r 'NT AUTHORITY\SYSTEM:(F)' 'BUILTIN\Administrators:(F)' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        return $null
+    }
+    try {
+        [System.IO.File]::WriteAllText($path, $Password)
+    } catch {
+        Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        return $null
+    }
+    return $path
+}
+
+function Set-ServiceAccountFromFile {
+    param(
+        [string]$User,
+        [string]$SecretFile
+    )
+    if (-not (Test-Path -LiteralPath $SecretFile)) {
+        Write-Host "ERRO: arquivo de senha ausente." -ForegroundColor Red
+        return $false
+    }
+    $servicePassword = [System.IO.File]::ReadAllText($SecretFile)
+    if (-not ('BackupDbServiceConfig' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class BackupDbServiceConfig {
+  [DllImport("advapi32.dll", EntryPoint="OpenSCManagerW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern IntPtr OpenSCManager(string machine, string database, uint access);
+
+  [DllImport("advapi32.dll", EntryPoint="OpenServiceW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern IntPtr OpenService(IntPtr scm, string name, uint access);
+
+  [DllImport("advapi32.dll", EntryPoint="ChangeServiceConfigW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern bool ChangeServiceConfig(
+    IntPtr service,
+    uint serviceType,
+    uint startType,
+    uint errorControl,
+    string binaryPath,
+    string loadOrderGroup,
+    IntPtr tagId,
+    string dependencies,
+    string startName,
+    string password,
+    string displayName);
+
+  [DllImport("advapi32.dll", SetLastError=true)]
+  public static extern bool CloseServiceHandle(IntPtr handle);
+}
+'@
+    }
+    $scm = [BackupDbServiceConfig]::OpenSCManager($null, $null, 1)
+    if ($scm -eq [IntPtr]::Zero) {
+        $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Write-Host "ERRO: OpenSCManager $code" -ForegroundColor Red
+        return $false
+    }
+    try {
+        $svc = [BackupDbServiceConfig]::OpenService($scm, $ServiceName, 2)
+        if ($svc -eq [IntPtr]::Zero) {
+            $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            Write-Host "ERRO: OpenService $code" -ForegroundColor Red
+            return $false
+        }
+        try {
+            $noChange = [uint32]::MaxValue
+            $ok = [BackupDbServiceConfig]::ChangeServiceConfig(
+                $svc, $noChange, $noChange, $noChange,
+                $null, $null, [IntPtr]::Zero, $null,
+                $User, $servicePassword, $null)
+            if (-not $ok) {
+                $code = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                Write-Host "ERRO: ChangeServiceConfig $code" -ForegroundColor Red
+                return $false
+            }
+            return $true
+        } finally {
+            [BackupDbServiceConfig]::CloseServiceHandle($svc) | Out-Null
+            $servicePassword = $null
+        }
+    } finally {
+        [BackupDbServiceConfig]::CloseServiceHandle($scm) | Out-Null
+    }
+}
+
+# Configurar usuário do serviço. Senha nunca vai para o argv do nssm:
+# arquivo temporário com ACL e ChangeServiceConfigW.
 if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) {
     $credential = New-Object System.Management.Automation.PSCredential($ServiceUser, $ServicePassword)
     $plainPassword = $credential.GetNetworkCredential().Password
 
     if ([string]::IsNullOrEmpty($plainPassword)) {
+        $plainPassword = $null
         Write-Host "Senha vazia detectada. Usando LocalSystem..." -ForegroundColor Yellow
         & $NssmPath set $ServiceName ObjectName LocalSystem
     } else {
         Write-Host "Configurando usuário do serviço..." -ForegroundColor Green
-        & $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword
+        $secretFile = $null
+        $accountConfigured = $false
+        try {
+            $secretFile = New-LockedServicePasswordFile -Password $plainPassword
+            $plainPassword = $null
+            if ([string]::IsNullOrEmpty($secretFile)) {
+                $accountConfigured = $false
+            } else {
+                $accountConfigured = Set-ServiceAccountFromFile -User $ServiceUser -SecretFile $secretFile
+            }
+        } finally {
+            $plainPassword = $null
+            if (-not [string]::IsNullOrEmpty($secretFile) -and (Test-Path -LiteralPath $secretFile)) {
+                Remove-Item -LiteralPath $secretFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if (-not $accountConfigured) {
+            Remove-ServiceAfterAccountFailure -Reason "falha ao definir a conta do servico (ChangeServiceConfig)"
+        }
         Write-Host "AVISO: conta customizada desabilita a restauracao automatica do update silencioso do servico." -ForegroundColor Yellow
     }
 } else {

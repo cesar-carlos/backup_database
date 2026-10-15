@@ -80,6 +80,21 @@ void main() {
     });
 
     test(
+      'should not classify a scheduled launch as service when session 0 matches',
+      () {
+        final ctx = LaunchBootstrapContextResolver.resolve(
+          rawArgs: const <String>['--schedule-id=job-1'],
+          rawEnvironment: const <String, String>{},
+          isServiceModeOverride: true,
+        );
+
+        expect(ctx.isServiceMode, isFalse);
+        expect(ctx.processRole, ProcessRole.ui);
+        expect(ctx.launchOrigin, LaunchOrigin.scheduledExecution);
+      },
+    );
+
+    test(
       'should return scheduledExecution when args contain --schedule-id=',
       () {
         final ctx = LaunchBootstrapContextResolver.resolve(

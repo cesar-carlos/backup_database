@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/logging/logging.dart';
+import 'package:backup_database/core/security/auth_challenge.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/connection/connected_client.dart';
 import 'package:backup_database/infrastructure/datasources/daos/connection_log_dao.dart';
@@ -46,6 +47,7 @@ class ClientHandler {
   final SocketServerTelemetry? _socketTelemetry;
   final String _clientId;
   bool _authHandled = false;
+  String? _pendingAuthNonce;
 
   late final String _remoteAddress;
   late final int _remotePort;
@@ -203,6 +205,10 @@ class ClientHandler {
           _socketLogger?.logReceived(message) ?? Future<void>.value(),
         );
 
+        if (!isAuthenticated && isAuthChallengeRequest(message)) {
+          _issueAuthChallenge(message);
+          continue;
+        }
         if (isAuthRequestMessage(message) &&
             (!_authHandled || !isAuthenticated)) {
           _authHandled = true;
@@ -213,8 +219,22 @@ class ClientHandler {
             // `_messageController` SEM `isAuthenticated=true`),
             // permitindo executar comandos antes de validar credencial.
             _socketSubscription?.pause();
+            final rawNonce = message.payload['nonce'];
+            final nonce = rawNonce is String && rawNonce.isNotEmpty
+                ? rawNonce
+                : null;
+            final issuedNonce = nonce == null ? null : _pendingAuthNonce;
+            if (nonce != null) {
+              _pendingAuthNonce = null;
+            }
+            final validation = nonce == null
+                ? _authentication.validateAuthRequest(message)
+                : _authentication.validateChallengeResponse(
+                    message,
+                    issuedNonce: issuedNonce,
+                  );
             unawaited(
-              _authentication.validateAuthRequest(message).then((
+              validation.then((
                 AuthValidationResult validationResult,
               ) async {
                 try {
@@ -384,6 +404,26 @@ class ClientHandler {
       ),
     );
     return true;
+  }
+
+  void _issueAuthChallenge(Message message) {
+    final rawServerId = message.payload['serverId'];
+    final serverId = rawServerId is String ? rawServerId : null;
+    if (serverId == null || serverId.isEmpty || _authentication == null) {
+      unawaited(
+        SocketErrorSender.sendProtocolError(
+          clientId: _clientId,
+          requestId: message.header.requestId,
+          errorMessage: 'Pedido de desafio de autenticacao invalido',
+          sendToClient: (_, msg) => send(msg),
+          errorCode: ErrorCode.invalidRequest,
+        ),
+      );
+      return;
+    }
+    final nonce = AuthChallenge.createNonce();
+    _pendingAuthNonce = nonce;
+    unawaited(send(createAuthChallenge(nonce: nonce)));
   }
 
   /// Emite no `_messageController` apenas se ele ainda está aberto.

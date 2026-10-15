@@ -33,6 +33,25 @@ void main() {
       },
     );
 
+    test('session zero with schedule id is not the Windows service', () {
+      expect(
+        ServiceModeDetector.sessionZeroIsServiceProcess(
+          const <String>['--schedule-id=job-1'],
+        ),
+        isFalse,
+      );
+      expect(
+        ServiceModeDetector.sessionZeroIsServiceProcess(
+          const <String>['--run-as-service'],
+        ),
+        isTrue,
+      );
+      expect(
+        ServiceModeDetector.sessionZeroIsServiceProcess(const <String>[]),
+        isTrue,
+      );
+    });
+
     test('matchesServiceArgument should require exact --run-as-service', () {
       expect(
         ServiceModeDetector.matchesServiceArgument(const ['--run-as-service']),

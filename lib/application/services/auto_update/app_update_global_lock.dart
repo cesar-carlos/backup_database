@@ -130,9 +130,9 @@ class AppUpdateGlobalLock {
         return true;
       }
       final output = result.stdout.toString();
-      // `tasklist` imprime "INFO: No tasks are running..." quando nao encontra.
-      return !output.contains('No tasks are running') &&
-          !output.contains('Nenhuma tarefa em execu');
+      // A mensagem de "nenhuma tarefa" muda com o idioma do Windows.
+      // O PID só aparece na saída quando o processo existe.
+      return RegExp('\\b$pid\\b').hasMatch(output);
     } on Object {
       return true;
     }

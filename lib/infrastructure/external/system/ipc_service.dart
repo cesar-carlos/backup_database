@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_ipc_service.dart';
@@ -16,7 +17,7 @@ class IpcService implements IIpcService {
     : _transport = transport ?? IpcTransportFactory.create();
 
   final IIpcTransport _transport;
-  Future<void> Function()? _onShowWindow;
+  Future<Object?> Function()? _onShowWindow;
   RunScheduleIpcHandler? _onRunSchedule;
   String _role = SingleInstanceConfig.ipcInstanceRoleUi;
   late final IpcScheduleDelegator _scheduleDelegator = IpcScheduleDelegator(
@@ -27,7 +28,7 @@ class IpcService implements IIpcService {
   @override
   Future<bool> startServer({
     required String role,
-    Future<void> Function()? onShowWindow,
+    Future<Object?> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   }) async {
     if (_transport.isServerRunning) {
@@ -83,13 +84,7 @@ class IpcService implements IIpcService {
       LoggerService.infoWithContext(
         'event=ipc_show_window_received ownerRole=$_role',
       );
-      try {
-        await _onShowWindow?.call();
-        return SingleInstanceConfig.ipcOkAckMessage;
-      } on Object catch (e, s) {
-        LoggerService.error('Erro no callback SHOW_WINDOW', e, s);
-        return null;
-      }
+      return _replyShowWindow();
     }
 
     if (message.startsWith(
@@ -139,29 +134,64 @@ class IpcService implements IIpcService {
     return _transport.connect(timeout: timeout);
   }
 
+  Future<String> _replyShowWindow() async {
+    final callback = _onShowWindow;
+    if (callback == null) {
+      LoggerService.info(
+        'event=ipc_show_window_unavailable reason=no_callback '
+        'ownerRole=$_role',
+      );
+      return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
+    }
+
+    final epoch = IpcShowWindowConfirmation.beginAttempt();
+    try {
+      final Object? outcome = await callback();
+      if (outcome == false) {
+        return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
+      }
+      final shown =
+          outcome == true || IpcShowWindowConfirmation.wasShown(epoch);
+      if (shown) {
+        return SingleInstanceConfig.ipcOkAckMessage;
+      }
+      LoggerService.info(
+        'event=ipc_show_window_unavailable reason=window_not_shown '
+        'ownerRole=$_role',
+      );
+      return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
+    } on Object catch (e, s) {
+      LoggerService.error('Erro no callback SHOW_WINDOW', e, s);
+      return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
+    }
+  }
+
   @override
-  Future<bool> notifyExistingInstance() async {
+  Future<SingleInstanceShowWindowStatus> notifyExistingInstance() async {
     final channel = await _connect(
       timeout: SingleInstanceConfig.showWindowConnectTimeout,
     );
     if (channel == null) {
       LoggerService.warning('ipc_show_window_failed connect');
-      return false;
+      return SingleInstanceShowWindowStatus.notDelivered;
     }
     try {
       await channel.writeLine(SingleInstanceConfig.ipcShowWindowMessage);
       final ack = await channel.readLine(
         timeout: SingleInstanceConfig.showWindowConnectTimeout,
       );
-      final ok = IpcV1Codec.isOkAck(ack);
-      if (ok) {
+      if (IpcV1Codec.isOkAck(ack)) {
         LoggerService.info('ipc_show_window_sent');
-      } else {
-        LoggerService.debug('ipc_show_window_no_ack');
+        return SingleInstanceShowWindowStatus.shown;
       }
-      return ok;
+      if (IpcV1Codec.isShowWindowUnavailable(ack)) {
+        LoggerService.info('event=ipc_show_window_unavailable_ack');
+        return SingleInstanceShowWindowStatus.unavailable;
+      }
+      LoggerService.debug('ipc_show_window_no_ack');
+      return SingleInstanceShowWindowStatus.notDelivered;
     } on Object catch (_) {
-      return false;
+      return SingleInstanceShowWindowStatus.notDelivered;
     } finally {
       await channel.close();
     }

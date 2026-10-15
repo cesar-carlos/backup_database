@@ -1,4 +1,6 @@
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
+import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/in_memory_ipc_transport.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -95,23 +97,68 @@ void main() {
   });
 
   group('IpcService SHOW_WINDOW', () {
-    test('should ACK SHOW_WINDOW after invoking the callback', () async {
+    setUp(IpcShowWindowConfirmation.resetForTest);
+
+    test('should ACK SHOW_WINDOW only after the window is shown', () async {
       final ipc = _pairedService();
       var showCount = 0;
       await ipc.startServer(
         role: SingleInstanceConfig.ipcInstanceRoleUi,
         onShowWindow: () async {
           showCount++;
+          IpcShowWindowConfirmation.markShown();
+          return null;
         },
       );
 
       try {
-        expect(await ipc.notifyExistingInstance(), isTrue);
+        expect(
+          await ipc.notifyExistingInstance(),
+          SingleInstanceShowWindowStatus.shown,
+        );
         expect(showCount, 1);
       } finally {
         await ipc.stop();
       }
     });
+
+    test('should report unavailable when the callback does not show', () async {
+      final ipc = _pairedService();
+      await ipc.startServer(
+        role: SingleInstanceConfig.ipcInstanceRoleUi,
+        onShowWindow: () async {
+          return null;
+        },
+      );
+
+      try {
+        expect(
+          await ipc.notifyExistingInstance(),
+          SingleInstanceShowWindowStatus.unavailable,
+        );
+      } finally {
+        await ipc.stop();
+      }
+    });
+
+    test(
+      'should report unavailable when no show callback is registered',
+      () async {
+        final ipc = _pairedService();
+        await ipc.startServer(
+          role: SingleInstanceConfig.ipcInstanceRoleService,
+        );
+
+        try {
+          expect(
+            await ipc.notifyExistingInstance(),
+            SingleInstanceShowWindowStatus.unavailable,
+          );
+        } finally {
+          await ipc.stop();
+        }
+      },
+    );
 
     test('should not ACK when SHOW_WINDOW callback throws', () async {
       final ipc = _pairedService();
@@ -123,7 +170,10 @@ void main() {
       );
 
       try {
-        expect(await ipc.notifyExistingInstance(), isFalse);
+        expect(
+          await ipc.notifyExistingInstance(),
+          isNot(SingleInstanceShowWindowStatus.shown),
+        );
       } finally {
         await ipc.stop();
       }
@@ -259,7 +309,10 @@ void main() {
         await ipc.startServer(role: SingleInstanceConfig.ipcInstanceRoleUi);
 
         try {
-          expect(await ipc.notifyExistingInstance(), isFalse);
+          expect(
+            await ipc.notifyExistingInstance(),
+            SingleInstanceShowWindowStatus.notDelivered,
+          );
         } finally {
           await ipc.stop();
         }

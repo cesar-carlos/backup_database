@@ -7,6 +7,7 @@ import 'package:backup_database/infrastructure/external/process/process_service.
 import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:result_dart/result_dart.dart' show unit;
@@ -64,15 +65,187 @@ class WindowsServiceElevationInstaller {
       'backup_db_install_${timestamp}_$randomSuffix.log',
     );
 
-    String safePath(String s) => s.replaceAll("'", "''");
-    final includePassword =
-        servicePassword != null && servicePassword.isNotEmpty;
+    final lockedPassword = servicePassword != null && servicePassword.isNotEmpty
+        ? servicePassword
+        : null;
     final plan = NssmConfigPlan.build(appDir: appDir, logPath: logPath);
     final planSets = plan.toElevatedPowerShellSets();
     final scriptTimeoutMs = _timing.elevatedInstallTimeout.inMilliseconds;
 
-    final scriptContent =
-        '''
+    File? passwordFile;
+    try {
+      if (lockedPassword != null) {
+        final created = await _createLockedPasswordFile(lockedPassword);
+        final createFailure = created.exceptionOrNull();
+        if (createFailure != null) {
+          final failure = createFailure is Failure
+              ? createFailure
+              : ServerFailure(message: createFailure.toString());
+          return rd.Failure(failure);
+        }
+        passwordFile = created.getOrNull();
+      }
+
+      final scriptContent = buildElevatedInstallScript(
+        nssmPath: nssmPath,
+        appPath: appPath,
+        appDir: appDir,
+        logPath: logPath,
+        logDir: logDir,
+        configPath: configPath,
+        installLogPath: installLogPath,
+        serviceUser: serviceUser,
+        passwordFilePath: passwordFile?.path,
+        planSets: planSets,
+      );
+
+      File? scriptFile;
+      try {
+        scriptFile = File(scriptPath);
+        await scriptFile.writeAsString(scriptContent);
+      } on Object catch (e) {
+        return rd.Failure(
+          ServerFailure(
+            message: 'Não foi possível criar script de instalação: $e',
+          ),
+        );
+      }
+
+      await _restrictScriptAcl(scriptPath);
+
+      final scriptPathEscaped = scriptPath.replaceAll('"', '`"');
+      final elevatedCommand =
+          r'$p = Start-Process -FilePath "powershell.exe" '
+          '-ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","$scriptPathEscaped" '
+          '-Verb RunAs -WindowStyle Hidden -PassThru; '
+          r'if ($null -eq $p) { exit 1223 }; '
+          'if (-not \$p.WaitForExit($scriptTimeoutMs)) { '
+          r'try { $p.Kill() } catch {}; exit 124 }; '
+          r'exit $p.ExitCode';
+
+      final launchTimeout =
+          _timing.uacPromptTimeout + _timing.elevatedInstallTimeout;
+
+      onElevationWaitChanged?.call(true);
+      rd.Result<ProcessResult> result;
+      try {
+        result = await _processService.run(
+          executable: 'powershell',
+          arguments: [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            elevatedCommand,
+          ],
+          timeout: launchTimeout,
+        );
+      } finally {
+        onElevationWaitChanged?.call(false);
+      }
+
+      String? logContent;
+      try {
+        final logFile = File(installLogPath);
+        if (await logFile.exists()) {
+          logContent = await logFile.readAsString();
+          await logFile.delete();
+        }
+      } on Object catch (_) {}
+      try {
+        if (await scriptFile.exists()) {
+          await scriptFile.delete();
+        }
+      } on Object catch (_) {}
+
+      return result.fold(
+        (processResult) async {
+          final output = processResult.stderr.isNotEmpty
+              ? processResult.stderr
+              : processResult.stdout;
+
+          if (_wasUacCancelled(output) || processResult.exitCode == 1223) {
+            return const rd.Failure(
+              ValidationFailure(
+                message:
+                    'A solicitação de permissões de Administrador foi '
+                    'cancelada. Para instalar o serviço, confirme o prompt UAC.',
+              ),
+            );
+          }
+
+          final timedOut = processResult.exitCode == _scriptTimeoutExitCode;
+          if (processResult.exitCode != _successExitCode) {
+            if (timedOut) {
+              await _rollbackPartialInstall(nssmPath);
+            }
+            var detail = logContent != null && logContent.isNotEmpty
+                ? logContent.trim()
+                : (output.isNotEmpty ? output : '');
+            if (detail.isEmpty) {
+              detail = await _readLogsFromProgramData();
+            }
+            final finalDetail = detail.isNotEmpty ? detail : 'Sem detalhes';
+            return rd.Failure(
+              ServerFailure(
+                message:
+                    'Falha ao instalar serviço com elevação UAC '
+                    '(exit ${processResult.exitCode}).\n\n$finalDetail',
+              ),
+            );
+          }
+
+          final postStatus = await _getStatus();
+          return postStatus.fold(
+            (status) {
+              if (!status.isInstalled) {
+                return rd.Failure(
+                  ServerFailure(
+                    message:
+                        'O comando elevado foi executado, mas o serviço não está '
+                        'registrado.\n\n$_troubleshootingWithEnv',
+                  ),
+                );
+              }
+              return const rd.Success(unit);
+            },
+            rd.Failure.new,
+          );
+        },
+        (failure) async {
+          await _rollbackPartialInstall(nssmPath);
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'Não foi possível solicitar elevação UAC para instalar '
+                  'o serviço: ${failureUserMessage(failure)}',
+            ),
+          );
+        },
+      );
+    } finally {
+      await _deleteQuietly(passwordFile);
+    }
+  }
+
+  @visibleForTesting
+  static String buildElevatedInstallScript({
+    required String nssmPath,
+    required String appPath,
+    required String appDir,
+    required String logPath,
+    required String logDir,
+    required String configPath,
+    required String installLogPath,
+    required String? serviceUser,
+    required String? passwordFilePath,
+    required String planSets,
+  }) {
+    String safePath(String value) => value.replaceAll("'", "''");
+    final passwordFile = passwordFilePath == null
+        ? ''
+        : safePath(passwordFilePath);
+    return '''
 \$ErrorActionPreference = "Stop"
 if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
   \$PSNativeCommandUseErrorActionPreference = \$false
@@ -83,7 +256,7 @@ if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyCo
 \$appPath = '${safePath(appPath)}'
 \$appDir = '${safePath(appDir)}'
 \$serviceUser = '${safePath(serviceUser ?? '')}'
-\$servicePassword = '${includePassword ? safePath(servicePassword) : ''}'
+\$passwordFile = '$passwordFile'
 \$logPath = '${safePath(logPath)}'
 \$logDir = '${safePath(logDir)}'
 \$configPath = '${safePath(configPath)}'
@@ -136,6 +309,69 @@ function Set-NssmKeyOptional {
   Write-InstallLog "AVISO \$KeyName`: Can't open service apos \$MaxAttempts tentativas: \$lastErr"
 }
 
+function Set-ServiceAccountFromFile {
+  param([string]\$User, [string]\$SecretFile)
+  if (-not (Test-Path -LiteralPath \$SecretFile)) {
+    Fail "ObjectName" "arquivo de senha ausente"
+  }
+  \$servicePassword = [System.IO.File]::ReadAllText(\$SecretFile)
+  if (-not ('BackupDbServiceConfig' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class BackupDbServiceConfig {
+  [DllImport("advapi32.dll", EntryPoint="OpenSCManagerW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern IntPtr OpenSCManager(string machine, string database, uint access);
+
+  [DllImport("advapi32.dll", EntryPoint="OpenServiceW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern IntPtr OpenService(IntPtr scm, string name, uint access);
+
+  [DllImport("advapi32.dll", EntryPoint="ChangeServiceConfigW", SetLastError=true, CharSet=CharSet.Unicode)]
+  public static extern bool ChangeServiceConfig(
+    IntPtr service,
+    uint serviceType,
+    uint startType,
+    uint errorControl,
+    string binaryPath,
+    string loadOrderGroup,
+    IntPtr tagId,
+    string dependencies,
+    string startName,
+    string password,
+    string displayName);
+
+  [DllImport("advapi32.dll", SetLastError=true)]
+  public static extern bool CloseServiceHandle(IntPtr handle);
+}
+'@
+  }
+  \$scm = [BackupDbServiceConfig]::OpenSCManager(\$null, \$null, 1)
+  if (\$scm -eq [IntPtr]::Zero) {
+    Fail "ObjectName" ("OpenSCManager " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+  }
+  try {
+    \$svc = [BackupDbServiceConfig]::OpenService(\$scm, "$_serviceName", 2)
+    if (\$svc -eq [IntPtr]::Zero) {
+      Fail "ObjectName" ("OpenService " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+    }
+    try {
+      \$noChange = [uint32]::MaxValue
+      \$ok = [BackupDbServiceConfig]::ChangeServiceConfig(
+        \$svc, \$noChange, \$noChange, \$noChange,
+        \$null, \$null, [IntPtr]::Zero, \$null,
+        \$User, \$servicePassword, \$null)
+      if (-not \$ok) {
+        Fail "ObjectName" ("ChangeServiceConfig " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
+      }
+    } finally {
+      [BackupDbServiceConfig]::CloseServiceHandle(\$svc) | Out-Null
+      \$servicePassword = \$null
+    }
+  } finally {
+    [BackupDbServiceConfig]::CloseServiceHandle(\$scm) | Out-Null
+  }
+}
+
 if (-not (Test-Path \$logDir)) { New-Item -ItemType Directory -Path \$logDir -Force | Out-Null }
 if (-not (Test-Path \$logPath)) { New-Item -ItemType Directory -Path \$logPath -Force | Out-Null }
 if (-not (Test-Path \$configPath)) { New-Item -ItemType Directory -Path \$configPath -Force | Out-Null }
@@ -176,8 +412,8 @@ try {
     Start-Sleep -Seconds 5
 
 $planSets
-    if (\$serviceUser -ne '' -and \$servicePassword -ne '') {
-      Set-NssmKeyWithRetry -KeyName "ObjectName" -Values @(\$serviceUser, \$servicePassword)
+    if (\$serviceUser -ne '' -and \$passwordFile -ne '') {
+      Set-ServiceAccountFromFile -User \$serviceUser -PasswordFile \$passwordFile
     } else {
       Set-NssmKeyOptional -KeyName "ObjectName" -Values @("$_localSystemAccount")
     }
@@ -187,134 +423,120 @@ $planSets
     Fail "geral" \$_.Exception.Message
   }
 } finally {
+  if (\$passwordFile -ne '') {
+    try { if (Test-Path -LiteralPath \$passwordFile) { Remove-Item -LiteralPath \$passwordFile -Force } } catch {}
+  }
   try { if (Test-Path \$selfScript) { Remove-Item -Force \$selfScript } } catch {}
 }
 ''';
+  }
 
-    File? scriptFile;
+  Future<rd.Result<File>> _createLockedPasswordFile(String password) async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final randomSuffix = DateTime.now().microsecondsSinceEpoch.toRadixString(
+      16,
+    );
+    final path = p.join(
+      Directory.systemTemp.path,
+      'backup_db_svc_pwd_${timestamp}_$randomSuffix.txt',
+    );
+    final file = File(path);
     try {
-      scriptFile = File(scriptPath);
-      await scriptFile.writeAsString(scriptContent);
+      await file.writeAsString('', flush: true);
     } on Object catch (e) {
       return rd.Failure(
         ServerFailure(
-          message: 'Não foi possível criar script de instalação: $e',
+          message:
+              'Não foi possível criar o arquivo temporário da senha '
+              'do serviço: $e',
         ),
       );
     }
-
-    await _restrictScriptAcl(scriptPath);
-
-    final scriptPathEscaped = scriptPath.replaceAll('"', '`"');
-    final elevatedCommand =
-        r'$p = Start-Process -FilePath "powershell.exe" '
-        '-ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","$scriptPathEscaped" '
-        '-Verb RunAs -WindowStyle Hidden -PassThru; '
-        r'if ($null -eq $p) { exit 1223 }; '
-        'if (-not \$p.WaitForExit($scriptTimeoutMs)) { '
-        r'try { $p.Kill() } catch {}; exit 124 }; '
-        r'exit $p.ExitCode';
-
-    final launchTimeout =
-        _timing.uacPromptTimeout + _timing.elevatedInstallTimeout;
-
-    onElevationWaitChanged?.call(true);
-    rd.Result<ProcessResult> result;
-    try {
-      result = await _processService.run(
-        executable: 'powershell',
-        arguments: [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          elevatedCommand,
-        ],
-        timeout: launchTimeout,
+    final restricted = await _restrictPasswordFileAcl(path);
+    if (!restricted) {
+      await _deleteQuietly(file);
+      return const rd.Failure(
+        ServerFailure(
+          message:
+              'Não foi possível restringir o acesso ao arquivo '
+              'temporário da senha do serviço.',
+        ),
       );
-    } finally {
-      onElevationWaitChanged?.call(false);
     }
-
-    String? logContent;
     try {
-      final logFile = File(installLogPath);
-      if (await logFile.exists()) {
-        logContent = await logFile.readAsString();
-        await logFile.delete();
-      }
-    } on Object catch (_) {}
+      await file.writeAsString(password, flush: true);
+    } on Object catch (e) {
+      await _deleteQuietly(file);
+      return rd.Failure(
+        ServerFailure(
+          message:
+              'Não foi possível gravar a senha do serviço no arquivo '
+              'temporário: $e',
+        ),
+      );
+    }
+    return rd.Success(file);
+  }
+
+  Future<bool> _restrictPasswordFileAcl(String path) async {
+    final grants = <String>[
+      path,
+      '/inheritance:r',
+      '/grant:r',
+      r'NT AUTHORITY\SYSTEM:(F)',
+      r'BUILTIN\Administrators:(F)',
+    ];
+    final account = _currentWindowsAccount();
+    if (account != null) {
+      grants.add('$account:(F)');
+    }
     try {
-      if (await scriptFile.exists()) {
-        await scriptFile.delete();
+      final result = await _processService.run(
+        executable: 'icacls',
+        arguments: grants,
+        timeout: _timing.shortTimeout,
+      );
+      return result.fold(
+        (processResult) => processResult.exitCode == _successExitCode,
+        (_) => false,
+      );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Não foi possível restringir ACL do arquivo de senha do serviço',
+        e,
+        s,
+      );
+      return false;
+    }
+  }
+
+  String? _currentWindowsAccount() {
+    final name = Platform.environment['USERNAME'];
+    if (name == null || name.isEmpty) {
+      return null;
+    }
+    final domain = Platform.environment['USERDOMAIN'];
+    if (domain == null || domain.isEmpty) {
+      return name;
+    }
+    return '$domain\\$name';
+  }
+
+  Future<void> _deleteQuietly(File? file) async {
+    if (file == null) {
+      return;
+    }
+    try {
+      if (await file.exists()) {
+        await file.delete();
       }
-    } on Object catch (_) {}
-
-    return result.fold(
-      (processResult) async {
-        final output = processResult.stderr.isNotEmpty
-            ? processResult.stderr
-            : processResult.stdout;
-
-        if (_wasUacCancelled(output) || processResult.exitCode == 1223) {
-          return const rd.Failure(
-            ValidationFailure(
-              message:
-                  'A solicitação de permissões de Administrador foi '
-                  'cancelada. Para instalar o serviço, confirme o prompt UAC.',
-            ),
-          );
-        }
-
-        final timedOut = processResult.exitCode == _scriptTimeoutExitCode;
-        if (processResult.exitCode != _successExitCode) {
-          if (timedOut) {
-            await _rollbackPartialInstall(nssmPath);
-          }
-          var detail = logContent != null && logContent.isNotEmpty
-              ? logContent.trim()
-              : (output.isNotEmpty ? output : '');
-          if (detail.isEmpty) {
-            detail = await _readLogsFromProgramData();
-          }
-          final finalDetail = detail.isNotEmpty ? detail : 'Sem detalhes';
-          return rd.Failure(
-            ServerFailure(
-              message:
-                  'Falha ao instalar serviço com elevação UAC '
-                  '(exit ${processResult.exitCode}).\n\n$finalDetail',
-            ),
-          );
-        }
-
-        final postStatus = await _getStatus();
-        return postStatus.fold(
-          (status) {
-            if (!status.isInstalled) {
-              return rd.Failure(
-                ServerFailure(
-                  message:
-                      'O comando elevado foi executado, mas o serviço não está '
-                      'registrado.\n\n$_troubleshootingWithEnv',
-                ),
-              );
-            }
-            return const rd.Success(unit);
-          },
-          rd.Failure.new,
-        );
-      },
-      (failure) async {
-        await _rollbackPartialInstall(nssmPath);
-        return rd.Failure(
-          ServerFailure(
-            message:
-                'Não foi possível solicitar elevação UAC para instalar '
-                'o serviço: ${failureUserMessage(failure)}',
-          ),
-        );
-      },
-    );
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'Não foi possível apagar o arquivo temporário da senha do serviço',
+        e,
+        s,
+      );
+    }
   }
 
   Future<void> _restrictScriptAcl(String scriptPath) async {

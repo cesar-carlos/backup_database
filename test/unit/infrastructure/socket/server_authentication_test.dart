@@ -1,8 +1,10 @@
 import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/security/auth_challenge.dart';
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
 import 'package:backup_database/infrastructure/datasources/daos/server_credential_dao.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/error_codes.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -359,5 +361,120 @@ void main() {
         expect(result.errorCode, ErrorCode.authenticationFailed);
       },
     );
+  });
+
+  group('ServerAuthentication challenge', () {
+    ServerCredentialsTableData credential() {
+      return ServerCredentialsTableData(
+        id: '1',
+        serverId: serverId,
+        passwordHash: passwordHash,
+        name: 'Test',
+        isActive: true,
+        createdAt: DateTime.now(),
+      );
+    }
+
+    setUp(() {
+      when(
+        () => mockDao.getByServerId(serverId),
+      ).thenAnswer((_) async => credential());
+    });
+
+    test('should accept a one-time challenge response', () async {
+      const nonce = 'nonce-issued-by-server';
+      final challenge = createAuthChallenge(nonce: nonce);
+      final request = createChallengeAuthRequest(
+        challenge: challenge,
+        serverId: serverId,
+        password: password,
+      );
+
+      final result = await authentication.validateChallengeResponse(
+        request!,
+        issuedNonce: nonce,
+      );
+
+      expect(result.isValid, isTrue);
+      expect(result.errorMessage, isNull);
+    });
+
+    test(
+      'should reject a challenge response signed with another nonce',
+      () async {
+        const nonce = 'nonce-issued-by-server';
+        final message = createAuthRequest(
+          serverId: serverId,
+          passwordHash: AuthChallenge.responseFor(
+            nonce: 'other-nonce',
+            passwordHash: passwordHash,
+          ),
+          nonce: nonce,
+        );
+
+        final result = await authentication.validateChallengeResponse(
+          message,
+          issuedNonce: nonce,
+        );
+
+        expect(result.isValid, isFalse);
+        expect(result.errorCode, ErrorCode.authenticationFailed);
+        expect(result.errorMessage, isNot(contains(passwordHash)));
+        expect(result.errorMessage, isNot(contains(nonce)));
+      },
+    );
+
+    test('should reject a replay after the issued nonce is cleared', () async {
+      const nonce = 'nonce-issued-by-server';
+      final message = createAuthRequest(
+        serverId: serverId,
+        passwordHash: AuthChallenge.responseFor(
+          nonce: nonce,
+          passwordHash: passwordHash,
+        ),
+        nonce: nonce,
+      );
+
+      final result = await authentication.validateChallengeResponse(
+        message,
+        issuedNonce: null,
+      );
+
+      expect(result.isValid, isFalse);
+      expect(result.errorCode, ErrorCode.authenticationFailed);
+    });
+
+    test(
+      'should reject the legacy hash when it is presented as a challenge',
+      () async {
+        const nonce = 'nonce-issued-by-server';
+        final message = createAuthRequest(
+          serverId: serverId,
+          passwordHash: passwordHash,
+          nonce: nonce,
+        );
+
+        final result = await authentication.validateChallengeResponse(
+          message,
+          issuedNonce: nonce,
+        );
+
+        expect(result.isValid, isFalse);
+        expect(result.errorMessage, isNot(contains(passwordHash)));
+      },
+    );
+
+    test('legacy static hash failure does not echo the hash', () async {
+      final message = createAuthRequest(
+        serverId: serverId,
+        passwordHash: 'not-the-stored-hash',
+      );
+
+      final result = await authentication.validateAuthRequest(message);
+
+      expect(result.isValid, isFalse);
+      expect(result.errorMessage, isNot(contains('not-the-stored-hash')));
+      expect(result.errorMessage, isNot(contains(passwordHash)));
+    });
   });
 }

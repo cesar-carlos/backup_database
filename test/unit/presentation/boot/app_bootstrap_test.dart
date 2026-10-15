@@ -1,4 +1,5 @@
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
@@ -54,6 +55,26 @@ void main() {
 
       expect(events, contains('binding'));
       expect(events, isNot(contains('service_init')));
+    });
+
+    test('treats ipc server startup failure as fatal', () async {
+      final events = <String>[];
+      final dependencies = _buildDependencies(
+        context: _uiContext(),
+        events: events,
+        ipcServerStarted: false,
+      );
+
+      await AppBootstrap(dependencies: dependencies).start();
+
+      expect(events, contains('ipc'));
+      expect(events, contains('cleanup'));
+      expect(
+        events,
+        contains('exit:${UiBootstrapExitCode.fatalBootstrapError}'),
+      );
+      expect(events, isNot(contains('app_init:server')));
+      expect(events, isNot(contains('run_app')));
     });
 
     test('aborts ui boot after second instance is detected', () async {
@@ -198,6 +219,7 @@ AppBootstrapDependencies _buildDependencies({
   BootstrapConfig? bootstrapConfig,
   bool canContinueAfterSingleInstanceCheck = true,
   bool shouldSkipScheduler = false,
+  bool ipcServerStarted = true,
   List<String>? infoLogs,
 }) {
   final resolvedLaunchConfig =
@@ -286,7 +308,7 @@ AppBootstrapDependencies _buildDependencies({
             required onRunSchedule,
           }) async {
             events.add('ipc');
-            return true;
+            return ipcServerStarted;
           },
       logInfo: _ignoreLog,
       logWarning: _ignoreLogWithError,

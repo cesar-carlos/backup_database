@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
+import 'package:backup_database/core/di/service_locator.dart'
+    as service_locator;
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:flutter/foundation.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -204,9 +207,25 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
       );
       return ok ?? false;
     } finally {
-      if (wasPreventClose != null) {
-        await _setWindowPreventClose(wasPreventClose);
+      final keepProcess = await _readTrayKeepsProcess();
+      await _setWindowPreventClose(
+        keepProcess ?? wasPreventClose ?? false,
+      );
+    }
+  }
+
+  Future<bool?> _readTrayKeepsProcess() async {
+    try {
+      if (!service_locator.getIt.isRegistered<IUserPreferencesRepository>()) {
+        return null;
       }
+      final preferences = service_locator.getIt<IUserPreferencesRepository>();
+      final minimizeToTray = await preferences.getMinimizeToTray();
+      final closeToTray = await preferences.getCloseToTray();
+      return minimizeToTray || closeToTray;
+    } on Object catch (error) {
+      LoggerService.debug('Preferencias de bandeja no OAuth: $error');
+      return null;
     }
   }
 

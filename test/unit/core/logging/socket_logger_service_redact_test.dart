@@ -15,11 +15,13 @@ void main() {
           {
             'serverId': 'srv-123',
             'passwordHash': r'pbkdf2-sha256$10000$abc$xyz',
+            'nonce': 'one-time-nonce',
             'clientId': 'client-1',
           },
         );
 
         expect(redacted['passwordHash'], '***');
+        expect(redacted['nonce'], '***');
         expect(redacted['serverId'], 'srv-123');
         expect(redacted['clientId'], 'client-1');
       });

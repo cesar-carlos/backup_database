@@ -1,4 +1,5 @@
 import 'package:backup_database/core/constants/license_features.dart';
+import 'package:backup_database/core/security/auth_challenge.dart';
 import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_license_validation_service.dart';
@@ -28,7 +29,26 @@ class ServerAuthentication {
   final ServerCredentialDao _dao;
   final ILicenseValidationService? _licenseValidationService;
 
-  Future<AuthValidationResult> validateAuthRequest(Message message) async {
+  Future<AuthValidationResult> validateAuthRequest(Message message) {
+    return _validate(message);
+  }
+
+  Future<AuthValidationResult> validateChallengeResponse(
+    Message message, {
+    required String? issuedNonce,
+  }) {
+    return _validate(
+      message,
+      issuedNonce: issuedNonce,
+      requireChallenge: true,
+    );
+  }
+
+  Future<AuthValidationResult> _validate(
+    Message message, {
+    String? issuedNonce,
+    bool requireChallenge = false,
+  }) async {
     if (message.header.type != MessageType.authRequest) {
       return const AuthValidationResult(
         isValid: false,
@@ -115,10 +135,37 @@ class ServerAuthentication {
       );
     }
 
-    final valid = PasswordHasher.constantTimeEquals(
-      credential.passwordHash,
-      passwordHash,
-    );
+    final rawNonce = message.payload['nonce'];
+    final nonce = rawNonce is String && rawNonce.isNotEmpty ? rawNonce : null;
+    final bool valid;
+    if (requireChallenge || nonce != null) {
+      if (nonce == null ||
+          issuedNonce == null ||
+          issuedNonce.isEmpty ||
+          !PasswordHasher.constantTimeEquals(issuedNonce, nonce)) {
+        LoggerService.warning(
+          'ServerAuthentication: invalid auth challenge for serverId',
+        );
+        return const AuthValidationResult(
+          isValid: false,
+          errorMessage: 'Desafio de autenticacao invalido',
+          errorCode: ErrorCode.authenticationFailed,
+        );
+      }
+      valid = AuthChallenge.verify(
+        nonce: issuedNonce,
+        passwordHash: credential.passwordHash,
+        response: passwordHash,
+      );
+    } else {
+      // Hash estático reutilizável (SHA-256 de serverId:password).
+      // Permanece por uma versão para clientes já instalados, que ainda
+      // enviam esse hash no authRequest. Não registrar o hash em log.
+      valid = PasswordHasher.constantTimeEquals(
+        credential.passwordHash,
+        passwordHash,
+      );
+    }
     if (valid) {
       LoggerService.info('ServerAuthentication: success for serverId');
     } else {

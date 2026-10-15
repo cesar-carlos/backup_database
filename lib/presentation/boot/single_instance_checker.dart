@@ -22,11 +22,16 @@ class SingleInstanceChecker {
     this._retryDelay = SingleInstanceConfig.retryDelay,
     int ownerInfoMaxAttempts = _defaultOwnerInfoMaxAttempts,
     this._ownerInfoRetryDelay = _defaultOwnerInfoRetryDelay,
+    int scheduledOwnerInfoMaxAttempts = _defaultScheduledOwnerInfoMaxAttempts,
+    this._scheduledOwnerInfoRetryDelay = _defaultScheduledOwnerInfoRetryDelay,
   }) : _getCurrentUsername =
            getCurrentUsername ?? WindowsUserService.getCurrentUsername,
        _maxRetryAttempts = maxRetryAttempts > 0 ? maxRetryAttempts : 1,
        _ownerInfoMaxAttempts = ownerInfoMaxAttempts > 0
            ? ownerInfoMaxAttempts
+           : 1,
+       _scheduledOwnerInfoMaxAttempts = scheduledOwnerInfoMaxAttempts > 0
+           ? scheduledOwnerInfoMaxAttempts
            : 1;
 
   /// F4: tenta múltiplas vezes obter info da instância existente. Cobre a
@@ -35,6 +40,13 @@ class SingleInstanceChecker {
   /// subindo o IPC.
   static const int _defaultOwnerInfoMaxAttempts = 3;
   static const Duration _defaultOwnerInfoRetryDelay = Duration(
+    milliseconds: 250,
+  );
+
+  /// Scheduled second launches wait a bit longer for the owner's pipe.
+  /// Each attempt still uses the IPC connect timeout.
+  static const int _defaultScheduledOwnerInfoMaxAttempts = 6;
+  static const Duration _defaultScheduledOwnerInfoRetryDelay = Duration(
     milliseconds: 250,
   );
 
@@ -50,6 +62,8 @@ class SingleInstanceChecker {
   final Duration _retryDelay;
   final int _ownerInfoMaxAttempts;
   final Duration _ownerInfoRetryDelay;
+  final int _scheduledOwnerInfoMaxAttempts;
+  final Duration _scheduledOwnerInfoRetryDelay;
 
   static const String dialogTitle =
       'Backup Database - J\u00E1 em Execu\u00E7\u00E3o';
@@ -79,6 +93,29 @@ class SingleInstanceChecker {
       'do Windows neste computador.\n\n'
       'N\u00E3o \u00E9 poss\u00EDvel abrir outra inst\u00E2ncia enquanto o '
       'servi\u00E7o estiver ativo.';
+  static const String dialogTitleMutexFailure =
+      'Backup Database - Falha na verifica\u00E7\u00E3o';
+  static const String _dialogMessageMutexCreationFailed =
+      'N\u00E3o foi poss\u00EDvel criar o bloqueio de inst\u00E2ncia '
+      '\u00FAnica do Backup Database.\n\n'
+      'A verifica\u00E7\u00E3o falhou por um erro do Windows. '
+      'Feche esta mensagem e tente abrir o aplicativo novamente.';
+  static const String _dialogMessageWindowUnavailable =
+      'O aplicativo Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o.\n\n'
+      'A inst\u00E2ncia atual n\u00E3o tem uma janela para trazer \u00E0 '
+      'frente. Ela pode ser uma execu\u00E7\u00E3o agendada ou ainda '
+      'estar iniciando sem interface.\n\n'
+      'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia '
+      'ao mesmo tempo.';
+  static const String _dialogMessageStartupServiceOwner =
+      'O Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o como '
+      'servi\u00E7o do Windows.\n\n'
+      'A abertura autom\u00E1tica no logon n\u00E3o exibiu uma janela.';
+  static const String _dialogMessageStartupOwnerUnconfirmed =
+      'O Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o, mas '
+      'n\u00E3o foi poss\u00EDvel confirmar que \u00E9 a sua janela.\n\n'
+      'A abertura autom\u00E1tica no logon n\u00E3o trouxe nenhuma '
+      'janela \u00E0 frente.';
 
   Future<bool> checkAndHandleSecondInstance() async {
     final isFirstInstance = await _singleInstanceService.checkAndLock(
@@ -94,11 +131,13 @@ class SingleInstanceChecker {
   }
 
   Future<void> handleSecondInstance() async {
+    if (_isMutexCreationFailure) {
+      _handleMutexCreationFailure();
+      return;
+    }
+
     if (_launchOrigin == LaunchOrigin.windowsStartup) {
-      LoggerService.infoWithContext(
-        'event=duplicate_launch_suppressed launchOrigin=windows-startup',
-      );
-      _exitDuplicateUi();
+      await _handleWindowsStartupSecondInstance();
       return;
     }
 
@@ -111,14 +150,7 @@ class SingleInstanceChecker {
     final ownerInfo = await _getExistingInfo();
     final existingRole = ownerInfo?.role;
 
-    String? existingUser;
-    try {
-      existingUser = await _ipcClient.getExistingInstanceUser();
-    } on Object catch (e) {
-      LoggerService.debug(
-        'Nao foi possivel obter usuario da instancia existente: $e',
-      );
-    }
+    final existingUser = await _readExistingUser();
 
     final isDifferentUser = existingUser != null && existingUser != currentUser;
     final couldNotDetermineUser = existingUser == null;
@@ -146,19 +178,25 @@ class SingleInstanceChecker {
     final shouldNotifyForeground =
         !isServiceOwner && !isDifferentUser && !couldNotDetermineUser;
 
-    var wasExistingWindowNotified = false;
+    var showWindowStatus = SingleInstanceShowWindowStatus.notDelivered;
     if (shouldNotifyForeground) {
       for (var i = 0; i < _maxRetryAttempts; i++) {
-        final notified = await _ipcClient.notifyExistingInstance();
-        if (notified) {
+        showWindowStatus = await _ipcClient.notifyExistingInstance();
+        if (showWindowStatus == SingleInstanceShowWindowStatus.shown) {
           LoggerService.info('Instancia existente notificada via IPC');
-          wasExistingWindowNotified = true;
+          break;
+        }
+        if (showWindowStatus == SingleInstanceShowWindowStatus.unavailable) {
+          LoggerService.info(
+            'event=duplicate_show_window_unavailable '
+            'ownerRole=${existingRole ?? "unknown"}',
+          );
           break;
         }
         await Future.delayed(_retryDelay);
       }
 
-      if (!wasExistingWindowNotified) {
+      if (showWindowStatus == SingleInstanceShowWindowStatus.notDelivered) {
         LoggerService.warning(
           'Nao foi possivel notificar instancia existente via IPC '
           'apos $_maxRetryAttempts tentativas',
@@ -181,9 +219,63 @@ class SingleInstanceChecker {
       isDifferentUser: isDifferentUser,
       couldNotDetermineUser: couldNotDetermineUser,
       existingUser: existingUser,
-      wasExistingWindowNotified: wasExistingWindowNotified,
+      showWindowStatus: showWindowStatus,
     );
     _messageBox.showWarning(dialogTitle, dialogMessage);
+    _exitDuplicateUi();
+  }
+
+  bool get _isMutexCreationFailure =>
+      _singleInstanceService.lockDenialReason ==
+      SingleInstanceLockDenialReason.creationFailed;
+
+  void _handleMutexCreationFailure() {
+    LoggerService.error(
+      'event=single_instance_mutex_creation_failed '
+      'launchOrigin=${_launchOrigin.name}',
+    );
+    if (_launchOrigin == LaunchOrigin.scheduledExecution) {
+      _exitProcess?.call(ScheduledBackupExitCode.genericFailure);
+      return;
+    }
+    _messageBox.showError(
+      dialogTitleMutexFailure,
+      _dialogMessageMutexCreationFailed,
+    );
+    _exitProcess?.call(UiBootstrapExitCode.fatalBootstrapError);
+  }
+
+  Future<void> _handleWindowsStartupSecondInstance() async {
+    final ownerInfo = await _getExistingInfo();
+    final existingUser = await _readExistingUser();
+    final currentUser = _getCurrentUsername();
+    final isServiceOwner =
+        ownerInfo?.role == SingleInstanceConfig.ipcInstanceRoleService;
+    final isSameUserUi =
+        !isServiceOwner &&
+        ownerInfo?.role == SingleInstanceConfig.ipcInstanceRoleUi &&
+        existingUser != null &&
+        currentUser != null &&
+        existingUser == currentUser;
+
+    if (isSameUserUi) {
+      LoggerService.infoWithContext(
+        'event=duplicate_launch_suppressed launchOrigin=windows-startup '
+        'ownerRole=${ownerInfo?.role ?? "unknown"}',
+      );
+      _exitDuplicateUi();
+      return;
+    }
+
+    LoggerService.infoWithContext(
+      'event=duplicate_launch_startup_notified '
+      'ownerRole=${ownerInfo?.role ?? "unknown"} '
+      'isServiceOwner=$isServiceOwner',
+    );
+    final message = isServiceOwner
+        ? _dialogMessageStartupServiceOwner
+        : _dialogMessageStartupOwnerUnconfirmed;
+    _messageBox.showWarning(dialogTitle, message);
     _exitDuplicateUi();
   }
 
@@ -202,19 +294,26 @@ class SingleInstanceChecker {
       return;
     }
 
-    final ownerInfo = await _getExistingInfo();
-    if (ownerInfo?.canRunSchedule != true) {
+    final ownerInfo = await _awaitOwnerInfoWhileMutexHeld();
+    if (ownerInfo == null) {
+      LoggerService.warning(
+        'event=scheduled_duplicate_owner_pipe_not_ready',
+      );
+      _exitProcess?.call(ScheduledBackupExitCode.ownerNotOnPipe);
+      return;
+    }
+    if (!ownerInfo.canRunSchedule) {
       LoggerService.warning(
         'event=scheduled_duplicate_owner_cannot_run_schedule '
-        'ownerRole=${ownerInfo?.role ?? "unknown"} '
-        'canRunSchedule=${ownerInfo?.canRunSchedule ?? "unknown"}',
+        'ownerRole=${ownerInfo.role} '
+        'canRunSchedule=${ownerInfo.canRunSchedule}',
       );
       _exitProcess?.call(ScheduledBackupExitCode.genericFailure);
       return;
     }
 
     LoggerService.infoWithContext(
-      'event=scheduled_duplicate_delegating ownerRole=${ownerInfo!.role} '
+      'event=scheduled_duplicate_delegating ownerRole=${ownerInfo.role} '
       'canRunSchedule=${ownerInfo.canRunSchedule}',
       scheduleId: scheduleId,
     );
@@ -250,17 +349,36 @@ class SingleInstanceChecker {
     return null;
   }
 
-  Future<SingleInstanceOwnerInfo?> _tryGetExistingInfoOnce() async {
-    try {
-      final ownerInfo = await _ipcClient.getExistingInstanceInfo();
-      if (ownerInfo != null) {
-        return ownerInfo;
+  Future<SingleInstanceOwnerInfo?> _awaitOwnerInfoWhileMutexHeld() async {
+    for (var attempt = 0; attempt < _scheduledOwnerInfoMaxAttempts; attempt++) {
+      final info = await _tryGetExistingInfoOnce();
+      if (info != null) {
+        return info;
       }
-      final role = await _ipcClient.getExistingInstanceRole();
-      if (role == null) {
+      if (!_singleInstanceService.isInstanceMutexHeld()) {
         return null;
       }
-      return SingleInstanceOwnerInfo(role: role, canRunSchedule: false);
+      if (attempt < _scheduledOwnerInfoMaxAttempts - 1) {
+        await Future.delayed(_scheduledOwnerInfoRetryDelay);
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _readExistingUser() async {
+    try {
+      return await _ipcClient.getExistingInstanceUser();
+    } on Object catch (e) {
+      LoggerService.debug(
+        'Nao foi possivel obter usuario da instancia existente: $e',
+      );
+      return null;
+    }
+  }
+
+  Future<SingleInstanceOwnerInfo?> _tryGetExistingInfoOnce() async {
+    try {
+      return await _ipcClient.getExistingInstanceInfo();
     } on Object catch (e) {
       LoggerService.debug(
         'Nao foi possivel obter info da instancia existente: $e',
@@ -273,7 +391,7 @@ class SingleInstanceChecker {
     required bool isServiceOwner,
     required bool isDifferentUser,
     required bool couldNotDetermineUser,
-    required bool wasExistingWindowNotified,
+    required SingleInstanceShowWindowStatus showWindowStatus,
     String? existingUser,
   }) {
     if (isServiceOwner) {
@@ -292,8 +410,12 @@ class SingleInstanceChecker {
       return _dialogMessageUnknownUser;
     }
 
-    if (wasExistingWindowNotified) {
+    if (showWindowStatus == SingleInstanceShowWindowStatus.shown) {
       return _dialogMessageSameUser;
+    }
+
+    if (showWindowStatus == SingleInstanceShowWindowStatus.unavailable) {
+      return _dialogMessageWindowUnavailable;
     }
 
     return _dialogMessageSameUserWindowFocusFailed;

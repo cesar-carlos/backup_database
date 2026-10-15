@@ -99,7 +99,7 @@ class SocketLoggerService {
   /// sensíveis aqui (tabela estática, §5.8 dos
   /// `architectural_patterns.mdc`).
   static const Map<MessageType, Set<String>> _sensitiveKeysByMessageType = {
-    MessageType.authRequest: {'passwordHash', 'password'},
+    MessageType.authRequest: {'passwordHash', 'password', 'nonce'},
     MessageType.authResponse: {'token', 'sessionToken'},
     MessageType.authChallenge: {'nonce'},
     MessageType.createDatabaseConfigRequest: {'password', 'cryptKey'},

@@ -2,6 +2,7 @@ import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:backup_database/core/utils/service_mode_detector.dart';
+import 'package:flutter/foundation.dart';
 
 enum LaunchOrigin {
   manual,
@@ -40,9 +41,13 @@ class LaunchBootstrapContextResolver {
     required Map<String, String> rawEnvironment,
     bool? isServiceModeOverride,
   }) {
-    final isServiceMode =
+    final detectedServiceMode =
         isServiceModeOverride ??
         ServiceModeDetector.isServiceMode(executableArguments: rawArgs);
+    final isServiceMode = isServiceModeForLaunch(
+      detectedServiceMode: detectedServiceMode,
+      rawArgs: rawArgs,
+    );
 
     final launchOrigin = isServiceMode
         ? LaunchOrigin.serviceControlManager
@@ -69,6 +74,19 @@ class LaunchBootstrapContextResolver {
       startMinimizedFromArgs: startMinimizedFromArgs,
       usesLegacyWindowsStartupAlias: usesLegacyWindowsStartupAlias,
     );
+  }
+
+  /// A `--schedule-id` launch is a backup delegation, including when
+  /// session 0 made the detector report service mode.
+  @visibleForTesting
+  static bool isServiceModeForLaunch({
+    required bool detectedServiceMode,
+    required List<String> rawArgs,
+  }) {
+    if (ScheduleArgs.contains(rawArgs)) {
+      return false;
+    }
+    return detectedServiceMode;
   }
 
   static LaunchOrigin _launchOriginForUi(List<String> rawArgs) {

@@ -1,4 +1,4 @@
-#define MyAppName "Backup Database"
+﻿#define MyAppName "Backup Database"
 #define MyAppVersion "3.6.2"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
@@ -51,6 +51,26 @@ brazilianportuguese.VcPageTitle=Verificando dependências
 brazilianportuguese.VcPageDescription=Instalando o Visual C++ Redistributable...
 brazilianportuguese.VcProgress=Instalando o Visual C++ Redistributable 2015-2022 (x64)...
 brazilianportuguese.VcWait=Aguarde...
+brazilianportuguese.AppRunningClosePrompt=O aplicativo %1 está em execução.%n%nÉ necessário fechar o aplicativo para continuar com a instalação.%n%nDeseja fechar o aplicativo agora?
+brazilianportuguese.AppStillRunningContinuePrompt=O aplicativo ainda parece estar em execução após tentativas de fechamento.%n%nA instalação pode falhar se o aplicativo não for fechado.%n%nDeseja continuar mesmo assim?
+brazilianportuguese.AppStillRunningSilent=O aplicativo %1 continua em execucao. A instalacao silenciosa nao pode garantir a substituicao completa dos binarios.
+brazilianportuguese.AppStillRunningRiskPrompt=O aplicativo %1 continua em execucao mesmo apos varias tentativas de fechamento.%n%nContinuar agora pode deixar o executavel atual no disco — o atalho da area de trabalho pode continuar mostrando o icone antigo ate que a maquina seja reiniciada.%n%nDeseja continuar mesmo assim? (Nao recomendado)
+brazilianportuguese.InstallCancelledAppRunning=Instalacao cancelada pelo usuario: o aplicativo continua em execucao. Feche o %1 e tente novamente.
+brazilianportuguese.VcRedistMissing=Visual C++ Redistributables não encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe
+brazilianportuguese.VcRedistFailed=Erro ao instalar Visual C++ Redistributables. Código de erro: %1
+brazilianportuguese.EnvFeedUrlMissing=A chave AUTO_UPDATE_FEED_URL nao ficou preenchida em:%n%1%n%nA instalacao continua, mas o auto-update ficara desabilitado ate corrigir o arquivo .env.
+brazilianportuguese.ServiceScriptMissing=Nao foi possivel encontrar o script de instalacao do servico:%n%1%n%nReinstale o aplicativo ou execute manualmente.
+brazilianportuguese.NssmMissing=Nao foi possivel encontrar nssm.exe em:%n%1%n%nReinstale o aplicativo ou copie nssm.exe para a pasta tools.
+brazilianportuguese.ServiceNotRunning=O servico foi instalado, mas nao confirmou RUNNING no tempo de espera.%n%nVerifique o status em Servicos do Windows ou reinstale o servico pelo aplicativo.
+brazilianportuguese.ServiceInstallFailed=Falha ao instalar o servico do Windows (codigo %1).%n%nConsulte o log do instalador e tente novamente.
+brazilianportuguese.ServiceScriptLaunchFailed=Nao foi possivel executar o script de instalacao do servico.
+brazilianportuguese.AppRunningUninstallPrompt=O aplicativo %1 está em execução.%n%nÉ necessário fechar o aplicativo para continuar com a desinstalação.%n%nDeseja fechar o aplicativo agora?
+brazilianportuguese.AppCloseFailed=Não foi possível fechar o aplicativo automaticamente.%n%nPor favor, feche o aplicativo manualmente e tente novamente.
+brazilianportuguese.AppStillRunningUninstall=O aplicativo ainda está em execução.%n%nPor favor, feche o aplicativo manualmente e tente novamente.
+brazilianportuguese.UninstallRemoveConfig=Deseja tambem remover os dados da maquina em %1 (banco de dados, segredos, logs, .env, staging e locks)?%n%nEscolha Nao para preservar a configuracao para uma reinstalacao.
+brazilianportuguese.ShortcutServerMode={#MyAppName} - Modo servidor
+brazilianportuguese.ShortcutClientMode={#MyAppName} - Modo cliente
+brazilianportuguese.ShortcutUninstall=Desinstalar {#MyAppName}
 english.ModePageTitle=Select installation mode
 english.ModePageSubtitle=Choose how you want to use Backup Database
 english.ModePageDescription=Select the installation mode that best fits your needs:
@@ -67,6 +87,26 @@ english.VcPageTitle=Checking dependencies
 english.VcPageDescription=Installing the Visual C++ Redistributable...
 english.VcProgress=Installing the Visual C++ Redistributable 2015-2022 (x64)...
 english.VcWait=Please wait...
+english.AppRunningClosePrompt=%1 is running.%n%nThe application must be closed before the installation can continue.%n%nClose it now?
+english.AppStillRunningContinuePrompt=The application still appears to be running after attempts to close it.%n%nThe installation may fail if the application is not closed.%n%nContinue anyway?
+english.AppStillRunningSilent=%1 is still running. The silent installation cannot guarantee that all binaries will be replaced.
+english.AppStillRunningRiskPrompt=%1 is still running after several attempts to close it.%n%nContinuing now may leave the current executable on disk — the desktop shortcut may keep showing the old icon until the computer is restarted.%n%nContinue anyway? (Not recommended)
+english.InstallCancelledAppRunning=Installation cancelled: the application is still running. Close %1 and try again.
+english.VcRedistMissing=Visual C++ Redistributable was not found. Download and install it manually: https://aka.ms/vs/17/release/vc_redist.x64.exe
+english.VcRedistFailed=Failed to install the Visual C++ Redistributable. Error code: %1
+english.EnvFeedUrlMissing=AUTO_UPDATE_FEED_URL was left empty in:%n%1%n%nInstallation will continue, but auto-update stays disabled until the .env file is corrected.
+english.ServiceScriptMissing=The service installation script was not found:%n%1%n%nReinstall the application or run the script manually.
+english.NssmMissing=nssm.exe was not found at:%n%1%n%nReinstall the application or copy nssm.exe into the tools folder.
+english.ServiceNotRunning=The service was installed, but it did not confirm RUNNING within the wait time.%n%nCheck Services in Windows or reinstall the service from the application.
+english.ServiceInstallFailed=Failed to install the Windows service (code %1).%n%nCheck the installer log and try again.
+english.ServiceScriptLaunchFailed=The service installation script could not be started.
+english.AppRunningUninstallPrompt=%1 is running.%n%nThe application must be closed before uninstall can continue.%n%nClose it now?
+english.AppCloseFailed=The application could not be closed automatically.%n%nClose it manually and try again.
+english.AppStillRunningUninstall=The application is still running.%n%nClose it manually and try again.
+english.UninstallRemoveConfig=Also remove machine data in %1 (database, secrets, logs, .env, staging, and locks)?%n%nChoose No to keep this configuration for a reinstall.
+english.ShortcutServerMode={#MyAppName} - Server Mode
+english.ShortcutClientMode={#MyAppName} - Client Mode
+english.ShortcutUninstall=Uninstall {#MyAppName}
 
 [Tasks]
 ; Inno Setup: tasks vem checadas por default. Para desmarcar inicialmente
@@ -102,8 +142,8 @@ Source: "service_utils.ps1"; Flags: dontcopy
 
 [Icons]
 ; Main icons for each mode (all will be created)
-Name: "{group}\{#MyAppName} - Server Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"; IconFilename: "{app}\{#MyAppExeName}"
-Name: "{group}\{#MyAppName} - Client Mode"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\{cm:ShortcutServerMode}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=server"; Comment: "Run Backup Database as Server"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\{cm:ShortcutClientMode}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; Comment: "Run Backup Database as Client"; IconFilename: "{app}\{#MyAppExeName}"
 ; Utility icons
 Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\check_dependencies.ps1"""; IconFilename: "{app}\{#MyAppExeName}"
 ; Service icons (ONLY for Server mode)
@@ -111,7 +151,7 @@ Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; P
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
 Name: "{group}\Troubleshooting do Serviço"; Filename: "{app}\docs\TROUBLESHOOTING_SERVICE.md"
-Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+Name: "{group}\{cm:ShortcutUninstall}"; Filename: "{uninstallexe}"
 ; Desktop icon (one per mode — explicit --mode= flag avoids relying on
 ; {app}\.install_mode being present/valid at launch time).
 ; §audit-2026-05-28: o icone unico sem --mode= podia abrir como server
@@ -123,7 +163,7 @@ Name: "{autodesktop}\{#MyAppName} (Client)"; Filename: "{app}\{#MyAppExeName}"; 
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchPostInstall
 
 [UninstallDelete]
-Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
+Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs; Check: ShouldRemoveMachineConfig
 Name: "{commonappdata}\BackupDatabase"; Type: filesandordirs; Check: ShouldRemoveMachineConfig
 ; dirifempty so remove se estiver realmente vazia, entao binarios
 ; nao tocados pelo Inno (downloads, plugins externos) ficam preservados.
@@ -159,6 +199,25 @@ procedure RemoveExistingDesktopShortcut(); forward;
 procedure TouchDesktopShortcut(); forward;
 procedure ConfigureRemoteSocketFirewall(); forward;
 procedure DeleteRemoteSocketFirewall(); forward;
+procedure RemoveLegacyEnglishStartMenuShortcuts(); forward;
+function ExpandCustomMessage(const Name: String): String; forward;
+function ExpandCustomMessage1(const Name, Arg1: String): String; forward;
+function IsInstalledAppRunning(const AppExePath: String): Boolean; forward;
+procedure TaskkillInstalledApp(const AppExePath: String); forward;
+
+function ExpandCustomMessage(const Name: String): String;
+var
+  Message: String;
+begin
+  Message := CustomMessage(Name);
+  StringChangeEx(Message, '%n', #13#10, True);
+  Result := Message;
+end;
+
+function ExpandCustomMessage1(const Name, Arg1: String): String;
+begin
+  Result := FmtMessage(ExpandCustomMessage(Name), [Arg1]);
+end;
 
 function GetUpdateContextPath(): String;
 begin
@@ -370,11 +429,69 @@ begin
   Result := not IsAppRunning(ExeName);
 end;
 
+function IsInstalledAppRunning(const AppExePath: String): Boolean;
+var
+  ResultCode: Integer;
+  Command: String;
+  ExeName: String;
+  QuotedPath: String;
+begin
+  Result := False;
+  ExeName := ExpandConstant('{#MyAppExeName}');
+  QuotedPath := AppExePath;
+  StringChangeEx(QuotedPath, '''', '''''', True);
+  Command :=
+    '-NoProfile -ExecutionPolicy Bypass -Command "' +
+    '$hit = Get-CimInstance Win32_Process | ' +
+    'Where-Object { $_.Name -eq ''' + ExeName +
+    ''' -and $_.ExecutablePath -ieq ''' + QuotedPath +
+    ''' } | Select-Object -First 1; ' +
+    'if ($null -eq $hit) { exit 1 } else { exit 0 }"';
+  if Exec(
+    'powershell.exe',
+    Command,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  ) then
+    Result := (ResultCode = 0)
+  else
+    Log('Warning: failed to query installed app process for ' + AppExePath);
+end;
+
+procedure TaskkillInstalledApp(const AppExePath: String);
+var
+  ResultCode: Integer;
+  Command: String;
+  ExeName: String;
+  QuotedPath: String;
+begin
+  ExeName := ExpandConstant('{#MyAppExeName}');
+  QuotedPath := AppExePath;
+  StringChangeEx(QuotedPath, '''', '''''', True);
+  Command :=
+    '-NoProfile -ExecutionPolicy Bypass -Command "' +
+    'Get-CimInstance Win32_Process | ' +
+    'Where-Object { $_.Name -eq ''' + ExeName +
+    ''' -and $_.ExecutablePath -ieq ''' + QuotedPath +
+    ''' } | ForEach-Object { & taskkill.exe /PID $_.ProcessId /F /T }"';
+  Exec(
+    'powershell.exe',
+    Command,
+    '',
+    SW_HIDE,
+    ewWaitUntilTerminated,
+    ResultCode
+  );
+end;
+
 function InitializeSetup(): Boolean;
 var
   AppExe: String;
   WaitCount: Integer;
   UpdateContextPath: String;
+  StartCode: Integer;
 begin
   Result := True;
   VCRedistNeeded := False;
@@ -391,9 +508,20 @@ begin
     ) then
       Log('Captured update_context.json before upgrade')
     else
+    begin
       Log('Warning: Failed to capture update_context.json before upgrade');
+      if IsServiceInstalled('BackupDatabaseService') then
+        Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE,
+          ewWaitUntilTerminated, StartCode);
+      Result := False;
+      Exit;
+    end;
   end;
 
+  // {app} ainda nao e conhecido de forma confiavel em InitializeSetup
+  // (o diretorio de instalacao pode mudar no assistente). O fechamento
+  // aqui continua por nome de imagem via CloseApp/taskkill /IM.
+  // PrepareToInstall, com {app} definido, encerra so o executavel instalado.
   AppExe := ExpandConstant('{#MyAppExeName}');
 
   if IsAppRunning(AppExe) then
@@ -410,9 +538,14 @@ begin
     end
     else
     begin
-      if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
-                'É necessário fechar o aplicativo para continuar com a instalação.' + #13#10 + #13#10 +
-                'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+      if MsgBox(
+           ExpandCustomMessage1(
+             'AppRunningClosePrompt',
+             ExpandConstant('{#MyAppName}')
+           ),
+           mbConfirmation,
+           MB_YESNO
+         ) = IDYES then
       begin
         CloseApp(AppExe);
 
@@ -425,9 +558,11 @@ begin
 
         if IsAppRunning(AppExe) then
         begin
-          if MsgBox('O aplicativo ainda parece estar em execução após tentativas de fechamento.' + #13#10 + #13#10 +
-                    'A instalação pode falhar se o aplicativo não for fechado.' + #13#10 + #13#10 +
-                    'Deseja continuar mesmo assim?', mbConfirmation, MB_YESNO) = IDNO then
+          if MsgBox(
+               ExpandCustomMessage('AppStillRunningContinuePrompt'),
+               mbConfirmation,
+               MB_YESNO
+             ) = IDNO then
           begin
             Result := False;
             Exit;
@@ -450,11 +585,16 @@ var
   LocalePath: String;
   LocaleCode: String;
 begin
+  LocalePath := ExpandConstant('{commonappdata}\BackupDatabase\config\ui_locale');
+  if WizardSilent() and FileExists(LocalePath) then
+  begin
+    Log('Silent install keeps existing ui_locale');
+    Exit;
+  end;
   if ActiveLanguage = 'english' then
     LocaleCode := 'en'
   else
     LocaleCode := 'pt';
-  LocalePath := ExpandConstant('{commonappdata}\BackupDatabase\config\ui_locale');
   ForceDirectories(ExpandConstant('{commonappdata}\BackupDatabase\config'));
   if not SaveStringToFile(LocalePath, LocaleCode, False) then
     Log('Warning: failed to save ui_locale');
@@ -490,7 +630,7 @@ var
   VCRedistPath: String;
   VCRedistErrorCode: Integer;
   ExecResult: Boolean;
-  AppExe: String;
+  AppExePath: String;
   UserChoice: Integer;
 begin
   Result := '';
@@ -503,57 +643,57 @@ begin
   if IsServiceInstalled('BackupDatabaseService') then
     StopService('BackupDatabaseService');
 
-  // Verificar novamente se o aplicativo está rodando antes de instalar
-  AppExe := ExpandConstant('{#MyAppExeName}');
-  if IsAppRunning(AppExe) then
+  // {app} ja esta definido. taskkill mira somente esse caminho
+  // (ExecutablePath), nao qualquer backup_database.exe da maquina.
+  AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  if IsInstalledAppRunning(AppExePath) then
   begin
-    // Tentar fechar novamente de forma mais agressiva
-    Exec('taskkill.exe', '/IM ' + AppExe + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, VCRedistErrorCode);
+    TaskkillInstalledApp(AppExePath);
     Sleep(2000);
-    
-    // Tentar novamente se ainda estiver rodando
-    if IsAppRunning(AppExe) then
+
+    if IsInstalledAppRunning(AppExePath) then
     begin
-      Exec('taskkill.exe', '/IM ' + AppExe + ' /F /T', '', SW_HIDE, ewWaitUntilTerminated, VCRedistErrorCode);
+      TaskkillInstalledApp(AppExePath);
       Sleep(2000);
     end;
-    
+
     // Se ainda estiver rodando após todas as tentativas, registrar evidência
     // explícita no log do Inno Setup. Em modo silencioso (auto update)
     // abortamos. Em modo interativo pedimos confirmação ao usuário porque
     // continuar com o app aberto costuma deixar o .exe antigo no disco —
     // sintoma classico: atalho desktop continua com icone velho apos
     // instalar versao nova.
-    if IsAppRunning(AppExe) then
+    if IsInstalledAppRunning(AppExePath) then
     begin
-      Log('WARNING: ' + AppExe + ' continua em execucao apos taskkill; '
+      Log('WARNING: ' + AppExePath + ' continua em execucao apos taskkill; '
         + 'arquivos abertos podem nao ser substituidos nesta instalacao.');
       if WizardSilent() then
       begin
-        Result := 'O aplicativo ' + ExpandConstant('{#MyAppName}')
-          + ' continua em execucao. A instalacao silenciosa nao pode garantir '
-          + 'a substituicao completa dos binarios.';
+        Result := ExpandCustomMessage1(
+          'AppStillRunningSilent',
+          ExpandConstant('{#MyAppName}')
+        );
         Exit;
       end
       else
       begin
         UserChoice := MsgBox(
-          'O aplicativo ' + ExpandConstant('{#MyAppName}')
-          + ' continua em execucao mesmo apos varias tentativas de fechamento.'#13#10#13#10
-          + 'Continuar agora pode deixar o executavel atual no disco — o atalho '
-          + 'da area de trabalho pode continuar mostrando o icone antigo ate que '
-          + 'a maquina seja reiniciada.'#13#10#13#10
-          + 'Deseja continuar mesmo assim? (Nao recomendado)',
+          ExpandCustomMessage1(
+            'AppStillRunningRiskPrompt',
+            ExpandConstant('{#MyAppName}')
+          ),
           mbConfirmation,
           MB_YESNO or MB_DEFBUTTON2
         );
         if UserChoice = IDNO then
         begin
-          Result := 'Instalacao cancelada pelo usuario: o aplicativo continua em '
-            + 'execucao. Feche o ' + ExpandConstant('{#MyAppName}') + ' e tente novamente.';
+          Result := ExpandCustomMessage1(
+            'InstallCancelledAppRunning',
+            ExpandConstant('{#MyAppName}')
+          );
           Exit;
         end;
-        Log('WARNING: usuario optou por continuar com ' + AppExe + ' aberto; '
+        Log('WARNING: usuario optou por continuar com ' + AppExePath + ' aberto; '
           + 'icone do atalho pode permanecer desatualizado ate o proximo logon.');
       end;
     end;
@@ -564,25 +704,34 @@ begin
     VCRedistPage.SetText(CustomMessage('VcProgress'), CustomMessage('VcWait'));
     VCRedistPage.SetProgress(0, 0);
     VCRedistPage.Show;
-    
+
     VCRedistPath := ExpandConstant('{tmp}\vc_redist.x64.exe');
-    
+
     if not FileExists(VCRedistPath) then
     begin
-      Result := 'Visual C++ Redistributables não encontrado. Por favor, baixe e instale manualmente: https://aka.ms/vs/17/release/vc_redist.x64.exe';
+      Result := ExpandCustomMessage('VcRedistMissing');
       VCRedistPage.Hide;
       Exit;
     end;
-    
+
     ExecResult := Exec(VCRedistPath, '/quiet /norestart', '', SW_HIDE, ewWaitUntilTerminated, VCRedistErrorCode);
 
     if not ExecResult or not IsVCRedistSuccessExitCode(VCRedistErrorCode) then
     begin
-      Result := 'Erro ao instalar Visual C++ Redistributables. Código de erro: ' + IntToStr(VCRedistErrorCode);
+      Result := ExpandCustomMessage1('VcRedistFailed', IntToStr(VCRedistErrorCode));
       VCRedistPage.Hide;
       Exit;
     end;
-    
+
+    if (VCRedistErrorCode = 3010) or (VCRedistErrorCode = 1641) then
+    begin
+      NeedsRestart := True;
+      Log(
+        'VC++ redistributable exit ' + IntToStr(VCRedistErrorCode) +
+        ' requires restart'
+      );
+    end;
+
     VCRedistPage.Hide;
   end;
 end;
@@ -618,13 +767,13 @@ var
   MergeExitCode: Integer;
   RestoreExitCode: Integer;
 begin
-  // Remover o .lnk antigo da area de trabalho ANTES da secao [Icons] do Inno
-  // gerar o novo. Sem isso, o Explorer pode preservar o icone cacheado mesmo
-  // quando o .lnk e sobrescrito — sintoma reportado: icone velho do Flutter
-  // sobrevive ao upgrade.
-  if (CurStep = ssInstall) and WizardIsTaskSelected('desktopicon') then
+  // ssInstall corre antes de [Icons]. Apaga atalhos antigos da area de
+  // trabalho mesmo quando a task desktopicon nao esta marcada, e os nomes
+  // em ingles do Menu Iniciar antes do Inno recriar os atalhos do idioma.
+  if CurStep = ssInstall then
   begin
     RemoveExistingDesktopShortcut();
+    RemoveLegacyEnglishStartMenuShortcuts();
   end;
 
   // Write .install_mode only after files are installed, when {app} is defined
@@ -664,10 +813,7 @@ begin
           Log('Warning: instalacao silenciosa segue apos merge_env.ps1 exit 2')
         else
           MsgBox(
-            'A chave AUTO_UPDATE_FEED_URL nao ficou preenchida em:' + #13#10 +
-            EnvPath + #13#10#13#10 +
-            'A instalacao continua, mas o auto-update ficara desabilitado ' +
-            'ate corrigir o arquivo .env.',
+            ExpandCustomMessage1('EnvFeedUrlMissing', EnvPath),
             mbError,
             MB_OK
           );
@@ -708,8 +854,31 @@ begin
     else
       DeleteClientStartupTask();
 
-    if WizardIsTaskSelected('openfirewall') then
-      ConfigureRemoteSocketFirewall();
+    if not (WizardSilent() and FileExists(UpdateContextPath)) then
+    begin
+      if SelectedMode = 'server' then
+      begin
+        DeleteClientStartupTask();
+        if (not WizardIsTaskSelected('startup')) and
+           IsServiceInstalled('BackupDatabaseService') then
+          Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE,
+            ewWaitUntilTerminated, RestoreExitCode);
+      end
+      else if IsServiceInstalled('BackupDatabaseService') then
+        Exec(
+          'sc.exe',
+          'config BackupDatabaseService start= disabled',
+          '',
+          SW_HIDE,
+          ewWaitUntilTerminated,
+          RestoreExitCode
+        );
+    end;
+
+    if (SelectedMode = 'server') and WizardIsTaskSelected('openfirewall') then
+      ConfigureRemoteSocketFirewall()
+    else
+      DeleteRemoteSocketFirewall();
 
     if WizardSilent() and FileExists(UpdateContextPath) then
     begin
@@ -865,10 +1034,11 @@ begin
     Log('ERROR: install_service.ps1 ausente em ' + ScriptPath
       + '; servico nao sera registrado.');
     if not WizardSilent() then
-      MsgBox('Nao foi possivel encontrar o script de instalacao do servico:'
-        + #13#10 + ScriptPath + #13#10 + #13#10
-        + 'Reinstale o aplicativo ou execute manualmente.',
-        mbError, MB_OK);
+      MsgBox(
+        ExpandCustomMessage1('ServiceScriptMissing', ScriptPath),
+        mbError,
+        MB_OK
+      );
     Exit;
   end;
   if not FileExists(NssmPath) then
@@ -876,10 +1046,11 @@ begin
     Log('ERROR: nssm.exe ausente em ' + NssmPath
       + '; servico nao sera registrado.');
     if not WizardSilent() then
-      MsgBox('Nao foi possivel encontrar nssm.exe em:' + #13#10 + NssmPath
-        + #13#10 + #13#10
-        + 'Reinstale o aplicativo ou copie nssm.exe para a pasta tools.',
-        mbError, MB_OK);
+      MsgBox(
+        ExpandCustomMessage1('NssmMissing', NssmPath),
+        mbError,
+        MB_OK
+      );
     Exit;
   end;
 
@@ -898,28 +1069,24 @@ begin
     begin
       Log('Warning: BackupDatabaseService installed but did not reach RUNNING within polling timeout');
       if not WizardSilent() then
-        MsgBox('O servico foi instalado, mas nao confirmou RUNNING no tempo de espera.'
-          + #13#10 + #13#10
-          + 'Verifique o status em Servicos do Windows ou reinstale o servico pelo aplicativo.',
-          mbError, MB_OK);
+        MsgBox(ExpandCustomMessage('ServiceNotRunning'), mbError, MB_OK);
     end
     else
     begin
       Log('Warning: install_service.ps1 failed, exit=' + IntToStr(ResultCode));
       if not WizardSilent() then
-        MsgBox('Falha ao instalar o servico do Windows (codigo '
-          + IntToStr(ResultCode) + ').'
-          + #13#10 + #13#10
-          + 'Consulte o log do instalador e tente novamente.',
-          mbError, MB_OK);
+        MsgBox(
+          ExpandCustomMessage1('ServiceInstallFailed', IntToStr(ResultCode)),
+          mbError,
+          MB_OK
+        );
     end;
   end
   else
   begin
     Log('Warning: failed to launch install_service.ps1 from installer');
     if not WizardSilent() then
-      MsgBox('Nao foi possivel executar o script de instalacao do servico.',
-        mbError, MB_OK);
+      MsgBox(ExpandCustomMessage('ServiceScriptLaunchFailed'), mbError, MB_OK);
   end;
 end;
 
@@ -1071,14 +1238,18 @@ begin
         Result := False;
       end;
     end
-    else if MsgBox('O aplicativo ' + ExpandConstant('{#MyAppName}') + ' está em execução.' + #13#10 + #13#10 +
-              'É necessário fechar o aplicativo para continuar com a desinstalação.' + #13#10 + #13#10 +
-              'Deseja fechar o aplicativo agora?', mbConfirmation, MB_YESNO) = IDYES then
+    else if MsgBox(
+              ExpandCustomMessage1(
+                'AppRunningUninstallPrompt',
+                ExpandConstant('{#MyAppName}')
+              ),
+              mbConfirmation,
+              MB_YESNO
+            ) = IDYES then
     begin
       if not CloseApp(AppExe) then
       begin
-        MsgBox('Não foi possível fechar o aplicativo automaticamente.' + #13#10 + #13#10 +
-               'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+        MsgBox(ExpandCustomMessage('AppCloseFailed'), mbError, MB_OK);
         Result := False;
       end
       else
@@ -1086,8 +1257,7 @@ begin
         Sleep(1000);
         if IsAppRunning(AppExe) then
         begin
-          MsgBox('O aplicativo ainda está em execução.' + #13#10 + #13#10 +
-                 'Por favor, feche o aplicativo manualmente e tente novamente.', mbError, MB_OK);
+          MsgBox(ExpandCustomMessage('AppStillRunningUninstall'), mbError, MB_OK);
           Result := False;
         end;
       end;
@@ -1099,10 +1269,10 @@ begin
   if Result and (not UninstallSilent) then
   begin
     if MsgBox(
-         'Deseja tambem remover a configuracao da maquina em ' +
-         ExpandConstant('{commonappdata}\BackupDatabase') +
-         ' (incluindo .env, staging e locks)?' + #13#10#13#10 +
-         'Escolha Nao para preservar a configuracao para uma reinstalacao.',
+         ExpandCustomMessage1(
+           'UninstallRemoveConfig',
+           ExpandConstant('{commonappdata}\BackupDatabase')
+         ),
          mbConfirmation,
          MB_YESNO or MB_DEFBUTTON2
        ) = IDYES then

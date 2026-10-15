@@ -5,6 +5,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_account_config.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:result_dart/result_dart.dart' show unit;
@@ -13,10 +14,13 @@ class WindowsServiceNssmConfigurator {
   WindowsServiceNssmConfigurator({
     required this._processService,
     WindowsServiceTimingConfig? timing,
-  }) : _timing = timing ?? WindowsServiceTimingConfig.defaultConfig;
+    WindowsServiceAccountConfig? accountConfig,
+  }) : _timing = timing ?? WindowsServiceTimingConfig.defaultConfig,
+       _accountConfig = accountConfig ?? WindowsServiceAccountConfig();
 
   final ProcessService _processService;
   final WindowsServiceTimingConfig _timing;
+  final WindowsServiceAccountConfig _accountConfig;
 
   static const String _serviceName = WindowsServiceConstants.serviceName;
   static const int _successExitCode = 0;
@@ -93,24 +97,14 @@ class WindowsServiceNssmConfigurator {
       );
       _warnObjectNameLocalSystem(objectResult);
     } else if (servicePassword != null && servicePassword.isNotEmpty) {
-      final credsResult = await _runSetObjectNameWithCredentials(
-        nssmPath: nssmPath,
+      final credsResult = await _accountConfig.setLogonAccount(
+        serviceName: _serviceName,
         serviceUser: serviceUser,
         servicePassword: servicePassword,
       );
       final credsFailure = credsResult.exceptionOrNull();
       if (credsFailure != null) {
         return rd.Failure(_asFailure(credsFailure));
-      }
-      final processResult = credsResult.getOrNull();
-      if (processResult != null && processResult.exitCode != _successExitCode) {
-        return const rd.Failure(
-          ServerFailure(
-            message:
-                'Falha ao configurar a conta do serviço (ObjectName). '
-                'Verifique o usuário e a senha.',
-          ),
-        );
       }
     } else {
       LoggerService.warning(
@@ -171,42 +165,6 @@ class WindowsServiceNssmConfigurator {
       await Future.delayed(_timing.nssmCantOpenRetryDelay);
     }
     return last!;
-  }
-
-  Future<rd.Result<ProcessResult>> _runSetObjectNameWithCredentials({
-    required String nssmPath,
-    required String serviceUser,
-    required String servicePassword,
-  }) async {
-    final result = await _runNssmSet(
-      nssmPath: nssmPath,
-      arguments: [
-        'set',
-        _serviceName,
-        'ObjectName',
-        serviceUser,
-        servicePassword,
-      ],
-    );
-    return result.fold(
-      (processResult) {
-        if (processResult.exitCode != _successExitCode) {
-          LoggerService.warning(
-            'nssm set ObjectName falhou para usuário "$serviceUser" '
-            '(exit ${processResult.exitCode}). Detalhes suprimidos para '
-            'evitar vazamento de credencial em log.',
-          );
-        }
-        return rd.Success(processResult);
-      },
-      (failure) {
-        LoggerService.warning(
-          'nssm set ObjectName falhou para usuário "$serviceUser". '
-          'Detalhes suprimidos para evitar vazamento de credencial em log.',
-        );
-        return rd.Failure(_asFailure(failure));
-      },
-    );
   }
 
   String _nssmOutput(ProcessResult processResult) {

@@ -106,11 +106,77 @@ void main() {
     });
 
     test(
-      'should not use ipc when duplicate launch is windowsStartup',
+      'should stay silent on windowsStartup when owner is the same user UI',
       () async {
         final messageBox = _FakeWindowsMessageBox();
         final ipcClient = _FakeSingleInstanceIpcClient(
+          existingUser: 'local_user',
+          existingRole: 'ui',
+          notifyResults: [true],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'local_user',
+          launchOrigin: LaunchOrigin.windowsStartup,
+          maxRetryAttempts: 1,
+          exitProcess: (_) {},
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.notifyAttemptCount, 0);
+        expect(messageBox.warningMessage, isNull);
+        expect(messageBox.errorMessage, isNull);
+      },
+    );
+
+    test(
+      'should explain windowsStartup when owner is not the same user UI',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
           existingUser: 'admin_user',
+          existingRole: 'ui',
+          notifyResults: [true],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'local_user',
+          launchOrigin: LaunchOrigin.windowsStartup,
+          maxRetryAttempts: 1,
+          exitProcess: exitCodes.add,
+        );
+
+        final canContinue = await checker.checkAndHandleSecondInstance();
+
+        expect(canContinue, isFalse);
+        expect(ipcClient.notifyAttemptCount, 0);
+        expect(messageBox.warningMessage, contains('logon'));
+        expect(
+          messageBox.warningMessage,
+          isNot(contains('trazida para frente')),
+        );
+        expect(exitCodes, [UiBootstrapExitCode.success]);
+      },
+    );
+
+    test(
+      'should explain windowsStartup when the lock owner is the service',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingUser: 'local_user',
+          existingRole: 'service',
           notifyResults: [true],
         );
         final checker = SingleInstanceChecker(
@@ -124,33 +190,14 @@ void main() {
           maxRetryAttempts: 1,
         );
 
-        final canContinue = await checker.checkAndHandleSecondInstance();
+        await checker.checkAndHandleSecondInstance();
 
-        expect(canContinue, isFalse);
-        expect(ipcClient.getExistingInstanceUserCallCount, 0);
         expect(ipcClient.notifyAttemptCount, 0);
-        expect(messageBox.warningMessage, isNull);
-      },
-    );
-
-    test(
-      'should exit with success when duplicate launch is windowsStartup',
-      () async {
-        final exitCodes = <int>[];
-        final checker = SingleInstanceChecker(
-          singleInstanceService: _FakeSingleInstanceService(
-            checkAndLockResult: false,
-          ),
-          ipcClient: _FakeSingleInstanceIpcClient(),
-          messageBox: _FakeWindowsMessageBox(),
-          launchOrigin: LaunchOrigin.windowsStartup,
-          exitProcess: exitCodes.add,
+        expect(messageBox.warningMessage, contains('serviço'));
+        expect(
+          messageBox.warningMessage,
+          isNot(contains('trazida para frente')),
         );
-
-        final canContinue = await checker.checkAndHandleSecondInstance();
-
-        expect(canContinue, isFalse);
-        expect(exitCodes, [UiBootstrapExitCode.success]);
       },
     );
 
@@ -353,16 +400,194 @@ void main() {
 
         expect(canContinue, isFalse);
         expect(ipcClient.delegatedScheduleIds, isEmpty);
-        expect(exitCodes, [1]);
+        expect(ipcClient.getExistingInstanceRoleCallCount, 0);
+        expect(exitCodes, [ScheduledBackupExitCode.genericFailure]);
+      },
+    );
+
+    test(
+      'should keep retrying a scheduled duplicate until PONG canRunSchedule',
+      () async {
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingRole: 'ui',
+          canRunSchedule: true,
+          ownerInfoResults: const [null, null, 'service'],
+          delegationResult: const SingleInstanceScheduledDelegationResult(
+            exitCode: 0,
+          ),
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.scheduledExecution,
+          scheduledScheduleId: '00000000-0000-4000-8000-000000000001',
+          scheduledOwnerInfoMaxAttempts: 4,
+          scheduledOwnerInfoRetryDelay: const Duration(milliseconds: 1),
+          exitProcess: exitCodes.add,
+        );
+
+        await checker.checkAndHandleSecondInstance();
+
+        expect(ipcClient.getExistingInstanceInfoCallCount, 3);
+        expect(ipcClient.getExistingInstanceRoleCallCount, 0);
+        expect(ipcClient.delegatedScheduleIds, [
+          '00000000-0000-4000-8000-000000000001',
+        ]);
+        expect(exitCodes, [ScheduledBackupExitCode.success]);
+      },
+    );
+
+    test(
+      'should exit owner-not-on-pipe when the scheduled owner never answers',
+      () async {
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingRole: 'ui',
+          canRunSchedule: true,
+          ownerInfoResults: const [null, null, null],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.scheduledExecution,
+          scheduledScheduleId: '00000000-0000-4000-8000-000000000001',
+          scheduledOwnerInfoMaxAttempts: 3,
+          scheduledOwnerInfoRetryDelay: const Duration(milliseconds: 1),
+          exitProcess: exitCodes.add,
+        );
+
+        await checker.checkAndHandleSecondInstance();
+
+        expect(ipcClient.delegatedScheduleIds, isEmpty);
+        expect(ipcClient.getExistingInstanceRoleCallCount, 0);
+        expect(exitCodes, [ScheduledBackupExitCode.ownerNotOnPipe]);
+        expect(exitCodes.single, isNot(ScheduledBackupExitCode.success));
+        expect(
+          exitCodes.single,
+          isNot(ScheduledBackupExitCode.genericFailure),
+        );
+      },
+    );
+
+    test(
+      'should stop scheduled owner retries when the mutex is gone',
+      () async {
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          ownerInfoResults: const [null, 'ui'],
+          canRunSchedule: true,
+          delegationResult: const SingleInstanceScheduledDelegationResult(
+            exitCode: 0,
+          ),
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+            mutexHeld: false,
+          ),
+          ipcClient: ipcClient,
+          messageBox: _FakeWindowsMessageBox(),
+          launchOrigin: LaunchOrigin.scheduledExecution,
+          scheduledScheduleId: '00000000-0000-4000-8000-000000000001',
+          scheduledOwnerInfoMaxAttempts: 4,
+          scheduledOwnerInfoRetryDelay: const Duration(milliseconds: 1),
+          exitProcess: exitCodes.add,
+        );
+
+        await checker.checkAndHandleSecondInstance();
+
+        expect(ipcClient.getExistingInstanceInfoCallCount, 1);
+        expect(ipcClient.delegatedScheduleIds, isEmpty);
+        expect(exitCodes, [ScheduledBackupExitCode.ownerNotOnPipe]);
+      },
+    );
+
+    test(
+      'should not claim the window was focused when show is unavailable',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+          ),
+          ipcClient: _FakeSingleInstanceIpcClient(
+            existingUser: 'user_a',
+            existingRole: 'ui',
+            notifyStatuses: const [
+              SingleInstanceShowWindowStatus.unavailable,
+            ],
+          ),
+          messageBox: messageBox,
+          getCurrentUsername: () => 'user_a',
+          maxRetryAttempts: 3,
+        );
+
+        await checker.checkAndHandleSecondInstance();
+
+        expect(messageBox.warningMessage, contains('não tem uma janela'));
+        expect(
+          messageBox.warningMessage,
+          isNot(contains('trazida para frente')),
+        );
+      },
+    );
+
+    test(
+      'should describe a mutex API failure without claiming another copy',
+      () async {
+        final messageBox = _FakeWindowsMessageBox();
+        final exitCodes = <int>[];
+        final ipcClient = _FakeSingleInstanceIpcClient(
+          existingUser: 'user_a',
+          existingRole: 'ui',
+          notifyResults: const [true],
+        );
+        final checker = SingleInstanceChecker(
+          singleInstanceService: _FakeSingleInstanceService(
+            checkAndLockResult: false,
+            lockDenialReason: SingleInstanceLockDenialReason.creationFailed,
+          ),
+          ipcClient: ipcClient,
+          messageBox: messageBox,
+          getCurrentUsername: () => 'user_a',
+          exitProcess: exitCodes.add,
+        );
+
+        await checker.checkAndHandleSecondInstance();
+
+        expect(ipcClient.notifyAttemptCount, 0);
+        expect(ipcClient.getExistingInstanceInfoCallCount, 0);
+        expect(messageBox.warningMessage, isNull);
+        expect(
+          messageBox.errorMessage,
+          contains('bloqueio de instância única'),
+        );
+        expect(messageBox.errorMessage, isNot(contains('já está aberto')));
+        expect(exitCodes, [UiBootstrapExitCode.fatalBootstrapError]);
       },
     );
   });
 }
 
 class _FakeSingleInstanceService implements ISingleInstanceService {
-  _FakeSingleInstanceService({required this.checkAndLockResult});
+  _FakeSingleInstanceService({
+    required this.checkAndLockResult,
+    this.lockDenialReason,
+    this.mutexHeld = true,
+  });
 
   final bool checkAndLockResult;
+  final bool mutexHeld;
+
+  @override
+  final SingleInstanceLockDenialReason? lockDenialReason;
 
   @override
   Future<bool> checkAndLock({
@@ -371,6 +596,9 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
   }) async {
     return checkAndLockResult;
   }
+
+  @override
+  bool isInstanceMutexHeld() => mutexHeld;
 
   @override
   bool get isFirstInstance => checkAndLockResult;
@@ -384,7 +612,7 @@ class _FakeSingleInstanceService implements ISingleInstanceService {
   @override
   Future<bool> startIpcServer({
     required String role,
-    Future<void> Function()? onShowWindow,
+    Future<Object?> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   }) async {
     return true;
@@ -398,14 +626,17 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     this.canRunSchedule = false,
     this.delegationResult,
     List<bool>? notifyResults,
+    List<SingleInstanceShowWindowStatus>? notifyStatuses,
     this._ownerInfoResults,
-  }) : _notifyResults = notifyResults ?? <bool>[true];
+  }) : _notifyResults = notifyResults ?? <bool>[true],
+       _notifyStatuses = notifyStatuses;
 
   final String? existingUser;
   final String? existingRole;
   final bool canRunSchedule;
   final SingleInstanceScheduledDelegationResult? delegationResult;
   final List<bool> _notifyResults;
+  final List<SingleInstanceShowWindowStatus>? _notifyStatuses;
   final List<String?>? _ownerInfoResults;
   final delegatedScheduleIds = <String>[];
 
@@ -428,8 +659,11 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     return existingUser;
   }
 
+  int getExistingInstanceRoleCallCount = 0;
+
   @override
   Future<String?> getExistingInstanceRole() async {
+    getExistingInstanceRoleCallCount++;
     return existingRole;
   }
 
@@ -462,14 +696,26 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
   }
 
   @override
-  Future<bool> notifyExistingInstance() async {
+  Future<SingleInstanceShowWindowStatus> notifyExistingInstance() async {
+    final statuses = _notifyStatuses;
+    if (statuses != null) {
+      if (_notifyAttemptIndex >= statuses.length) {
+        _notifyAttemptIndex++;
+        return SingleInstanceShowWindowStatus.notDelivered;
+      }
+      final status = statuses[_notifyAttemptIndex];
+      _notifyAttemptIndex++;
+      return status;
+    }
     if (_notifyAttemptIndex >= _notifyResults.length) {
       _notifyAttemptIndex++;
-      return false;
+      return SingleInstanceShowWindowStatus.notDelivered;
     }
     final result = _notifyResults[_notifyAttemptIndex];
     _notifyAttemptIndex++;
-    return result;
+    return result
+        ? SingleInstanceShowWindowStatus.shown
+        : SingleInstanceShowWindowStatus.notDelivered;
   }
 
   @override
@@ -484,9 +730,14 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
 class _FakeWindowsMessageBox implements IWindowsMessageBox {
   String? warningTitle;
   String? warningMessage;
+  String? errorTitle;
+  String? errorMessage;
 
   @override
-  void showError(String title, String message) {}
+  void showError(String title, String message) {
+    errorTitle = title;
+    errorMessage = message;
+  }
 
   @override
   void showInfo(String title, String message) {}

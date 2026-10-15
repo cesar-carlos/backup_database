@@ -267,6 +267,7 @@ class ServiceModeInitializer {
               processService: service_locator.getIt<ProcessService>(),
             ),
             beforeInstallHook: AppCleanup.prepareForInstall,
+            isBackupRunning: () => schedulerService!.isExecutingBackup,
           ).configureAndStart();
         },
       );
@@ -278,9 +279,10 @@ class ServiceModeInitializer {
 
       await shutdownCompleter.future;
 
-      await log.append('initialize: shutdown signal received');
-      await singleInstanceService?.releaseLock();
-      await log.append('initialize: lock released, exiting');
+      await completeGracefulShutdown(
+        singleInstanceService: singleInstanceService,
+        appendLog: log.append,
+      );
     } on Object catch (e, stackTrace) {
       await _handleFatalError(
         log: log,
@@ -358,6 +360,26 @@ class ServiceModeInitializer {
       '${ServiceModeExitCode.fatalBootstrapError}',
     );
     exit(ServiceModeExitCode.fatalBootstrapError);
+  }
+
+  @visibleForTesting
+  static Future<void> completeGracefulShutdown({
+    required ISingleInstanceService? singleInstanceService,
+    required Future<void> Function(String message) appendLog,
+    void Function(int code)? exitProcess,
+  }) async {
+    await appendLog('initialize: shutdown signal received');
+    try {
+      await singleInstanceService?.releaseLock();
+    } on Object catch (failure, stack) {
+      LoggerService.warning(
+        'Erro ao liberar lock no shutdown do modo servico',
+        failure,
+        stack,
+      );
+    }
+    await appendLog('initialize: lock released, exiting');
+    (exitProcess ?? exit)(ServiceModeExitCode.gracefulShutdown);
   }
 
   @visibleForTesting

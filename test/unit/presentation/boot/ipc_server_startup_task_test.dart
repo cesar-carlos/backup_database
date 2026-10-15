@@ -88,14 +88,13 @@ void main() {
       expect(events, equals(['start_ipc', 'run:schedule-1']));
     });
 
-    test(
-      'logs warning and does not claim ready when start returns false',
-      () async {
-        final events = <String>[];
-        final infoLogs = <String>[];
-        final warnings = <String>[];
+    test('throws when the pipe server does not start', () async {
+      final events = <String>[];
+      final infoLogs = <String>[];
+      final errors = <String>[];
 
-        await IpcServerStartupTask(
+      await expectLater(
+        IpcServerStartupTask(
           isWindowManagementEnabled: () => true,
           isWindowReady: () => true,
           showWindow: () async {},
@@ -106,32 +105,48 @@ void main() {
                 return false;
               },
           logInfo: infoLogs.add,
-          logWarning: (message, [_, _]) => warnings.add(message),
-          logError: _ignoreLogWithError,
-        ).start(_config());
-
-        expect(events, equals(['start_ipc']));
-        expect(
-          infoLogs.where((line) => line.contains('inicializado e pronto')),
-          isEmpty,
-        );
-        expect(warnings.first, contains('IPC Server nao iniciou'));
-      },
-    );
-
-    test('logs warning and swallows start failure', () async {
-      final events = <String>[];
-      final warnings = <String>[];
-
-      await _buildTask(
-        windowEnabled: true,
-        events: events,
-        throwOnStart: true,
-        logWarning: (message, [_, _]) => warnings.add(message),
-      ).start(_config());
+          logWarning: _ignoreLogWithError,
+          logError: (message, [_, _]) => errors.add(message),
+        ).start(_config()),
+        throwsA(
+          isA<StateError>().having(
+            (StateError error) => error.message,
+            'message',
+            contains('IPC Server nao iniciou'),
+          ),
+        ),
+      );
 
       expect(events, equals(['start_ipc']));
-      expect(warnings.first, contains('Erro ao inicializar IPC Server'));
+      expect(
+        infoLogs.where((line) => line.contains('inicializado e pronto')),
+        isEmpty,
+      );
+      expect(errors.first, contains('Erro ao inicializar IPC Server'));
+    });
+
+    test('rethrows ipc server start failures', () async {
+      final events = <String>[];
+      final errors = <String>[];
+
+      await expectLater(
+        _buildTask(
+          windowEnabled: true,
+          events: events,
+          throwOnStart: true,
+          logError: (message, [_, _]) => errors.add(message),
+        ).start(_config()),
+        throwsA(
+          isA<StateError>().having(
+            (StateError error) => error.message,
+            'message',
+            'ipc boom',
+          ),
+        ),
+      );
+
+      expect(events, equals(['start_ipc']));
+      expect(errors.first, contains('Erro ao inicializar IPC Server'));
     });
   });
 

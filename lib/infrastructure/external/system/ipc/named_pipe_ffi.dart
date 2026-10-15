@@ -197,6 +197,13 @@ class NamedPipeFfi {
         int Function(int, int, Pointer<Utf16>, Pointer<Uint32>)
       >('QueryFullProcessImageNameW');
 
+  static final int Function(Pointer<Utf16>, Pointer<Utf16>, int)
+  _getLongPathName = _k32
+      .lookupFunction<
+        Uint32 Function(Pointer<Utf16>, Pointer<Utf16>, Uint32),
+        int Function(Pointer<Utf16>, Pointer<Utf16>, int)
+      >('GetLongPathNameW');
+
   static final int Function(int) _flushFileBuffers = _k32
       .lookupFunction<Int32 Function(IntPtr), int Function(int)>(
         'FlushFileBuffers',
@@ -239,6 +246,13 @@ class NamedPipeFfi {
       return true;
     }
     return _getLastError() == _errorPipeConnected;
+  }
+
+  static void disconnect(int handle) {
+    if (!handleIsValid(handle)) {
+      return;
+    }
+    _disconnectNamedPipe(handle);
   }
 
   static void disconnectAndClose(int handle) {
@@ -426,10 +440,46 @@ class NamedPipeFfi {
     }
   }
 
+  static const int _maxLongPathChars = 32768;
+
+  static String? longPathName(String path) {
+    if (!Platform.isWindows || path.isEmpty) {
+      return null;
+    }
+    final direct = _readLongPath(path);
+    if (direct != null) {
+      return direct;
+    }
+    if (path.startsWith(r'\\?\')) {
+      return null;
+    }
+    return _readLongPath(r'\\?\$path');
+  }
+
+  static String? _readLongPath(String path) {
+    final input = path.toNativeUtf16();
+    final buffer = calloc<Uint16>(_maxLongPathChars);
+    try {
+      final written = _getLongPathName(
+        input,
+        buffer.cast<Utf16>(),
+        _maxLongPathChars,
+      );
+      if (written == 0 || written >= _maxLongPathChars) {
+        return null;
+      }
+      return buffer.cast<Utf16>().toDartString();
+    } finally {
+      calloc.free(input);
+      calloc.free(buffer);
+    }
+  }
+
   static IpcPeerGuard platformGuard({required String expectedImagePath}) {
     return IpcPeerGuard(
       expectedImagePath: () => expectedImagePath,
       resolveImagePath: imagePathForPid,
+      expandLongPath: longPathName,
     );
   }
 }

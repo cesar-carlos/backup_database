@@ -200,6 +200,18 @@ void main() {
         expect(setup, contains('ExitCode = 3010'));
         expect(setup, contains('ExitCode = 1641'));
         expect(
+          iss.routineContains('PrepareToInstall', 'VCRedistErrorCode = 3010'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('PrepareToInstall', 'VCRedistErrorCode = 1641'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('PrepareToInstall', 'NeedsRestart := True'),
+          isTrue,
+        );
+        expect(
           iss.routineContains('PrepareToInstall', 'SW_HIDE'),
           isTrue,
         );
@@ -375,15 +387,29 @@ void main() {
           ),
           isTrue,
         );
-        // O delete tem que rodar no ssInstall — antes da secao [Icons] do
-        // Inno criar o novo .lnk — e somente quando a task desktopicon
-        // estiver ativa.
+        // O delete tem que rodar no ssInstall — antes da secao [Icons] —
+        // mesmo quando a task desktopicon esta desmarcada, para o upgrade
+        // nao deixar o .lnk anterior.
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            'if CurStep = ssInstall then',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            'RemoveExistingDesktopShortcut()',
+          ),
+          isTrue,
+        );
         expect(
           iss.routineContains(
             'CurStepChanged',
             "if (CurStep = ssInstall) and WizardIsTaskSelected('desktopicon')",
           ),
-          isTrue,
+          isFalse,
         );
       },
     );
@@ -439,8 +465,17 @@ void main() {
         expect(
           iss.routineContains(
             'PrepareToInstall',
-            'Instalacao cancelada pelo usuario',
+            "'InstallCancelledAppRunning'",
           ),
+          isTrue,
+        );
+        expect(iss.contains('Instalacao cancelada pelo usuario'), isTrue);
+        expect(
+          iss.contains('brazilianportuguese.InstallCancelledAppRunning='),
+          isTrue,
+        );
+        expect(
+          iss.contains('english.InstallCancelledAppRunning='),
           isTrue,
         );
         expect(
@@ -465,6 +500,191 @@ void main() {
           iss.routineContains(
             'PrepareToInstall',
             "StopService('BackupDatabaseService')",
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'setup.iss localizes remaining prompts, shortcuts, and install guards',
+      () async {
+        final setup = await _repoFile(
+          p.join('installer', 'setup.iss'),
+        ).readAsString();
+        final iss = await _loadSetupIssParser();
+
+        const messageKeys = <String>[
+          'AppRunningClosePrompt',
+          'AppStillRunningContinuePrompt',
+          'AppStillRunningSilent',
+          'AppStillRunningRiskPrompt',
+          'InstallCancelledAppRunning',
+          'VcRedistMissing',
+          'VcRedistFailed',
+          'EnvFeedUrlMissing',
+          'ServiceScriptMissing',
+          'NssmMissing',
+          'ServiceNotRunning',
+          'ServiceInstallFailed',
+          'ServiceScriptLaunchFailed',
+          'AppRunningUninstallPrompt',
+          'AppCloseFailed',
+          'AppStillRunningUninstall',
+          'UninstallRemoveConfig',
+          'ShortcutServerMode',
+          'ShortcutClientMode',
+          'ShortcutUninstall',
+        ];
+        for (final key in messageKeys) {
+          expect(setup, contains('brazilianportuguese.$key='));
+          expect(setup, contains('english.$key='));
+        }
+        expect(setup, isNot(contains("MsgBox('")));
+        expect(setup, contains('banco de dados, segredos, logs'));
+        expect(setup, contains('database, secrets, logs'));
+        expect(
+          iss.routineContains('InitializeSetup', 'WizardSilent()'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('PrepareToInstall', 'WizardSilent()'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('InitializeUninstall', 'UninstallSilent'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'InstallAndStartServiceFromInstaller',
+            'if not WizardSilent()',
+          ),
+          isTrue,
+        );
+
+        final serverShortcut = iss.iconEntry(
+          r'{group}\{cm:ShortcutServerMode}',
+        );
+        expect(serverShortcut, isNotNull);
+        expect(serverShortcut, contains('Parameters: "--mode=server"'));
+        expect(
+          serverShortcut,
+          contains(r'IconFilename: "{app}\{#MyAppExeName}"'),
+        );
+        final clientShortcut = iss.iconEntry(
+          r'{group}\{cm:ShortcutClientMode}',
+        );
+        expect(clientShortcut, isNotNull);
+        expect(clientShortcut, contains('Parameters: "--mode=client"'));
+        expect(
+          clientShortcut,
+          contains(r'IconFilename: "{app}\{#MyAppExeName}"'),
+        );
+        final uninstallShortcut = iss.iconEntry(
+          r'{group}\{cm:ShortcutUninstall}',
+        );
+        expect(uninstallShortcut, isNotNull);
+        expect(uninstallShortcut, contains('Filename: "{uninstallexe}"'));
+
+        expect(
+          iss.hasForwardDeclaration('RemoveLegacyEnglishStartMenuShortcuts'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'RemoveLegacyEnglishStartMenuShortcuts',
+            r'{group}\{#MyAppName} - Server Mode.lnk',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'RemoveLegacyEnglishStartMenuShortcuts',
+            r'{group}\{#MyAppName} - Client Mode.lnk',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'RemoveLegacyEnglishStartMenuShortcuts',
+            r'{group}\Uninstall {#MyAppName}.lnk',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            'RemoveLegacyEnglishStartMenuShortcuts()',
+          ),
+          isTrue,
+        );
+
+        expect(
+          iss.routineContains(
+            'InitializeSetup',
+            '{app} ainda nao e conhecido',
+          ),
+          isTrue,
+        );
+        expect(iss.routineContains('CloseApp', '/IM '), isTrue);
+        expect(
+          iss.routineContains('PrepareToInstall', '/IM '),
+          isFalse,
+        );
+        expect(
+          iss.routineContains(
+            'PrepareToInstall',
+            r'{app}\{#MyAppExeName}',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('PrepareToInstall', 'TaskkillInstalledApp'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('TaskkillInstalledApp', 'ExecutablePath'),
+          isTrue,
+        );
+        expect(
+          iss.routineContains('TaskkillInstalledApp', 'taskkill.exe'),
+          isTrue,
+        );
+
+        final uninstallDelete = iss.section('UninstallDelete');
+        expect(
+          uninstallDelete,
+          contains(
+            r'Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs; Check: ShouldRemoveMachineConfig',
+          ),
+        );
+
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            "WizardIsTaskSelected('openfirewall')",
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            "SelectedMode = 'server'",
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'CurStepChanged',
+            'DeleteRemoteSocketFirewall()',
+          ),
+          isTrue,
+        );
+        expect(
+          iss.routineContains(
+            'CurUninstallStepChanged',
+            'DeleteRemoteSocketFirewall()',
           ),
           isTrue,
         );
@@ -573,6 +793,20 @@ void main() {
           install,
           contains(
             'Set-NssmCritical -Key "AppExit" -ExtraArgs @("78", "Exit")',
+          ),
+        );
+        expect(install, contains('ChangeServiceConfigW'));
+        expect(install, contains('Set-ServiceAccountFromFile'));
+        expect(
+          install,
+          contains(r'Remove-Item -LiteralPath $secretFile -Force'),
+        );
+        expect(
+          install,
+          isNot(
+            contains(
+              r'& $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword',
+            ),
           ),
         );
         expect(restore, contains('Wait-ServiceRemoved'));
@@ -780,6 +1014,190 @@ void main() {
           merged,
           contains('CUSTOM_USER_VAR=preserve_me'),
           reason: 'user override must be preserved',
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env fills an empty AUTO_UPDATE_FEED_URL and keeps secrets',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_empty_feed_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, '.env');
+
+        await File(examplePath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n'
+          'BACKUP_DATABASE_LICENSE_PRIVATE_KEY=from-example\n'
+          'OPTIONAL=from-example\n',
+        );
+        await File(targetPath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=\n'
+          'BACKUP_DATABASE_LICENSE_PRIVATE_KEY=real-secret\n'
+          'OPTIONAL=\n',
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+          ],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        final merged = await File(targetPath).readAsString();
+        expect(
+          merged,
+          contains('AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml'),
+        );
+        expect(
+          merged,
+          contains('BACKUP_DATABASE_LICENSE_PRIVATE_KEY=real-secret'),
+        );
+        expect(merged, isNot(contains('from-example')));
+        expect(
+          RegExp(r'^OPTIONAL=$', multiLine: true).hasMatch(merged),
+          isTrue,
+          reason: 'empty non-critical keys stay empty',
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env does not replace a non-empty AUTO_UPDATE_FEED_URL',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_keep_feed_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, '.env');
+
+        await File(examplePath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+        );
+        await File(targetPath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://custom.example/feed.xml\n',
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+          ],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        final merged = await File(targetPath).readAsString();
+        expect(
+          merged,
+          contains('AUTO_UPDATE_FEED_URL=https://custom.example/feed.xml'),
+        );
+        expect(
+          merged,
+          isNot(contains('https://example.com/appcast.xml')),
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env deletes legacy .env after copying it to ProgramData',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_legacy_delete_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, 'config', '.env');
+        final legacyPath = p.join(tempDir.path, 'app', '.env');
+        await Directory(p.dirname(targetPath)).create(recursive: true);
+        await Directory(p.dirname(legacyPath)).create(recursive: true);
+        await File(examplePath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+        );
+        await File(legacyPath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://legacy.example/feed.xml\n'
+          'CUSTOM=from-legacy\n',
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+            '-LegacyPath',
+            legacyPath,
+          ],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(await File(targetPath).exists(), isTrue);
+        expect(await File(legacyPath).exists(), isFalse);
+        final merged = await File(targetPath).readAsString();
+        expect(merged, contains('CUSTOM=from-legacy'));
+        expect(
+          merged,
+          contains('AUTO_UPDATE_FEED_URL=https://legacy.example/feed.xml'),
+        );
+
+        await _deleteTempDirBestEffort(tempDir);
+      },
+      skip: !Platform.isWindows,
+    );
+
+    test(
+      'merge_env keeps legacy .env when ProgramData already has one',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'merge_env_legacy_keep_test',
+        );
+        final examplePath = p.join(tempDir.path, '.env.example');
+        final targetPath = p.join(tempDir.path, '.env');
+        final legacyPath = p.join(tempDir.path, 'legacy.env');
+        await File(examplePath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://example.com/appcast.xml\n',
+        );
+        await File(targetPath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://custom.example/feed.xml\n',
+        );
+        await File(legacyPath).writeAsString(
+          'AUTO_UPDATE_FEED_URL=https://legacy.example/feed.xml\n',
+        );
+
+        final result = await _runPowerShellScript(
+          scriptRelativePath: p.join('installer', 'merge_env.ps1'),
+          arguments: <String>[
+            '-ExamplePath',
+            examplePath,
+            '-TargetPath',
+            targetPath,
+            '-LegacyPath',
+            legacyPath,
+          ],
+        );
+
+        expect(result.exitCode, 0, reason: result.stderr.toString());
+        expect(await File(legacyPath).exists(), isTrue);
+        final merged = await File(targetPath).readAsString();
+        expect(
+          merged,
+          contains('AUTO_UPDATE_FEED_URL=https://custom.example/feed.xml'),
         );
 
         await _deleteTempDirBestEffort(tempDir);

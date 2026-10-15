@@ -17,35 +17,39 @@ import 'package:pub_semver/pub_semver.dart';
 /// [AppUpdateDecisionEngine.evaluate], preservando os testes existentes.
 abstract final class AppUpdateDecisionEngine {
   /// Avalia a lista de `releases` (já ordenadas decrescente por versão)
-  /// contra a `currentVersion` instalada e devolve a primeira que:
-  /// - é estritamente mais nova,
-  /// - cumpre `minSupportedAppVersion` se declarado, e
-  /// - passa no critério de staged rollout (ver [passesRollout]).
+  /// contra a `currentVersion` instalada.
   ///
-  /// Quando nenhuma release qualifica, devolve `AppUpdateDecision`
-  /// com `latestRelease == null` (cliente já está atualizado).
+  /// A candidata é a release mais nova que ainda é maior que a instalada
+  /// e cumpre `minSupportedAppVersion`. O rollout vale só para essa
+  /// candidata: se a máquina ficar de fora, o resultado é "sem update".
+  /// Não se entrega uma versão anterior só porque a mais nova está em
+  /// percentual.
   static AppUpdateDecision evaluate({
     required List<AppcastRelease> releases,
     required Version currentVersion,
     String? machineId,
   }) {
+    AppcastRelease? candidate;
     for (final release in releases) {
       if (release.version <= currentVersion) continue;
       if (release.minSupportedAppVersion != null &&
           currentVersion < release.minSupportedAppVersion!) {
         continue;
       }
-      if (!passesRollout(release, machineId)) continue;
+      candidate = release;
+      break;
+    }
 
+    if (candidate == null || !passesRollout(candidate, machineId)) {
       return AppUpdateDecision(
         currentVersion: currentVersion,
-        latestRelease: release,
+        latestRelease: null,
       );
     }
 
     return AppUpdateDecision(
       currentVersion: currentVersion,
-      latestRelease: null,
+      latestRelease: candidate,
     );
   }
 

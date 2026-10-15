@@ -1,6 +1,7 @@
 import 'dart:ffi';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:ffi/ffi.dart';
@@ -25,6 +26,10 @@ void main() {
 
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.creationFailed,
+        );
       },
     );
 
@@ -67,6 +72,10 @@ void main() {
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
         expect(closeHandleCallCount, equals(1));
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.alreadyRunning,
+        );
       },
     );
 
@@ -86,6 +95,10 @@ void main() {
 
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.creationFailed,
+        );
       },
     );
 
@@ -105,6 +118,7 @@ void main() {
 
         expect(result, isTrue);
         expect(service.isFirstInstance, isTrue);
+        expect(service.lockDenialReason, isNull);
       },
     );
 
@@ -125,6 +139,10 @@ void main() {
 
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.creationFailed,
+        );
       },
     );
 
@@ -227,6 +245,10 @@ void main() {
 
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.alreadyRunning,
+        );
       },
     );
 
@@ -248,6 +270,10 @@ void main() {
 
         expect(result, isFalse);
         expect(service.isFirstInstance, isFalse);
+        expect(
+          service.lockDenialReason,
+          SingleInstanceLockDenialReason.alreadyRunning,
+        );
       },
     );
 
@@ -339,6 +365,47 @@ void main() {
         expect(closeHandleCallCount, equals(1));
       },
     );
+  });
+
+  group('SingleInstanceService.isInstanceMutexHeld', () {
+    test('should return false when OpenMutex reports the mutex is missing', () {
+      final service = SingleInstanceService.forTest(
+        openMutex: (_, _, _) => 0,
+        setLastError: (_) {},
+        getLastError: () => ERROR_FILE_NOT_FOUND,
+        isWindowsPlatform: () => true,
+      );
+
+      expect(service.isInstanceMutexHeld(), isFalse);
+    });
+
+    test('should return true and close the handle when the mutex exists', () {
+      var closeCount = 0;
+      final service = SingleInstanceService.forTest(
+        openMutex: (_, _, _) => 42,
+        setLastError: (_) {},
+        getLastError: () => 0,
+        closeHandle: (_) {
+          closeCount++;
+          return 1;
+        },
+        isWindowsPlatform: () => true,
+      );
+
+      expect(service.isInstanceMutexHeld(), isTrue);
+      expect(closeCount, 1);
+    });
+
+    test('should keep retrying when OpenMutex fails for another reason', () {
+      final service = SingleInstanceService.forTest(
+        openMutex: (_, _, _) => 0,
+        setLastError: (_) {},
+        getLastError: () => ERROR_ACCESS_DENIED,
+        isWindowsPlatform: () => true,
+      );
+
+      expect(service.isInstanceMutexHeld(), isTrue);
+    });
   });
 }
 

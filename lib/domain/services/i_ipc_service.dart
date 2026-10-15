@@ -4,7 +4,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 abstract class IIpcService {
   Future<bool> startServer({
     required String role,
-    Future<void> Function()? onShowWindow,
+    Future<Object?> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   });
 
@@ -12,7 +12,7 @@ abstract class IIpcService {
 
   bool get isRunning;
 
-  Future<bool> notifyExistingInstance();
+  Future<SingleInstanceShowWindowStatus> notifyExistingInstance();
 
   Future<bool> checkServerRunning();
 

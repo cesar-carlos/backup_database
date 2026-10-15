@@ -10,6 +10,11 @@ import 'package:backup_database/infrastructure/external/system/ipc/ipc_v1_codec.
 import 'package:backup_database/infrastructure/external/system/ipc/named_pipe_ffi.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 
+const Duration _connectionStopPoll = Duration(milliseconds: 20);
+const Duration _pipeAcceptRetryDelay = Duration(milliseconds: 50);
+const Duration _connectionShutdownGrace = Duration(seconds: 2);
+const Duration _serverStopGrace = Duration(seconds: 5);
+
 class WindowsNamedPipeTransport implements IIpcTransport {
   WindowsNamedPipeTransport({
     String? pipeName,
@@ -27,6 +32,8 @@ class WindowsNamedPipeTransport implements IIpcTransport {
   Isolate? _serverIsolate;
   SendPort? _serverCmd;
   ReceivePort? _fromServer;
+  Completer<void>? _serverStopped;
+  bool _serverExitObserved = false;
   bool _running = false;
   Future<void> Function(IIpcChannel channel)? _onConnection;
 
@@ -45,6 +52,8 @@ class WindowsNamedPipeTransport implements IIpcTransport {
     }
 
     _onConnection = onConnection;
+    _serverExitObserved = false;
+    _serverStopped = null;
     final fromServer = ReceivePort();
     _fromServer = fromServer;
     final listening = Completer<bool>();
@@ -62,6 +71,12 @@ class WindowsNamedPipeTransport implements IIpcTransport {
           if (!listening.isCompleted) {
             listening.complete(false);
           }
+        } else if (type == 'stopped') {
+          _serverExitObserved = true;
+          final pending = _serverStopped;
+          if (pending != null && !pending.isCompleted) {
+            pending.complete();
+          }
         } else if (type == 'conn') {
           unawaited(_acceptConnection(message));
         }
@@ -74,7 +89,7 @@ class WindowsNamedPipeTransport implements IIpcTransport {
         _NamedPipeServerSpawn(
           toMain: fromServer.sendPort,
           pipeName: _pipeName,
-          expectedBasename: IpcPeerGuard.basename(_expectedImagePath),
+          expectedImagePath: _expectedImagePath,
           maxInstances: SingleInstanceConfig.ipcMaxPipeInstances,
           maxLineBytes: SingleInstanceConfig.ipcMaxLineBytes,
         ),
@@ -110,7 +125,11 @@ class WindowsNamedPipeTransport implements IIpcTransport {
     }
     final handler = _onConnection;
     if (handler == null) {
-      cmd.send(const {'t': 'close'});
+      try {
+        cmd.send(const {'t': 'close'});
+      } on Object {
+        // Connection isolate already closed its port during shutdown.
+      }
       return;
     }
     final channel = _NamedPipeServerChannel(
@@ -126,21 +145,45 @@ class WindowsNamedPipeTransport implements IIpcTransport {
 
   @override
   Future<void> stopServer() async {
+    final isolate = _serverIsolate;
+    final commandPort = _serverCmd;
+    final fromServer = _fromServer;
     _running = false;
     _onConnection = null;
-    try {
-      _serverCmd?.send('stop');
-      if (Platform.isWindows) {
-        NamedPipeFfi.wakeServer(_pipeName);
-      }
-    } on Object catch (e, s) {
-      LoggerService.warning('ipc_named_pipe_stop_signal_failed', e, s);
-    }
-    _serverIsolate?.kill(priority: Isolate.immediate);
     _serverIsolate = null;
     _serverCmd = null;
-    _fromServer?.close();
-    _fromServer = null;
+
+    if (isolate == null && commandPort == null && fromServer == null) {
+      return;
+    }
+
+    final stopped = Completer<void>();
+    _serverStopped = stopped;
+    if (_serverExitObserved) {
+      stopped.complete();
+    } else {
+      try {
+        commandPort?.send('stop');
+        if (Platform.isWindows) {
+          NamedPipeFfi.wakeServer(_pipeName);
+        }
+      } on Object catch (e, s) {
+        LoggerService.warning('ipc_named_pipe_stop_signal_failed', e, s);
+      }
+      if (isolate != null) {
+        try {
+          await stopped.future.timeout(_serverStopGrace);
+        } on TimeoutException {
+          isolate.kill(priority: Isolate.immediate);
+        }
+      }
+    }
+
+    _serverStopped = null;
+    fromServer?.close();
+    if (identical(_fromServer, fromServer)) {
+      _fromServer = null;
+    }
   }
 
   @override
@@ -205,7 +248,11 @@ class _NamedPipeServerChannel implements IIpcChannel {
     if (_closed) {
       return;
     }
-    commandPort.send({'t': 'write', 'v': IpcV1Codec.stripLine(line)});
+    try {
+      commandPort.send({'t': 'write', 'v': IpcV1Codec.stripLine(line)});
+    } on Object {
+      _closed = true;
+    }
   }
 
   @override
@@ -214,7 +261,11 @@ class _NamedPipeServerChannel implements IIpcChannel {
       return;
     }
     _closed = true;
-    commandPort.send(const {'t': 'close'});
+    try {
+      commandPort.send(const {'t': 'close'});
+    } on Object {
+      // Connection isolate already exited and closed its port.
+    }
   }
 }
 
@@ -270,14 +321,14 @@ final class _NamedPipeServerSpawn {
   const _NamedPipeServerSpawn({
     required this.toMain,
     required this.pipeName,
-    required this.expectedBasename,
+    required this.expectedImagePath,
     required this.maxInstances,
     required this.maxLineBytes,
   });
 
   final SendPort toMain;
   final String pipeName;
-  final String expectedBasename;
+  final String expectedImagePath;
   final int maxInstances;
   final int maxLineBytes;
 }
@@ -286,16 +337,26 @@ final class _NamedPipeConnSpawn {
   const _NamedPipeConnSpawn({
     required this.handle,
     required this.toMain,
+    required this.toServer,
     required this.donePort,
-    required this.expectedBasename,
+    required this.expectedImagePath,
     required this.maxLineBytes,
   });
 
   final int handle;
   final SendPort toMain;
+  final SendPort toServer;
   final SendPort donePort;
-  final String expectedBasename;
+  final String expectedImagePath;
   final int maxLineBytes;
+}
+
+final class _LivePipeConnection {
+  _LivePipeConnection({required this.isolate, required this.handle});
+
+  final Isolate isolate;
+  final int handle;
+  SendPort? commandPort;
 }
 
 Future<void> _runNamedPipeServerIsolate(_NamedPipeServerSpawn args) {
@@ -315,11 +376,26 @@ Future<void> _namedPipeServerIsolateMainAsync(
   });
 
   final doneSlots = ReceivePort();
+  final finishedHandles = <int>{};
   var active = 0;
-  doneSlots.listen((Object? _) {
+  doneSlots.listen((Object? message) {
+    if (message is int) {
+      finishedHandles.add(message);
+    }
     if (active > 0) {
       active--;
     }
+  });
+
+  final childEvents = ReceivePort();
+  final connections = <_LivePipeConnection>[];
+  final pendingCommandPorts = <int, SendPort>{};
+  childEvents.listen((Object? message) {
+    _rememberConnectionCommand(
+      message: message,
+      connections: connections,
+      pendingCommandPorts: pendingCommandPorts,
+    );
   });
 
   final security = Win32SecurityDescriptor.fromSddl(
@@ -331,7 +407,7 @@ Future<void> _namedPipeServerIsolateMainAsync(
     while (running) {
       await Future<void>.delayed(Duration.zero);
       while (active >= args.maxInstances && running) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
+        await Future<void>.delayed(_connectionStopPoll);
       }
       if (!running) {
         break;
@@ -346,7 +422,7 @@ Future<void> _namedPipeServerIsolateMainAsync(
           args.toMain.send(const {'t': 'failed'});
           break;
         }
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await Future<void>.delayed(_pipeAcceptRetryDelay);
         continue;
       }
       firstInstance = false;
@@ -366,15 +442,20 @@ Future<void> _namedPipeServerIsolateMainAsync(
       }
       active++;
       try {
-        await Isolate.spawn(
+        final child = await Isolate.spawn(
           _runNamedPipeConnectionIsolate,
           _NamedPipeConnSpawn(
             handle: handle,
             toMain: args.toMain,
+            toServer: childEvents.sendPort,
             donePort: doneSlots.sendPort,
-            expectedBasename: args.expectedBasename,
+            expectedImagePath: args.expectedImagePath,
             maxLineBytes: args.maxLineBytes,
           ),
+        );
+        connections.add(
+          _LivePipeConnection(isolate: child, handle: handle)
+            ..commandPort = pendingCommandPorts.remove(handle),
         );
       } on Object {
         NamedPipeFfi.disconnectAndClose(handle);
@@ -382,20 +463,111 @@ Future<void> _namedPipeServerIsolateMainAsync(
       }
     }
   } finally {
+    await _shutdownConnectionIsolates(
+      connections: connections,
+      finishedHandles: finishedHandles,
+      activeCount: () => active,
+    );
     security?.dispose();
     cmd.close();
     doneSlots.close();
+    childEvents.close();
+    try {
+      args.toMain.send(const {'t': 'stopped'});
+    } on Object {
+      // Main already closed its receive port after the stop grace.
+    }
   }
+}
+
+void _rememberConnectionCommand({
+  required Object? message,
+  required List<_LivePipeConnection> connections,
+  required Map<int, SendPort> pendingCommandPorts,
+}) {
+  if (message is! Map) {
+    return;
+  }
+  final handle = message['h'];
+  final port = message['p'];
+  if (handle is! int || port is! SendPort) {
+    return;
+  }
+  for (final connection in connections) {
+    if (connection.handle != handle) {
+      continue;
+    }
+    connection.commandPort = port;
+    return;
+  }
+  pendingCommandPorts[handle] = port;
+}
+
+Future<void> _shutdownConnectionIsolates({
+  required List<_LivePipeConnection> connections,
+  required Set<int> finishedHandles,
+  required int Function() activeCount,
+}) async {
+  if (connections.isEmpty) {
+    return;
+  }
+  final deadline = DateTime.now().add(_connectionShutdownGrace);
+  while (_hasUnregisteredCommand(connections, finishedHandles) &&
+      DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(_connectionStopPoll);
+  }
+  for (final connection in connections) {
+    if (finishedHandles.contains(connection.handle)) {
+      continue;
+    }
+    NamedPipeFfi.disconnect(connection.handle);
+    final port = connection.commandPort;
+    if (port == null) {
+      continue;
+    }
+    try {
+      port.send(const {'t': 'close'});
+    } on Object {
+      // Connection isolate already closed its command port.
+    }
+  }
+  while (activeCount() > 0 && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(_connectionStopPoll);
+  }
+  for (final connection in connections) {
+    if (finishedHandles.contains(connection.handle)) {
+      continue;
+    }
+    connection.isolate.kill(priority: Isolate.immediate);
+    NamedPipeFfi.disconnectAndClose(connection.handle);
+  }
+}
+
+bool _hasUnregisteredCommand(
+  List<_LivePipeConnection> connections,
+  Set<int> finishedHandles,
+) {
+  for (final connection in connections) {
+    if (finishedHandles.contains(connection.handle)) {
+      continue;
+    }
+    if (connection.commandPort == null) {
+      return true;
+    }
+  }
+  return false;
 }
 
 Future<void> _runNamedPipeConnectionIsolate(_NamedPipeConnSpawn args) async {
   final handle = args.handle;
   final cmd = ReceivePort();
   try {
+    args.toServer.send({'h': handle, 'p': cmd.sendPort});
     final clientPid = NamedPipeFfi.clientPid(handle);
     final guard = IpcPeerGuard(
-      expectedImagePath: () => args.expectedBasename,
+      expectedImagePath: () => args.expectedImagePath,
       resolveImagePath: NamedPipeFfi.imagePathForPid,
+      expandLongPath: NamedPipeFfi.longPathName,
     );
     if (clientPid == null || !guard.allowPeer(clientPid)) {
       return;
@@ -434,6 +606,10 @@ Future<void> _runNamedPipeConnectionIsolate(_NamedPipeConnSpawn args) async {
   } finally {
     cmd.close();
     NamedPipeFfi.disconnectAndClose(handle);
-    args.donePort.send('done');
+    try {
+      args.donePort.send(handle);
+    } on Object {
+      // Server isolate already finished waiting for this connection.
+    }
   }
 }

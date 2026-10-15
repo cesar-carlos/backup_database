@@ -152,6 +152,8 @@ class SingleInstanceConfig {
   static String get ipcGetUserInfoMessage => '$ipcProtocolId|GET_USER_INFO';
   static String get ipcShowWindowMessage => '$ipcProtocolId|SHOW_WINDOW';
   static String get ipcOkAckMessage => '$ipcProtocolId|OK';
+  static String get ipcShowWindowUnavailableMessage =>
+      '$ipcProtocolId|WINDOW_UNAVAILABLE';
   static const String ipcRunScheduleCommand = 'RUN_SCHEDULE';
   static const String ipcRunScheduleResultCommand = 'RUN_SCHEDULE_RESULT';
   static const String ipcRunScheduleMessageOk = 'ok';

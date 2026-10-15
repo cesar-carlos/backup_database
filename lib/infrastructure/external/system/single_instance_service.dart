@@ -17,6 +17,14 @@ final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutex =
       int Function(Pointer, int, Pointer<Utf16>)
     >('CreateMutexW');
 
+const int _synchronizeAccess = 0x00100000;
+
+final int Function(int, int, Pointer<Utf16>) _openMutex = _kernel32
+    .lookupFunction<
+      IntPtr Function(Uint32, Int32, Pointer<Utf16>),
+      int Function(int, int, Pointer<Utf16>)
+    >('OpenMutexW');
+
 SingleInstanceLockFallbackMode _defaultLockFallbackModeProvider() =>
     SingleInstanceConfig.lockFallbackMode;
 
@@ -30,6 +38,7 @@ class SingleInstanceService implements ISingleInstanceService {
   factory SingleInstanceService() => _instance;
   SingleInstanceService._({
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    int Function(int, int, Pointer<Utf16>)? openMutex,
     void Function(int)? setLastError,
     int Function()? getLastError,
     int Function(int)? closeHandle,
@@ -39,6 +48,7 @@ class SingleInstanceService implements ISingleInstanceService {
     IpcService? ipcService,
     Future<bool> Function()? ipcServerProbe,
   }) : _createMutexFn = createMutex ?? _createMutex,
+       _openMutexFn = openMutex ?? _openMutex,
        _setLastErrorFn =
            setLastError ?? ((code) => SetLastError(WIN32_ERROR(code))),
        _getLastErrorFn = getLastError ?? GetLastError,
@@ -61,6 +71,7 @@ class SingleInstanceService implements ISingleInstanceService {
 
   SingleInstanceService.forTest({
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+    int Function(int, int, Pointer<Utf16>)? openMutex,
     void Function(int)? setLastError,
     int Function()? getLastError,
     int Function(int)? closeHandle,
@@ -71,6 +82,7 @@ class SingleInstanceService implements ISingleInstanceService {
     Future<bool> Function()? ipcServerProbe,
   }) : this._(
          createMutex: createMutex,
+         openMutex: openMutex,
          setLastError: setLastError,
          getLastError: getLastError,
          closeHandle: closeHandle,
@@ -87,7 +99,9 @@ class SingleInstanceService implements ISingleInstanceService {
   int _mutexHandle = 0;
   bool _isFirstInstance = false;
   bool _checkAndLockCompleted = false;
+  SingleInstanceLockDenialReason? _lockDenialReason;
   final int Function(Pointer<NativeType>, int, Pointer<Utf16>) _createMutexFn;
+  final int Function(int, int, Pointer<Utf16>) _openMutexFn;
   final void Function(int) _setLastErrorFn;
   final int Function() _getLastErrorFn;
   final int Function(int) _closeHandleFn;
@@ -144,6 +158,7 @@ class SingleInstanceService implements ISingleInstanceService {
         LoggerService.infoWithContext(
           'event=single_instance_lock_denied ownerRole=$modeName',
         );
+        _lockDenialReason = SingleInstanceLockDenialReason.alreadyRunning;
         _isFirstInstance = false;
         _checkAndLockCompleted = true;
 
@@ -171,6 +186,7 @@ class SingleInstanceService implements ISingleInstanceService {
           '[SingleInstance] Fallback mode fail_safe: refusing startup after '
           'exception to preserve exclusivity.',
         );
+        _lockDenialReason = SingleInstanceLockDenialReason.creationFailed;
         _isFirstInstance = false;
         _checkAndLockCompleted = true;
         return false;
@@ -184,6 +200,7 @@ class SingleInstanceService implements ISingleInstanceService {
           'event=single_instance_fail_open_blocked_by_active_ipc '
           'ownerRole=$modeName reason=exception action=deny',
         );
+        _lockDenialReason = SingleInstanceLockDenialReason.alreadyRunning;
         _isFirstInstance = false;
         _checkAndLockCompleted = true;
         return false;
@@ -254,6 +271,7 @@ class SingleInstanceService implements ISingleInstanceService {
         'handle=$_mutexHandle getLastError=$lastError '
         'fallback=fail_safe action=deny',
       );
+      _lockDenialReason = SingleInstanceLockDenialReason.creationFailed;
       _isFirstInstance = false;
       _checkAndLockCompleted = true;
       return false;
@@ -268,6 +286,7 @@ class SingleInstanceService implements ISingleInstanceService {
         'event=single_instance_fail_open_blocked_by_active_ipc '
         'ownerRole=$modeName getLastError=$lastError action=deny',
       );
+      _lockDenialReason = SingleInstanceLockDenialReason.alreadyRunning;
       _isFirstInstance = false;
       _checkAndLockCompleted = true;
       return false;
@@ -297,9 +316,48 @@ class SingleInstanceService implements ISingleInstanceService {
   }
 
   @override
+  bool isInstanceMutexHeld() {
+    if (_isFirstInstance && _mutexHandle != 0) {
+      return true;
+    }
+    if (!_isWindowsPlatformFn()) {
+      return false;
+    }
+
+    const mutexName = SingleInstanceConfig.instanceMutexName;
+    final mutexNamePtr = mutexName.toNativeUtf16();
+    try {
+      _setLastErrorFn(0);
+      final handle = _openMutexFn(_synchronizeAccess, 0, mutexNamePtr);
+      final lastError = _getLastErrorFn();
+      if (handle != 0 && handle != -1) {
+        _closeHandleFn(handle);
+        return true;
+      }
+      if (lastError == ERROR_FILE_NOT_FOUND) {
+        return false;
+      }
+      LoggerService.warning(
+        'event=single_instance_mutex_probe_inconclusive '
+        'getLastError=$lastError',
+      );
+      return true;
+    } on Object catch (e, stackTrace) {
+      LoggerService.warning(
+        'event=single_instance_mutex_probe_failed',
+        e,
+        stackTrace,
+      );
+      return true;
+    } finally {
+      calloc.free(mutexNamePtr);
+    }
+  }
+
+  @override
   Future<bool> startIpcServer({
     required String role,
-    Future<void> Function()? onShowWindow,
+    Future<Object?> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
   }) async {
     try {
@@ -330,6 +388,9 @@ class SingleInstanceService implements ISingleInstanceService {
       LoggerService.warning('Erro ao liberar lock: $e');
     }
   }
+
+  @override
+  SingleInstanceLockDenialReason? get lockDenialReason => _lockDenialReason;
 
   @override
   bool get isFirstInstance => _isFirstInstance;

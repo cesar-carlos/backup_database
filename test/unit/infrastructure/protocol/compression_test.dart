@@ -26,6 +26,14 @@ void main() {
       expect(compressed.length, lessThan(repetitive.length));
     });
 
+    test('decompress rejects output above the cap', () {
+      final repetitive = Uint8List.fromList(List<int>.filled(8000, 0x41));
+      final compressed = compression.compress(repetitive);
+      final capped = PayloadCompression(maxDecompressedBytes: 100);
+
+      expect(() => capped.decompress(compressed), throwsStateError);
+    });
+
     test('decompress(compress(data)) preserves length', () {
       final data = Uint8List.fromList(
         [1, 2, 3, 4, 5] + List<int>.filled(1500, 10),

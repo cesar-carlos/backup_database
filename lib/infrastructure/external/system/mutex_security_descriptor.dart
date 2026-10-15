@@ -69,10 +69,12 @@ class MutexSecurityAttributes {
 class Win32SecurityDescriptor {
   Win32SecurityDescriptor._();
 
-  /// SDDL de named pipe: Generic All para Everyone (WD), o equivalente
-  /// de acesso ao mutex machine-global. Não usa a máscara
-  /// `MUTEX_ALL_ACCESS` (`0x1F0001`), que não se aplica a pipes.
-  static const String namedPipeEveryoneGenericAllSddl = 'D:(A;;GA;;;WD)';
+  /// Named-pipe DACL with Generic Read and Generic Write.
+  /// SY, BA, and IU stay. S-1-5-3 is the batch logon SID so a
+  /// non-interactive scheduled task of a normal user can connect.
+  /// Everyone (WD) Generic All is intentionally absent.
+  static const String namedPipeEveryoneGenericAllSddl =
+      'D:(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;IU)(A;;GRGW;;;S-1-5-3)';
 
   static MutexSecurityAttributes? fromSddl(String sddl) {
     if (!Platform.isWindows) return null;

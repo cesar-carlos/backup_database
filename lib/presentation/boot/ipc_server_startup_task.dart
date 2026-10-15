@@ -3,8 +3,10 @@ import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 
 typedef IpcRunScheduleHandler = Future<int> Function(String scheduleId);
 
+typedef IpcShowWindowHandler = Future<Object?> Function();
+
 typedef IpcServerStarter = Future<bool> Function({
-  required Future<void> Function() onShowWindow,
+  required IpcShowWindowHandler onShowWindow,
   required IpcRunScheduleHandler onRunSchedule,
 });
 
@@ -46,17 +48,15 @@ class IpcServerStartupTask {
         onShowWindow: _handleShowWindow,
         onRunSchedule: runSchedule,
       );
-      if (started) {
-        logInfo('IPC Server inicializado e pronto');
-      } else {
-        logWarning(
+      if (!started) {
+        throw StateError(
           'IPC Server nao iniciou (named pipe indisponivel)',
-          null,
-          null,
         );
       }
+      logInfo('IPC Server inicializado e pronto');
     } on Object catch (e, stackTrace) {
-      logWarning('Erro ao inicializar IPC Server: $e', e, stackTrace);
+      logError('Erro ao inicializar IPC Server: $e', e, stackTrace);
+      rethrow;
     }
   }
 
@@ -74,17 +74,18 @@ class IpcServerStartupTask {
     await _showNow();
   }
 
-  Future<void> _handleShowWindow() async {
+  Future<Object?> _handleShowWindow() async {
     logInfo('Recebido comando SHOW_WINDOW via IPC de outra instancia');
     if (!isWindowManagementEnabled()) {
-      return;
+      return null;
     }
     if (!isWindowReady()) {
       _pendingShowWindow = true;
       logInfo('event=ipc_show_window_queued');
-      return;
+      return null;
     }
     await _showNow();
+    return null;
   }
 
   Future<void> _showNow() async {

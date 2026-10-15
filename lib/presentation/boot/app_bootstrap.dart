@@ -482,10 +482,10 @@ class AppBootstrap {
       );
     }
 
-    await _dependencies.environment.setupServiceLocator();
-    _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
-
     try {
+      await _dependencies.environment.setupServiceLocator();
+      _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
+
       await _dependencies.uiServices.ipcServerStartupTask.start(
         bootstrapConfig,
       );

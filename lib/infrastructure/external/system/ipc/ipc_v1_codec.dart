@@ -43,6 +43,10 @@ class IpcV1Codec {
     return message == SingleInstanceConfig.ipcOkAckMessage;
   }
 
+  static bool isShowWindowUnavailable(String? message) {
+    return message == SingleInstanceConfig.ipcShowWindowUnavailableMessage;
+  }
+
   static String? parseRunScheduleRequest(String message) {
     if (!_runSchedulePrefix.hasMatch(message)) {
       return null;

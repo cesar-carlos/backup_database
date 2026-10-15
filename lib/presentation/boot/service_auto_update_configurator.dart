@@ -16,12 +16,14 @@ class ServiceAutoUpdateConfigurator {
     required this.autoUpdateService,
     required this.accountProbe,
     required this.beforeInstallHook,
+    this.isBackupRunning,
   });
 
   final FeatureAvailabilityService features;
   final AutoUpdateService autoUpdateService;
   final ServiceAccountProbe accountProbe;
   final ServiceShutdownHook beforeInstallHook;
+  final bool Function()? isBackupRunning;
 
   Future<void> configureAndStart() async {
     if (!features.isAutoUpdateEnabled) {
@@ -71,6 +73,14 @@ class ServiceAutoUpdateConfigurator {
     // No modo serviço o processo já roda como LocalSystem (validado
     // pelo `ServiceAccountProbe`). UAC só importa para o caminho UI;
     // por isso o checador de elevação **não** é chamado aqui.
+    if (isBackupRunning?.call() ?? false) {
+      return const AppUpdateBlockOutcome(
+        reason: AppUpdateBlockReason.localBackupRunning,
+        message:
+            'Atualização bloqueada: existe um backup em andamento no '
+            'serviço. Aguarde a conclusão.',
+      );
+    }
     final serviceAccount = await accountProbe.probeInstalledAccount();
     final message = ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
       serviceAccount,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:backup_database/core/theme/tokens/app_breakpoints.dart';
+import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
@@ -43,8 +44,9 @@ class WindowManagerService with WindowListener {
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      // O X decide no WM_CLOSE. preventClose tem de valer antes do show.
+      await _updatePreventClose(_keepsProcessOnClose);
       if (startMinimized) {
-        // Quando iniciar minimizado, ocultar a janela e não focar
         await windowManager.hide();
         LoggerService.info('Aplicativo iniciado minimizado (oculto)');
       } else {
@@ -71,11 +73,7 @@ class WindowManagerService with WindowListener {
       await windowManager.setSkipTaskbar(false);
     }
 
-    // Garantir que o tamanho mínimo seja aplicado após a inicialização
     await windowManager.setMinimumSize(minimumSize);
-
-    // O X do Windows decide no WM_CLOSE, antes do callback Dart.
-    // preventClose precisa estar ligado antes da janela aparecer.
     await _updatePreventClose(_keepsProcessOnClose);
 
     windowManager.addListener(this);
@@ -202,6 +200,7 @@ class WindowManagerService with WindowListener {
         await windowManager.show();
         await windowManager.focus();
       }
+      await _markIpcShowIfWindowIsVisible();
     } on Object catch (e, stackTrace) {
       LoggerService.error('❌ Erro ao mostrar janela', e, stackTrace);
       // Tentar método alternativo
@@ -211,10 +210,23 @@ class WindowManagerService with WindowListener {
         await Future.delayed(const Duration(milliseconds: 200));
         await windowManager.show();
         await windowManager.focus();
+        await _markIpcShowIfWindowIsVisible();
       } on Object catch (e2) {
         LoggerService.error('❌ Erro crítico ao mostrar janela', e2);
         rethrow;
       }
+    }
+  }
+
+  Future<void> _markIpcShowIfWindowIsVisible() async {
+    try {
+      final isVisible = await windowManager.isVisible();
+      final isMinimized = await windowManager.isMinimized();
+      if (isVisible && !isMinimized) {
+        IpcShowWindowConfirmation.markShown();
+      }
+    } on Object {
+      // A failed visibility probe must not count as a shown window.
     }
   }
 

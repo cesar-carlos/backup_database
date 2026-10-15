@@ -57,21 +57,19 @@ class AppUpdateInstallerLauncher {
 
     final deadline = DateTime.now().add(spawnGracePeriod);
     var consecutiveDeadChecks = 0;
-    var sawAliveOnce = false;
 
     while (DateTime.now().isBefore(deadline)) {
       if (processAliveCheck(handle.pid)) {
-        sawAliveOnce = true;
         consecutiveDeadChecks = 0;
       } else {
         consecutiveDeadChecks++;
-        if (consecutiveDeadChecks >= 2 && !sawAliveOnce) {
+        if (consecutiveDeadChecks >= 2) {
           return false;
         }
       }
       await Future<void>.delayed(_pollInterval);
     }
 
-    return sawAliveOnce || processAliveCheck(handle.pid);
+    return processAliveCheck(handle.pid);
   }
 }

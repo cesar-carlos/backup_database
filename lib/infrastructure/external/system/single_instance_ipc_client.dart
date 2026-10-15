@@ -8,7 +8,7 @@ class SingleInstanceIpcClient implements ISingleInstanceIpcClient {
   final IIpcService _ipc;
 
   @override
-  Future<bool> notifyExistingInstance() {
+  Future<SingleInstanceShowWindowStatus> notifyExistingInstance() {
     return _ipc.notifyExistingInstance();
   }
 

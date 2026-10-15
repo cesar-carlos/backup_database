@@ -36,15 +36,9 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
-  flutter_controller_->ForceRedraw();
-
+  // A janela só aparece em window_manager.waitUntilReadyToShow, depois de
+  // preventClose. Um Show() aqui no primeiro frame fecha o processo no X
+  // antes da bandeja valer.
   return true;
 }
 

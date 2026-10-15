@@ -9,7 +9,7 @@ import 'package:backup_database/infrastructure/protocol/schedule_messages.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class ClientRpcTransport {
-  int _nextRequestId = 0;
+  int _nextRequestId = 1;
   final Map<int, Completer<Message>> _pendingRequests = {};
 
   bool get isEmpty => _pendingRequests.isEmpty;
@@ -24,10 +24,18 @@ class ClientRpcTransport {
   }
 
   void completeIfPending(int requestId, Message message) {
+    if (_isUnboundProtocolError(message)) {
+      return;
+    }
     final completer = _pendingRequests.remove(requestId);
     if (completer != null && !completer.isCompleted) {
       completer.complete(message);
     }
+  }
+
+  bool _isUnboundProtocolError(Message message) {
+    return message.header.type == MessageType.error &&
+        message.header.requestId == 0;
   }
 
   void abortAll(Object error) {

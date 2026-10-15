@@ -5,7 +5,6 @@ import 'dart:typed_data';
 
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/logging/logging.dart';
-import 'package:backup_database/core/security/password_hasher.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/auth_messages.dart';
 import 'package:backup_database/infrastructure/protocol/binary_protocol.dart';
@@ -40,6 +39,9 @@ class TcpSocketClient implements SocketClientService {
   HeartbeatManager? _heartbeatManager;
   StreamSubscription<Message>? _heartbeatSubscription;
   bool _waitingAuth = false;
+  bool _waitingChallenge = false;
+  String? _authServerId;
+  String? _authPassword;
 
   /// Serializa as escritas no socket para evitar interleaving de bytes
   /// quando heartbeat e mensagens normais tentam emitir concorrentemente.
@@ -75,6 +77,32 @@ class TcpSocketClient implements SocketClientService {
   /// expúnhamos a mensagem em string, o que forçava UI a fazer
   /// matching frágil em texto traduzido.
   ErrorCode? get lastErrorCode => _lastErrorCode;
+
+  Future<void> _sendChallengeResponse(Message authRequest) async {
+    try {
+      await send(authRequest);
+    } on Object {
+      LoggerService.warning(
+        'TcpSocketClient: falha ao enviar resposta do desafio',
+      );
+      _failAuthentication('Falha ao enviar autenticação');
+    }
+  }
+
+  void _failAuthentication(String error) {
+    _waitingAuth = false;
+    _waitingChallenge = false;
+    _authPassword = null;
+    _lastErrorMessage = error;
+    _lastErrorCode = ErrorCode.authenticationFailed;
+    LoggerService.error('Autenticação FALHOU: $error');
+    _setStatus(ConnectionStatus.authenticationFailed);
+    unawaited(
+      Future.microtask(() {
+        unawaited(_handleDisconnect(scheduleReconnect: false));
+      }),
+    );
+  }
 
   void _setStatus(ConnectionStatus newStatus) {
     if (_status != newStatus) {
@@ -121,6 +149,9 @@ class TcpSocketClient implements SocketClientService {
     _lastErrorMessage = null;
     _lastErrorCode = null;
     _waitingAuth = false;
+    _waitingChallenge = false;
+    _authServerId = null;
+    _authPassword = null;
     try {
       _socket = await Socket.connect(
         host,
@@ -143,14 +174,12 @@ class TcpSocketClient implements SocketClientService {
           'Enviando requisição de autenticação para serverId: $serverId',
         );
         _waitingAuth = true;
-        final passwordHash = PasswordHasher.hash(password, serverId);
-        final authRequest = createAuthRequest(
-          serverId: serverId,
-          passwordHash: passwordHash,
-        );
-        await send(authRequest);
+        _waitingChallenge = true;
+        _authServerId = serverId;
+        _authPassword = password;
+        await send(createAuthChallengeRequest(serverId: serverId));
         LoggerService.info(
-          'Requisição de autenticação enviada, aguardando resposta...',
+          'Pedido de desafio de autenticação enviado, aguardando nonce...',
         );
       } else {
         _setStatus(ConnectionStatus.connected);
@@ -252,6 +281,24 @@ class TcpSocketClient implements SocketClientService {
           _socketLogger?.logReceived(message) ?? Future<void>.value(),
         );
 
+        if (_waitingChallenge && isAuthChallengeMessage(message)) {
+          final serverId = _authServerId;
+          final password = _authPassword;
+          final authRequest = serverId == null || password == null
+              ? null
+              : createChallengeAuthRequest(
+                  challenge: message,
+                  serverId: serverId,
+                  password: password,
+                );
+          if (authRequest == null) {
+            _failAuthentication('Resposta de desafio inválida');
+            return;
+          }
+          _waitingChallenge = false;
+          unawaited(_sendChallengeResponse(authRequest));
+          return;
+        }
         if (_waitingAuth && isAuthResponseMessage(message)) {
           _waitingAuth = false;
           final success = message.payload['success'] == true;
@@ -274,6 +321,7 @@ class TcpSocketClient implements SocketClientService {
             return;
           }
           LoggerService.info('✅ Autenticação bem-sucedida!');
+          _authPassword = null;
           _setStatus(ConnectionStatus.connected);
           _reconnectAttempts = 0;
           _startHeartbeat();
@@ -413,6 +461,7 @@ class TcpSocketClient implements SocketClientService {
     _subscription = null;
     _socket?.destroy();
     _socket = null;
+    _buffer.clear();
     _setStatus(ConnectionStatus.disconnected);
 
     if (scheduleReconnect && _reconnectEnabled && _reconnectHost != null) {
@@ -446,6 +495,7 @@ class TcpSocketClient implements SocketClientService {
     _subscription = null;
     _socket?.destroy();
     _socket = null;
+    _buffer.clear();
     _setStatus(ConnectionStatus.disconnected);
     if (!_messageController.isClosed) {
       await _messageController.close();

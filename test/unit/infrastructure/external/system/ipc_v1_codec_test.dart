@@ -106,6 +106,18 @@ void main() {
       );
       expect(IpcV1Codec.isOkAck('OK'), isFalse);
       expect(IpcV1Codec.isOkAck(null), isFalse);
+      expect(
+        IpcV1Codec.isShowWindowUnavailable(
+          SingleInstanceConfig.ipcShowWindowUnavailableMessage,
+        ),
+        isTrue,
+      );
+      expect(
+        IpcV1Codec.isShowWindowUnavailable(
+          SingleInstanceConfig.ipcOkAckMessage,
+        ),
+        isFalse,
+      );
     });
   });
 

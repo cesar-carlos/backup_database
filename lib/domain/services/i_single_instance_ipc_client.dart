@@ -18,8 +18,14 @@ class SingleInstanceOwnerInfo {
   final bool canRunSchedule;
 }
 
+enum SingleInstanceShowWindowStatus {
+  shown,
+  unavailable,
+  notDelivered,
+}
+
 abstract class ISingleInstanceIpcClient {
-  Future<bool> notifyExistingInstance();
+  Future<SingleInstanceShowWindowStatus> notifyExistingInstance();
 
   Future<bool> checkServerRunning();
 

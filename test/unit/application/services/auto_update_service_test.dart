@@ -1052,6 +1052,36 @@ void main() {
       expect(eligible.isUpdateAvailable, isTrue);
     });
 
+    test('rollout da versao mais nova nao entrega a anterior', () {
+      final newest = AppcastRelease(
+        version: Version.parse('3.6.0'),
+        downloadUrl: 'https://example.com/new.exe',
+        fileSizeBytes: 1,
+        sha256: 'a',
+        publishedAt: DateTime.utc(2026, 6),
+        title: 'Version 3.6.0',
+        description: '',
+        rolloutPercentage: 0,
+      );
+      final previous = AppcastRelease(
+        version: Version.parse('3.5.0'),
+        downloadUrl: 'https://example.com/old.exe',
+        fileSizeBytes: 1,
+        sha256: 'b',
+        publishedAt: DateTime.utc(2026, 5),
+        title: 'Version 3.5.0',
+        description: '',
+      );
+
+      final decision = AutoUpdateService.evaluateRelease(
+        releases: <AppcastRelease>[newest, previous],
+        currentVersion: Version.parse('3.4.0'),
+        machineId: 'machine-A',
+      );
+
+      expect(decision.isUpdateAvailable, isFalse);
+    });
+
     test('rolloutPercentage = 0 bloqueia todos os clientes', () {
       final release = AppcastRelease(
         version: Version.parse('3.5.0'),

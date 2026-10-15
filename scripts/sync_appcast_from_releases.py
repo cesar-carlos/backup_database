@@ -283,7 +283,14 @@ def build_published_releases(repo: str, policy: AppcastPolicy) -> list[Published
             )
             continue
 
-        asset = _select_installer_asset(release)
+        try:
+            asset = _select_installer_asset(release)
+        except RuntimeError as error:
+            print(
+                f"WARNING: skipping {version}: {error}",
+                file=sys.stderr,
+            )
+            continue
         published_release = PublishedRelease(
             version=version,
             published_at=published_at_raw,

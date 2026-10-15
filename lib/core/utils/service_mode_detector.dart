@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/schedule_args.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:win32/win32.dart';
@@ -59,16 +60,27 @@ class ServiceModeDetector {
         if (result.value) {
           final sid = sessionId.value;
           LoggerService.info('[ServiceModeDetector] Session ID: $sid');
-          if (sid == _serviceSessionId) {
+          if (sid == _serviceSessionId &&
+              sessionZeroIsServiceProcess(argsForServiceFlag)) {
             _isServiceMode = true;
             LoggerService.info(
               '[ServiceModeDetector] MATCH layer-1: Session 0 → service mode',
             );
             return true;
           }
-          LoggerService.info(
-            '[ServiceModeDetector] layer-1 skip: Session $sid ≠ 0',
-          );
+          if (sid == _serviceSessionId) {
+            // Task Scheduler jobs also land in session 0. They must
+            // delegate, not take the service bootstrap (exit 77).
+            // The C++ runner still starts a headless engine for session 0.
+            LoggerService.info(
+              '[ServiceModeDetector] layer-1 skip: Session 0 with '
+              '--schedule-id is a scheduled task',
+            );
+          } else {
+            LoggerService.info(
+              '[ServiceModeDetector] layer-1 skip: Session $sid ≠ 0',
+            );
+          }
         } else {
           LoggerService.warning(
             '[ServiceModeDetector] layer-1 failed: ProcessIdToSessionId '
@@ -139,6 +151,12 @@ class ServiceModeDetector {
 
   static bool isServiceSessionIdForTest(int sessionId) =>
       sessionId == _serviceSessionId;
+
+  /// Session 0 is the Windows service unless this process was launched
+  /// with `--schedule-id`, which is a scheduled backup in session 0.
+  @visibleForTesting
+  static bool sessionZeroIsServiceProcess(List<String> args) =>
+      !ScheduleArgs.contains(args);
 
   /// Returns true if [args] contains the dedicated service execution flag.
   @visibleForTesting

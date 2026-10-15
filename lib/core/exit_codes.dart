@@ -8,9 +8,16 @@ abstract final class ScheduledBackupExitCode {
   static const int success = 0;
   static const int genericFailure = 1;
   static const int invalidScheduleId = 2;
+
+  /// The mutex owner exists, but its pipe never answered PONG.
+  /// Distinct from [genericFailure], which is a backup that already failed.
+  static const int ownerNotOnPipe = 3;
 }
 
 abstract final class ServiceModeExitCode {
+  /// SCM/NSSM stop after cleanup. `exit` ends the process; the service
+  /// runner only leaves its message loop on `WM_QUIT`, which nothing posts.
+  static const int gracefulShutdown = 0;
   static const int lockDenied = 77;
   static const int fatalBootstrapError = 1;
 

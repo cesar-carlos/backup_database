@@ -110,3 +110,39 @@ begin
   else
     Log('Warning: failed to refresh Windows icon cache (ie4uinit.exe)');
 end;
+
+procedure RemoveOneStartMenuShortcut(const ShortcutPath: String);
+begin
+  if FileExists(ShortcutPath) then
+  begin
+    if DeleteFile(ShortcutPath) then
+      Log('Removed Start Menu shortcut before recreate: ' + ShortcutPath)
+    else
+      Log('Warning: failed to remove Start Menu shortcut: ' + ShortcutPath);
+  end;
+end;
+
+procedure RemoveLegacyEnglishStartMenuShortcuts();
+begin
+  // Nomes em ingles anteriores a {cm:...}. ssInstall roda antes de [Icons],
+  // entao o Inno recria so o atalho do idioma selecionado. As variantes em
+  // portugues sao apagadas para nao sobrar o .lnk do outro idioma.
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\{#MyAppName} - Server Mode.lnk')
+  );
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\{#MyAppName} - Client Mode.lnk')
+  );
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\Uninstall {#MyAppName}.lnk')
+  );
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\{#MyAppName} - Modo servidor.lnk')
+  );
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\{#MyAppName} - Modo cliente.lnk')
+  );
+  RemoveOneStartMenuShortcut(
+    ExpandConstant('{group}\Desinstalar {#MyAppName}.lnk')
+  );
+end;
