@@ -34,13 +34,47 @@ CloseApplicationsFilter=*.exe
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+brazilianportuguese.ModePageTitle=Selecione o modo de instalação
+brazilianportuguese.ModePageSubtitle=Escolha como deseja usar o Backup Database
+brazilianportuguese.ModePageDescription=Selecione o modo que melhor atende às suas necessidades:
+brazilianportuguese.ModeServer=(Recomendado) Modo servidor — executa como servidor de backup dedicado (aceita conexões remotas)
+brazilianportuguese.ModeClient=Modo cliente — conecta a um servidor remoto e gerencia os backups à distância
+brazilianportuguese.DesktopIcon=Criar um ícone na área de trabalho
+brazilianportuguese.DesktopIconGroup=Ícones adicionais
+brazilianportuguese.StartupTask=Iniciar com o Windows
+brazilianportuguese.StartupGroup=Opções de inicialização
+brazilianportuguese.FirewallTask=Liberar a porta TCP 9527 no Firewall do Windows (clientes remotos)
+brazilianportuguese.FirewallGroup=Rede
+brazilianportuguese.LaunchApp=Iniciar {#MyAppName}
+brazilianportuguese.VcPageTitle=Verificando dependências
+brazilianportuguese.VcPageDescription=Instalando o Visual C++ Redistributable...
+brazilianportuguese.VcProgress=Instalando o Visual C++ Redistributable 2015-2022 (x64)...
+brazilianportuguese.VcWait=Aguarde...
+english.ModePageTitle=Select installation mode
+english.ModePageSubtitle=Choose how you want to use Backup Database
+english.ModePageDescription=Select the installation mode that best fits your needs:
+english.ModeServer=(Recommended) Server mode — run as a dedicated backup server (allows remote connections)
+english.ModeClient=Client mode — connect to a remote server and manage backups remotely
+english.DesktopIcon=Create a desktop icon
+english.DesktopIconGroup=Additional icons
+english.StartupTask=Start with Windows
+english.StartupGroup=Startup options
+english.FirewallTask=Allow TCP port 9527 in Windows Firewall (remote clients)
+english.FirewallGroup=Network
+english.LaunchApp=Launch {#MyAppName}
+english.VcPageTitle=Checking dependencies
+english.VcPageDescription=Installing the Visual C++ Redistributable...
+english.VcProgress=Installing the Visual C++ Redistributable 2015-2022 (x64)...
+english.VcWait=Please wait...
+
 [Tasks]
 ; Inno Setup: tasks vem checadas por default. Para desmarcar inicialmente
 ; use `Flags: unchecked`. Nao existe `Flags: checked` (foi um erro do
 ; commit ee94182 que so foi detectado no build 3.4.0).
-Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional Icons"
-Name: "startup"; Description: "Iniciar com o Windows"; GroupDescription: "Opções de Inicialização"
-Name: "openfirewall"; Description: "Liberar porta TCP 9527 no Firewall do Windows (clientes remotos)"; GroupDescription: "Rede"; Flags: unchecked; Check: IsServerMode
+Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:DesktopIconGroup}"
+Name: "startup"; Description: "{cm:StartupTask}"; GroupDescription: "{cm:StartupGroup}"
+Name: "openfirewall"; Description: "{cm:FirewallTask}"; GroupDescription: "{cm:FirewallGroup}"; Flags: unchecked; Check: IsServerMode
 
 [Dirs]
 Name: "{commonappdata}\BackupDatabase\config"
@@ -86,7 +120,7 @@ Name: "{autodesktop}\{#MyAppName} (Server)"; Filename: "{app}\{#MyAppExeName}"; 
 Name: "{autodesktop}\{#MyAppName} (Client)"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--mode=client"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; Check: IsClientMode
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchPostInstall
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchPostInstall
 
 [UninstallDelete]
 Name: "{commonappdata}\BackupDatabase\logs"; Type: filesandordirs
@@ -116,6 +150,7 @@ function ReadUpdateContextAppMode(): String; forward;
 function IsVCRedistInstalled(): Boolean; forward;
 function IsVCRedistSuccessExitCode(const ExitCode: Integer): Boolean; forward;
 procedure RemoveLegacyStartupEntries(); forward;
+procedure SaveSelectedUiLocale(); forward;
 procedure DeleteClientStartupTask(); forward;
 procedure ConfigureClientStartupTask(const AppExePath: String); forward;
 procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String); forward;
@@ -410,16 +445,31 @@ begin
   VCRedistNeeded := not IsVCRedistInstalled();
 end;
 
+procedure SaveSelectedUiLocale();
+var
+  LocalePath: String;
+  LocaleCode: String;
+begin
+  if ActiveLanguage = 'english' then
+    LocaleCode := 'en'
+  else
+    LocaleCode := 'pt';
+  LocalePath := ExpandConstant('{commonappdata}\BackupDatabase\config\ui_locale');
+  ForceDirectories(ExpandConstant('{commonappdata}\BackupDatabase\config'));
+  if not SaveStringToFile(LocalePath, LocaleCode, False) then
+    Log('Warning: failed to save ui_locale');
+end;
+
 procedure InitializeWizard();
 begin
   ModePage := CreateInputOptionPage(wpLicense,
-    'Select Installation Mode',
-    'Choose how you want to use Backup Database',
-    'Select the installation mode that best fits your needs:',
+    CustomMessage('ModePageTitle'),
+    CustomMessage('ModePageSubtitle'),
+    CustomMessage('ModePageDescription'),
     True, False);
 
-  ModePage.Add('(Recommended) Server Mode - Run as a dedicated backup server (allows remote connections)');
-  ModePage.Add('Client Mode - Connect to a remote server and manage backups remotely');
+  ModePage.Add(CustomMessage('ModeServer'));
+  ModePage.Add(CustomMessage('ModeClient'));
 
   SelectedMode := ResolveSelectedMode();
   if SelectedMode = 'client' then
@@ -429,7 +479,9 @@ begin
 
   if VCRedistNeeded then
   begin
-    VCRedistPage := CreateOutputProgressPage('Checking Dependencies', 'Installing Visual C++ Redistributables...');
+    VCRedistPage := CreateOutputProgressPage(
+      CustomMessage('VcPageTitle'),
+      CustomMessage('VcPageDescription'));
   end;
 end;
 
@@ -509,7 +561,7 @@ begin
 
   if VCRedistNeeded then
   begin
-    VCRedistPage.SetText('Instalando Visual C++ Redistributables 2015-2022 (x64)...', 'Aguarde...');
+    VCRedistPage.SetText(CustomMessage('VcProgress'), CustomMessage('VcWait'));
     VCRedistPage.SetProgress(0, 0);
     VCRedistPage.Show;
     
@@ -636,6 +688,8 @@ begin
     finally
       ModeFile.Free;
     end;
+
+    SaveSelectedUiLocale();
 
     RemoveLegacyStartupEntries();
 

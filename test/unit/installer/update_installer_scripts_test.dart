@@ -257,6 +257,15 @@ void main() {
           contains(r'compiler:Languages\BrazilianPortuguese.isl'),
         );
         expect(setup, contains('compiler:Default.isl'));
+        expect(setup, contains("CustomMessage('ModePageTitle')"));
+        expect(setup, contains('{cm:DesktopIcon}'));
+        expect(setup, contains('{cm:LaunchApp}'));
+        expect(setup, isNot(contains("'Select Installation Mode'")));
+        expect(setup, contains('procedure SaveSelectedUiLocale'));
+        expect(
+          setup,
+          contains(r'{commonappdata}\BackupDatabase\config\ui_locale'),
+        );
       },
     );
 

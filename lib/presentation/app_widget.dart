@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/app_mode_policy.dart';
+import 'package:backup_database/core/l10n/app_ui_locale.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/routes/app_router.dart';
@@ -53,6 +54,8 @@ class BackupDatabaseApp extends StatelessWidget {
           final accent = themeProvider.fluentAccentColor;
           return FluentApp.router(
             title: getWindowTitleForMode(currentAppMode),
+            locale: resolveInstalledAppUiLocale(),
+            supportedLocales: appSupportedUiLocales,
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightFluentTheme.copyWith(accentColor: accent),
             darkTheme: AppTheme.darkFluentTheme.copyWith(accentColor: accent),
