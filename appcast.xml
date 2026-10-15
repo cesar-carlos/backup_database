@@ -5,6 +5,36 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.3</title>
+      <pubDate>Thu, 15 Oct 2026 18:39:27 +0000</pubDate>
+      <description>## Highlights
+
+Corrige o controle de instancia unica, o auto-update e o instalador. O servico encerra de verdade ao parar, o backup agendado espera o pipe da instancia que ja esta aberta, e a atualizacao pelo servico nao corta um backup em andamento.
+
+## Correcoes
+
+- Fechar ou minimizar para a bandeja passa a valer antes da janela aparecer
+- Atualizar agora na interface abre o UAC quando o Windows exige administrador
+- O assistente respeita portugues ou ingles, e o update silencioso nao regrava o idioma ja escolhido
+- A senha da conta do servico nao vai mais na linha de comando
+- O socket aceita um desafio de uso unico e ainda aceita o hash antigo dos clientes ja instalados
+
+## Instalacao
+
+Get-FileHash BackupDatabase-Setup-3.6.3.exe -Algorithm SHA256
+# deve coincidir com BackupDatabase-Setup-3.6.3.exe.sha256
+
+SHA-256: 529f91fc16e7f10315d5fa31548b2a4577bfa504ffd699a3b454af719b8da498
+
+Instalacao silenciosa (/SILENT ou /VERYSILENT). Auto-update entrega esta versao depois do workflow update-appcast reconstruir o feed.
+
+## Artefatos
+
+- BackupDatabase-Setup-3.6.3.exe (36.37 MB)
+- BackupDatabase-Setup-3.6.3.exe.sha256</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.3/BackupDatabase-Setup-3.6.3.exe" sparkle:version="3.6.3" sparkle:os="windows" length="38137211" type="application/octet-stream" sha256="529f91fc16e7f10315d5fa31548b2a4577bfa504ffd699a3b454af719b8da498" />
+    </item>
+    <item>
       <title>Version 3.6.2</title>
       <pubDate>Thu, 15 Oct 2026 12:23:18 +0000</pubDate>
       <description>## Highlights
