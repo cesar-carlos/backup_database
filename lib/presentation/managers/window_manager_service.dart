@@ -74,15 +74,26 @@ class WindowManagerService with WindowListener {
     // Garantir que o tamanho mínimo seja aplicado após a inicialização
     await windowManager.setMinimumSize(minimumSize);
 
-    // Configurar preventClose baseado na configuração closeToTray
-    await _updatePreventClose(_closeToTray);
+    // O X do Windows decide no WM_CLOSE, antes do callback Dart.
+    // preventClose precisa estar ligado antes da janela aparecer.
+    await _updatePreventClose(_keepsProcessOnClose);
 
     windowManager.addListener(this);
     _isInitialized = true;
 
     LoggerService.info(
-      'WindowManager inicializado - Tamanho mínimo: ${minimumSize.width}x${minimumSize.height}, CloseToTray: $_closeToTray',
+      'WindowManager inicializado - Tamanho mínimo: '
+      '${minimumSize.width}x${minimumSize.height}, '
+      'MinimizeToTray: $_minimizeToTray, CloseToTray: $_closeToTray',
     );
+  }
+
+  void prepareTrayCloseBehavior({
+    required bool minimizeToTray,
+    required bool closeToTray,
+  }) {
+    _minimizeToTray = minimizeToTray;
+    _closeToTray = closeToTray;
   }
 
   void setCallbacks({
@@ -95,36 +106,31 @@ class WindowManagerService with WindowListener {
     _onFocus = onFocus;
   }
 
-  void setMinimizeToTray(bool value) {
+  bool get _keepsProcessOnClose => keepsProcessWhenWindowCloses(
+    minimizeToTray: _minimizeToTray,
+    closeToTray: _closeToTray,
+  );
+
+  Future<void> setMinimizeToTray(bool value) async {
     _minimizeToTray = value;
     LoggerService.debug('Minimizar para bandeja: $value');
+    await _updatePreventClose(_keepsProcessOnClose);
   }
 
-  void setCloseToTray(bool value) {
+  Future<void> setCloseToTray(bool value) async {
     _closeToTray = value;
     LoggerService.debug('Fechar para bandeja: $value');
-
-    // Configurar preventClose baseado na configuração (assíncrono em background)
-    unawaited(
-      _updatePreventClose(value).catchError((e) {
-        LoggerService.warning('Erro ao configurar preventClose: $e');
-      }),
-    );
+    await _updatePreventClose(_keepsProcessOnClose);
   }
 
-  Future<void> _updatePreventClose(bool closeToTray) async {
+  Future<void> _updatePreventClose(bool keepProcess) async {
     try {
-      if (closeToTray) {
-        // Quando closeToTray é true, prevenir fechamento padrão
-        await windowManager.setPreventClose(true);
-        LoggerService.debug('PreventClose ativado - fechar irá para bandeja');
-      } else {
-        // Quando closeToTray é false, permitir fechamento normal
-        await windowManager.setPreventClose(false);
-        LoggerService.debug(
-          'PreventClose desativado - fechar irá encerrar aplicativo',
-        );
-      }
+      await windowManager.setPreventClose(keepProcess);
+      LoggerService.debug(
+        keepProcess
+            ? 'PreventClose ativado - fechar irá para bandeja'
+            : 'PreventClose desativado - fechar irá encerrar aplicativo',
+      );
     } on Object catch (e) {
       LoggerService.warning('Erro ao configurar preventClose: $e');
     }
@@ -270,14 +276,29 @@ class WindowManagerService with WindowListener {
   @override
   Future<void> onWindowClose() async {
     LoggerService.info(
-      'Tentativa de fechar janela - closeToTray: $_closeToTray',
+      'Tentativa de fechar janela - minimizeToTray: $_minimizeToTray, '
+      'closeToTray: $_closeToTray',
     );
 
-    // Verificar se o fechamento está sendo prevenido (ex: durante OAuth)
+    if (_keepsProcessOnClose) {
+      try {
+        await windowManager.setPreventClose(true);
+        await hide();
+        await windowManager.setSkipTaskbar(true);
+        LoggerService.info('Janela ocultada para a bandeja');
+      } on Object catch (e, stackTrace) {
+        LoggerService.error(
+          'Erro ao ocultar janela para bandeja',
+          e,
+          stackTrace,
+        );
+      }
+      return;
+    }
+
     try {
       final isPreventClose = await windowManager.isPreventClose();
-      if (isPreventClose && !_closeToTray) {
-        // Se preventClose está ativo por outro motivo (ex: OAuth) e não é closeToTray, ignorar
+      if (isPreventClose) {
         LoggerService.debug(
           'Fechamento prevenido por outro motivo - ignorando evento',
         );
@@ -287,40 +308,17 @@ class WindowManagerService with WindowListener {
       LoggerService.warning('Erro ao verificar preventClose: $e');
     }
 
-    if (_closeToTray) {
-      // Prevenir o fechamento padrão e ocultar para a bandeja
-      try {
-        // Garantir que preventClose está ativo
-        await windowManager.setPreventClose(true);
-        // Ocultar a janela
-        await hide();
-        // Ocultar da taskbar
-        await windowManager.setSkipTaskbar(true);
-        LoggerService.info(
-          '✅ Janela ocultada para a bandeja (fechamento prevenido)',
-        );
-      } on Object catch (e) {
-        LoggerService.error('Erro ao ocultar janela para bandeja', e);
-        // Se falhar, tentar apenas ocultar
-        try {
-          await hide();
-          await windowManager.setSkipTaskbar(true);
-        } on Object catch (e2) {
-          LoggerService.error('Erro crítico ao ocultar janela', e2);
-        }
-      }
-    } else {
-      // Permitir fechamento normal
-      try {
-        // Garantir que preventClose está desativado
-        await windowManager.setPreventClose(false);
-        LoggerService.info('Fechamento permitido - encerrando aplicativo');
-        _onClose?.call();
-      } on Object catch (e) {
-        LoggerService.error('Erro ao configurar preventClose para fechar', e);
-        // Mesmo com erro, tentar fechar
-        _onClose?.call();
-      }
+    try {
+      await windowManager.setPreventClose(false);
+      LoggerService.info('Fechamento permitido - encerrando aplicativo');
+      _onClose?.call();
+    } on Object catch (e, stackTrace) {
+      LoggerService.error(
+        'Erro ao configurar preventClose para fechar',
+        e,
+        stackTrace,
+      );
+      _onClose?.call();
     }
   }
 
@@ -359,4 +357,14 @@ class WindowManagerService with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
   }
+}
+
+/// O X encerra o processo só quando as duas opções da bandeja estão desligadas.
+/// "Minimizar para bandeja" também intercepta o fechamento: o plugin nativo
+/// destrói a janela no WM_CLOSE se [preventClose] ainda estiver desligado.
+bool keepsProcessWhenWindowCloses({
+  required bool minimizeToTray,
+  required bool closeToTray,
+}) {
+  return minimizeToTray || closeToTray;
 }

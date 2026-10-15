@@ -47,8 +47,8 @@ class SystemTraySection extends StatelessWidget {
             ),
             description: appLocaleString(
               context,
-              'Mantem o app em segundo plano ao minimizar a janela.',
-              'Keeps the app running in the background when the window is minimized.',
+              'Mantem o app em segundo plano ao minimizar ou fechar a janela.',
+              'Keeps the app running in the background when the window is minimized or closed.',
             ),
             value: systemSettings.minimizeToTray,
             onChanged: features.isTrayEnabled

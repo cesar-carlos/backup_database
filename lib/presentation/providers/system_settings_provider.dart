@@ -76,8 +76,8 @@ class SystemSettingsProvider extends ChangeNotifier {
 
       _isInitialized = true;
 
-      _windowManager.setMinimizeToTray(_minimizeToTray);
-      _windowManager.setCloseToTray(_closeToTray);
+      await _windowManager.setMinimizeToTray(_minimizeToTray);
+      await _windowManager.setCloseToTray(_closeToTray);
 
       LoggerService.info(
         'Configurações aplicadas - Minimizar para bandeja: $_minimizeToTray, Fechar para bandeja: $_closeToTray',
@@ -100,7 +100,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       }
     }
     _minimizeToTray = value;
-    _windowManager.setMinimizeToTray(value);
+    await _windowManager.setMinimizeToTray(value);
     notifyListeners();
     LoggerService.debug('Minimizar para bandeja alterado: $value');
 
@@ -120,7 +120,7 @@ class SystemSettingsProvider extends ChangeNotifier {
       }
     }
     _closeToTray = value;
-    _windowManager.setCloseToTray(value);
+    await _windowManager.setCloseToTray(value);
     notifyListeners();
     LoggerService.debug('Fechar para bandeja alterado: $value');
 

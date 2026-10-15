@@ -184,6 +184,7 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
       return false;
     }
 
+    final wasPreventClose = await _readWindowPreventClose();
     await _setWindowPreventClose(true);
     try {
       final ok = await runAsync<bool>(
@@ -203,7 +204,9 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
       );
       return ok ?? false;
     } finally {
-      await _setWindowPreventClose(false);
+      if (wasPreventClose != null) {
+        await _setWindowPreventClose(wasPreventClose);
+      }
     }
   }
 
@@ -281,6 +284,15 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   /// Set window-level `preventClose` defensivo durante OAuth flow.
   /// Best-effort — falhas viram debug log (`window_manager` pode não
   /// estar inicializado em ambientes de teste/headless).
+  Future<bool?> _readWindowPreventClose() async {
+    try {
+      return await windowManager.isPreventClose();
+    } on Object catch (e) {
+      LoggerService.debug('Window manager isPreventClose: $e');
+      return null;
+    }
+  }
+
   Future<void> _setWindowPreventClose(bool enable) async {
     try {
       await windowManager.setPreventClose(enable);

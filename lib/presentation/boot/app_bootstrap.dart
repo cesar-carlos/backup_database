@@ -617,12 +617,32 @@ class AppBootstrap {
     );
   }
 
+  static Future<void> _prepareTrayCloseBehavior({
+    required FeatureAvailabilityService features,
+    required WindowManagerService windowManager,
+  }) async {
+    if (!features.isTrayEnabled) {
+      return;
+    }
+    final preferences = service_locator.getIt<IUserPreferencesRepository>();
+    final minimizeToTray = await preferences.getMinimizeToTray();
+    final closeToTray = await preferences.getCloseToTray();
+    windowManager.prepareTrayCloseBehavior(
+      minimizeToTray: minimizeToTray,
+      closeToTray: closeToTray,
+    );
+  }
+
   static Future<void> _defaultInitializeUiServices({
     required LaunchConfig launchConfig,
     required BootstrapConfig bootstrapConfig,
   }) async {
     final features = service_locator.getIt<FeatureAvailabilityService>();
     final windowManager = WindowManagerService();
+    await _prepareTrayCloseBehavior(
+      features: features,
+      windowManager: windowManager,
+    );
 
     await _buildWindowManagerStartupTask(
       features: features,
