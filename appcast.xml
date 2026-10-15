@@ -5,6 +5,36 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.2</title>
+      <pubDate>Thu, 15 Oct 2026 12:23:18 +0000</pubDate>
+      <description>## Highlights
+
+O clique no X deixa o aplicativo na bandeja quando Minimizar para bandeja esta ligado. Antes o Windows destruia a janela e encerrava o processo.
+
+## Correcao
+
+- `preventClose` entra em vigor antes da janela aparecer
+- Minimizar para bandeja tambem intercepta o fechamento
+- O login OAuth restaura o `preventClose` anterior
+
+## Instalacao
+
+```powershell
+Get-FileHash BackupDatabase-Setup-3.6.2.exe -Algorithm SHA256
+# deve coincidir com BackupDatabase-Setup-3.6.2.exe.sha256
+```
+
+SHA-256: `a531885599c997240c3b243bfd681e8f95b92a239f2f5bff219c87d7628776c5`
+
+Instalacao silenciosa (`/SILENT` ou `/VERYSILENT`). Auto-update entrega esta versao depois do workflow `update-appcast` reconstruir o feed.
+
+## Artefatos
+
+- `BackupDatabase-Setup-3.6.2.exe` (36.35 MB)
+- `BackupDatabase-Setup-3.6.2.exe.sha256`</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.2/BackupDatabase-Setup-3.6.2.exe" sparkle:version="3.6.2" sparkle:os="windows" length="38114092" type="application/octet-stream" sha256="a531885599c997240c3b243bfd681e8f95b92a239f2f5bff219c87d7628776c5" />
+    </item>
+    <item>
       <title>Version 3.6.1</title>
       <pubDate>Mon, 31 Aug 2026 11:34:49 +0000</pubDate>
       <description>## Highlights
