@@ -15,8 +15,8 @@ const List<Locale> appSupportedUiLocales = <Locale>[
 const String _defaultProgramData = r'C:\ProgramData';
 
 Locale resolveAppUiLocale({
-  String? installerCode,
   required String platformLocaleName,
+  String? installerCode,
 }) {
   return localeFromUiCode(installerCode) ??
       localeFromUiCode(platformLocaleName) ??
@@ -27,7 +27,7 @@ Locale? localeFromUiCode(String? raw) {
   if (raw == null) {
     return null;
   }
-  final String code = raw.trim().toLowerCase().replaceAll('_', '-');
+  final code = raw.trim().toLowerCase().replaceAll('_', '-');
   if (code.isEmpty) {
     return null;
   }
@@ -41,18 +41,18 @@ Locale? localeFromUiCode(String? raw) {
 }
 
 String installedUiLocaleFilePath({String? programData}) {
-  final String root =
+  final root =
       programData ?? Platform.environment['ProgramData'] ?? _defaultProgramData;
   return '$root\\BackupDatabase\\config\\ui_locale';
 }
 
 String? readInstalledUiLocaleCode({String? path}) {
-  final File file = File(path ?? installedUiLocaleFilePath());
+  final file = File(path ?? installedUiLocaleFilePath());
   try {
     if (!file.existsSync()) {
       return null;
     }
-    final String code = file.readAsStringSync().trim();
+    final code = file.readAsStringSync().trim();
     if (code.isEmpty) {
       return null;
     }

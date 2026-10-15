@@ -172,7 +172,7 @@ function Remove-ServiceAfterAccountFailure {
 }
 
 function New-LockedServicePasswordFile {
-    param([string]$Password)
+    param([SecureString]$Password)
     $stamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
     $suffix = [guid]::NewGuid().ToString('N').Substring(0, 12)
     $path = Join-Path ([System.IO.Path]::GetTempPath()) "backup_db_svc_pwd_${stamp}_$suffix.txt"
@@ -186,11 +186,18 @@ function New-LockedServicePasswordFile {
         Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         return $null
     }
+    $secretPtr = [IntPtr]::Zero
     try {
-        [System.IO.File]::WriteAllText($path, $Password)
+        $secretPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+        $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($secretPtr)
+        [System.IO.File]::WriteAllText($path, $plain)
     } catch {
         Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
         return $null
+    } finally {
+        if ($secretPtr -ne [IntPtr]::Zero) {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($secretPtr)
+        }
     }
     return $path
 }
@@ -272,11 +279,7 @@ public static class BackupDbServiceConfig {
 # Configurar usuário do serviço. Senha nunca vai para o argv do nssm:
 # arquivo temporário com ACL e ChangeServiceConfigW.
 if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) {
-    $credential = New-Object System.Management.Automation.PSCredential($ServiceUser, $ServicePassword)
-    $plainPassword = $credential.GetNetworkCredential().Password
-
-    if ([string]::IsNullOrEmpty($plainPassword)) {
-        $plainPassword = $null
+    if ($ServicePassword.Length -eq 0) {
         Write-Host "Senha vazia detectada. Usando LocalSystem..." -ForegroundColor Yellow
         & $NssmPath set $ServiceName ObjectName LocalSystem
     } else {
@@ -284,15 +287,13 @@ if (-not [string]::IsNullOrEmpty($ServiceUser) -and $null -ne $ServicePassword) 
         $secretFile = $null
         $accountConfigured = $false
         try {
-            $secretFile = New-LockedServicePasswordFile -Password $plainPassword
-            $plainPassword = $null
+            $secretFile = New-LockedServicePasswordFile -Password $ServicePassword
             if ([string]::IsNullOrEmpty($secretFile)) {
                 $accountConfigured = $false
             } else {
                 $accountConfigured = Set-ServiceAccountFromFile -User $ServiceUser -SecretFile $secretFile
             }
         } finally {
-            $plainPassword = $null
             if (-not [string]::IsNullOrEmpty($secretFile) -and (Test-Path -LiteralPath $secretFile)) {
                 Remove-Item -LiteralPath $secretFile -Force -ErrorAction SilentlyContinue
             }

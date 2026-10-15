@@ -63,7 +63,7 @@ class WindowsEventLogService implements IWindowsServiceEventLogger {
 
   // Antes era `bool isEnabled = true;` — flag pública mutável era um
   // foot-gun: qualquer caller podia setar `eventLog.isEnabled = false`
-  // e silenciosamente desabilitar TODO o event logging. Agora é
+  // e silenciosamente desabilitar o event logging inteiro. Agora é
   // private + setter explícito que loga a transição (S8 da auditoria).
   bool _isEnabled = true;
   bool _isAvailable = false;

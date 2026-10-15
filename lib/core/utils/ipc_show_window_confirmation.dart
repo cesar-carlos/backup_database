@@ -7,10 +7,7 @@ class IpcShowWindowConfirmation {
   static int _epoch = 0;
   static int _shownEpoch = -1;
 
-  static int beginAttempt() {
-    _epoch++;
-    return _epoch;
-  }
+  static int beginAttempt() => ++_epoch;
 
   static void markShown() {
     _shownEpoch = _epoch;

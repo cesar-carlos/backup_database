@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/app_mode_policy.dart';
-import 'package:backup_database/core/l10n/app_ui_locale.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/core/l10n/app_ui_locale.dart';
 import 'package:backup_database/core/routes/app_router.dart';
 import 'package:backup_database/core/theme/app_theme.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';

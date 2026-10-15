@@ -526,7 +526,6 @@ void main() {
           ),
           messageBox: messageBox,
           getCurrentUsername: () => 'user_a',
-          maxRetryAttempts: 3,
         );
 
         await checker.checkAndHandleSecondInstance();
@@ -626,10 +625,9 @@ class _FakeSingleInstanceIpcClient implements ISingleInstanceIpcClient {
     this.canRunSchedule = false,
     this.delegationResult,
     List<bool>? notifyResults,
-    List<SingleInstanceShowWindowStatus>? notifyStatuses,
+    this._notifyStatuses,
     this._ownerInfoResults,
-  }) : _notifyResults = notifyResults ?? <bool>[true],
-       _notifyStatuses = notifyStatuses;
+  }) : _notifyResults = notifyResults ?? <bool>[true];
 
   final String? existingUser;
   final String? existingRole;

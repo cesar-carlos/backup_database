@@ -1,8 +1,8 @@
 import 'package:backup_database/core/config/app_mode.dart';
-import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/presentation/boot/boot.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';

@@ -373,7 +373,7 @@ class WindowManagerService with WindowListener {
 
 /// O X encerra o processo só quando as duas opções da bandeja estão desligadas.
 /// "Minimizar para bandeja" também intercepta o fechamento: o plugin nativo
-/// destrói a janela no WM_CLOSE se [preventClose] ainda estiver desligado.
+/// destrói a janela no WM_CLOSE se `preventClose` ainda estiver desligado.
 bool keepsProcessWhenWindowCloses({
   required bool minimizeToTray,
   required bool closeToTray,

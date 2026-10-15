@@ -1,13 +1,12 @@
 import 'dart:io';
 
 import 'package:backup_database/core/l10n/app_ui_locale.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('resolveAppUiLocale', () {
     test('should use Portuguese when the installer chose it', () {
-      final Locale locale = resolveAppUiLocale(
+      final locale = resolveAppUiLocale(
         installerCode: 'pt',
         platformLocaleName: 'en_US',
       );
@@ -16,7 +15,7 @@ void main() {
     });
 
     test('should use English when the installer chose it', () {
-      final Locale locale = resolveAppUiLocale(
+      final locale = resolveAppUiLocale(
         installerCode: 'english',
         platformLocaleName: 'pt_BR',
       );
@@ -25,7 +24,7 @@ void main() {
     });
 
     test('should follow a Portuguese platform when nothing was saved', () {
-      final Locale locale = resolveAppUiLocale(
+      final locale = resolveAppUiLocale(
         platformLocaleName: 'pt-BR',
       );
 
@@ -33,7 +32,7 @@ void main() {
     });
 
     test('should fall back to English for an unknown locale', () {
-      final Locale locale = resolveAppUiLocale(
+      final locale = resolveAppUiLocale(
         installerCode: 'fr',
         platformLocaleName: 'de_DE',
       );
@@ -44,11 +43,11 @@ void main() {
 
   group('readInstalledUiLocaleCode', () {
     test('should read the code saved by the installer', () {
-      final Directory dir = Directory.systemTemp.createTempSync(
+      final dir = Directory.systemTemp.createTempSync(
         'ui_locale_test_',
       );
       addTearDown(() => dir.deleteSync(recursive: true));
-      final File file = File('${dir.path}\\ui_locale');
+      final file = File('${dir.path}\\ui_locale');
       file.writeAsStringSync('pt\n');
 
       expect(readInstalledUiLocaleCode(path: file.path), 'pt');

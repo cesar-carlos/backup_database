@@ -1077,8 +1077,8 @@ class AutoUpdateService {
         .join(',');
     final command =
         "\$p = Start-Process -FilePath '$escapedExe' "
-        "-ArgumentList $argumentList -Verb RunAs -PassThru "
-        '-WindowStyle Hidden; Write-Output \$p.Id';
+        '-ArgumentList $argumentList -Verb RunAs -PassThru '
+        r'-WindowStyle Hidden; Write-Output $p.Id';
     final result = await Process.run('powershell.exe', <String>[
       '-NoProfile',
       '-NonInteractive',

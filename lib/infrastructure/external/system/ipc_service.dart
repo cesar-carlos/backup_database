@@ -146,7 +146,7 @@ class IpcService implements IIpcService {
 
     final epoch = IpcShowWindowConfirmation.beginAttempt();
     try {
-      final Object? outcome = await callback();
+      final outcome = await callback();
       if (outcome == false) {
         return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
       }
