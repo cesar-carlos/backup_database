@@ -48,6 +48,16 @@ void main() {
       });
       controlServer.listen((peer) {
         peers.add(peer);
+        unawaited(
+          peer.done.then<void>(
+            (_) {},
+            onError: (Object error) {
+              if (error is! SocketException) {
+                Error.throwWithStackTrace(error, StackTrace.current);
+              }
+            },
+          ),
+        );
         peer.write('220 Ready\r\n');
         peer
             .cast<List<int>>()
@@ -133,6 +143,16 @@ void main() {
         final pending = Completer<void>();
         server.listen((socket) {
           peer = socket;
+          unawaited(
+            socket.done.then<void>(
+              (_) {},
+              onError: (Object error) {
+                if (error is! SocketException) {
+                  Error.throwWithStackTrace(error, StackTrace.current);
+                }
+              },
+            ),
+          );
           socket.write('220 Ready\r\n');
           socket
               .cast<List<int>>()

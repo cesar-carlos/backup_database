@@ -41,6 +41,14 @@ jobs:
             echo "SINGLE_INSTANCE_ENABLED=true" >> .env
           fi
 
+      - name: Check cross-platform socket and service regressions
+        run: >-
+          flutter test
+          test/unit/infrastructure/external/destinations/ftp_socket_interruption_test.dart
+          test/unit/infrastructure/external/system/single_instance_service_test.dart
+          test/unit/infrastructure/external/system/nssm_config_plan_test.dart
+          --reporter expanded
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos
 
