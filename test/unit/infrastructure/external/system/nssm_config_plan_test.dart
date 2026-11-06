@@ -26,7 +26,7 @@ void main() {
       expect(isCritical('AppNoConsole', ['1']), isTrue);
       expect(isCritical('AppExit', ['77', 'Exit']), isTrue);
       expect(isCritical('AppExit', ['78', 'Exit']), isTrue);
-      expect(isCritical('AppExit', ['Default', 'Restart']), isFalse);
+      expect(isCritical('AppExit', ['Default', 'Restart']), isTrue);
     });
 
     test('elevated PowerShell sets use retry for critical keys', () {

@@ -24,6 +24,26 @@ void main() {
       final output = File('${temp.path}/copy');
       dataServer.listen((socket) {
         peers.add(socket);
+        // Abort deliberately resets the peer connection on Linux. Observe both
+        // directions of the fake server socket so that reset is not unhandled.
+        socket.listen(
+          (_) {},
+          onError: (Object error) {
+            if (error is! SocketException) {
+              Error.throwWithStackTrace(error, StackTrace.current);
+            }
+          },
+        );
+        unawaited(
+          socket.done.then<void>(
+            (_) {},
+            onError: (Object error) {
+              if (error is! SocketException) {
+                Error.throwWithStackTrace(error, StackTrace.current);
+              }
+            },
+          ),
+        );
         dataReady.complete(socket);
       });
       controlServer.listen((peer) {
@@ -33,37 +53,44 @@ void main() {
             .cast<List<int>>()
             .transform(utf8.decoder)
             .transform(const LineSplitter())
-            .listen((cmd) async {
-              commands.add(cmd);
-              if (cmd.startsWith('USER')) peer.write('230 OK\r\n');
-              if (cmd.startsWith('SIZE')) peer.write('213 4\r\n');
-              if (cmd == 'PASV') {
-                peer.write(
-                  '227 (127,0,0,1,${dataServer.port ~/ 256},${dataServer.port % 256})\r\n',
-                );
-              }
-              if (cmd.startsWith('RETR')) {
-                peer.write('150 Opening\r\n');
-                final data = await dataReady.future;
-                retr.complete();
-                if (mode == 'truncated') {
-                  data.add([1, 2]);
-                  await data.close();
-                  peer.write('226 Complete\r\n');
-                } else if (mode == 'slow') {
-                  for (var i = 0; i < 4; i++) {
-                    data.add([i]);
-                    await data.flush();
-                    await Future<void>.delayed(
-                      const Duration(milliseconds: 400),
-                    );
-                  }
-                  await data.close();
-                  peer.write('226 Complete\r\n');
+            .listen(
+              (cmd) async {
+                commands.add(cmd);
+                if (cmd.startsWith('USER')) peer.write('230 OK\r\n');
+                if (cmd.startsWith('SIZE')) peer.write('213 4\r\n');
+                if (cmd == 'PASV') {
+                  peer.write(
+                    '227 (127,0,0,1,${dataServer.port ~/ 256},${dataServer.port % 256})\r\n',
+                  );
                 }
-              }
-              if (cmd == 'QUIT') peer.write('221 Bye\r\n');
-            });
+                if (cmd.startsWith('RETR')) {
+                  peer.write('150 Opening\r\n');
+                  final data = await dataReady.future;
+                  retr.complete();
+                  if (mode == 'truncated') {
+                    data.add([1, 2]);
+                    await data.close();
+                    peer.write('226 Complete\r\n');
+                  } else if (mode == 'slow') {
+                    for (var i = 0; i < 4; i++) {
+                      data.add([i]);
+                      await data.flush();
+                      await Future<void>.delayed(
+                        const Duration(milliseconds: 400),
+                      );
+                    }
+                    await data.close();
+                    peer.write('226 Complete\r\n');
+                  }
+                }
+                if (cmd == 'QUIT') peer.write('221 Bye\r\n');
+              },
+              onError: (Object error) {
+                if (error is! SocketException) {
+                  Error.throwWithStackTrace(error, StackTrace.current);
+                }
+              },
+            );
       });
       addTearDown(() async {
         for (final peer in peers) {
@@ -111,10 +138,17 @@ void main() {
               .cast<List<int>>()
               .transform(utf8.decoder)
               .transform(const LineSplitter())
-              .listen((cmd) {
-                if (cmd.startsWith('USER')) socket.write('230 OK\r\n');
-                if (cmd == 'NOOP') pending.complete();
-              });
+              .listen(
+                (cmd) {
+                  if (cmd.startsWith('USER')) socket.write('230 OK\r\n');
+                  if (cmd == 'NOOP') pending.complete();
+                },
+                onError: (Object error) {
+                  if (error is! SocketException) {
+                    Error.throwWithStackTrace(error, StackTrace.current);
+                  }
+                },
+              );
         });
         try {
           final ftp = FTPConnect('127.0.0.1', port: server.port, timeout: 1);

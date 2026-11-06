@@ -22,7 +22,10 @@ on:
 
 jobs:
   build-installer:
-    runs-on: self-hosted
+    runs-on: windows-2022
+    timeout-minutes: 45
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -35,6 +38,11 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Install Flutter dependencies
         run: flutter pub get
@@ -60,9 +68,16 @@ jobs:
           )
           $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $found) {
-            throw "Inno Setup 6 nao encontrado. Instale antes de rodar este workflow."
+            choco install innosetup --no-progress -y
+            if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Inno Setup" }
+            $found = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if (-not $found) { throw "Inno Setup 6 nao encontrado apos instalacao" }
           }
           Write-Host "OK: $found"
+
+      - name: Test service migration and rollback on Windows
+        shell: pwsh
+        run: flutter test test/unit/installer/winsw_migration_test.dart test/unit/installer/rollback_update_test.dart
 
       - name: Run build_installer.py end-to-end
         shell: pwsh

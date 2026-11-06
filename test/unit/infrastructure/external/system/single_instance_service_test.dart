@@ -12,6 +12,37 @@ import 'package:win32/win32.dart';
 
 class _FailingIpc extends Mock implements IpcService {}
 
+// Supply every native adapter, including APIs a scenario does not call.
+// Resolving a production default may load kernel32 even before the first call.
+SingleInstanceService createService({
+  bool isDebugMode = true,
+  int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
+  int Function(int, int, Pointer<Utf16>)? openMutex,
+  void Function(int)? setLastError,
+  int Function()? getLastError,
+  int Function(int)? closeHandle,
+  bool Function()? isWindowsPlatform,
+  SingleInstanceLockFallbackMode Function()? lockFallbackModeProvider,
+  SecurityAttributesProvider? securityAttributesProvider,
+  IpcService? ipcService,
+  Future<bool> Function()? ipcServerProbe,
+}) => SingleInstanceService.forTest(
+  isDebugMode: isDebugMode,
+  createMutex:
+      createMutex ?? (_, _, _) => throw StateError('Unexpected CreateMutex'),
+  openMutex: openMutex ?? (_, _, _) => throw StateError('Unexpected OpenMutex'),
+  setLastError:
+      setLastError ?? (_) => throw StateError('Unexpected SetLastError'),
+  getLastError:
+      getLastError ?? () => throw StateError('Unexpected GetLastError'),
+  closeHandle: closeHandle ?? (_) => throw StateError('Unexpected CloseHandle'),
+  isWindowsPlatform: isWindowsPlatform,
+  lockFallbackModeProvider: lockFallbackModeProvider,
+  securityAttributesProvider: securityAttributesProvider,
+  ipcService: ipcService,
+  ipcServerProbe: ipcServerProbe,
+);
+
 void main() {
   test(
     'IPC stop failure still closes mutex and permits reacquisition',
@@ -20,7 +51,7 @@ void main() {
       when(ipc.stop).thenThrow(StateError('IPC stop failed'));
       var nextHandle = 100;
       final closed = <int>[];
-      final service = SingleInstanceService.forTest(
+      final service = createService(
         createMutex: (_, _, _) => nextHandle++,
         setLastError: (_) {},
         getLastError: () => 0,
@@ -46,7 +77,7 @@ void main() {
         'release denies mutex failure despite explicit fail_open (throws=$throws)',
         () async {
           var probes = 0;
-          final service = SingleInstanceService.forTest(
+          final service = createService(
             isDebugMode: false,
             createMutex: (_, _, _) {
               if (throws) throw StateError('mutex unavailable');
@@ -79,7 +110,7 @@ void main() {
     test(
       'should return false when mutex creation fails and fallback is fail_safe',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 0,
           setLastError: (_) {},
           getLastError: () => 5,
@@ -102,7 +133,7 @@ void main() {
     test(
       'should return true when mutex creation fails and fallback is fail_open',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 0,
           setLastError: (_) {},
           getLastError: () => 5,
@@ -122,7 +153,7 @@ void main() {
       'should return false and close handle when mutex already exists',
       () async {
         var closeHandleCallCount = 0;
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 123,
           setLastError: (_) {},
           getLastError: () => ERROR_ALREADY_EXISTS,
@@ -148,7 +179,7 @@ void main() {
     test(
       'should return false on exception when fallback is fail_safe',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => throw StateError('mutex_error'),
           setLastError: (_) {},
           getLastError: () => 0,
@@ -171,7 +202,7 @@ void main() {
     test(
       'should return true on exception when fallback is fail_open',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => throw StateError('mutex_error'),
           setLastError: (_) {},
           getLastError: () => 0,
@@ -192,7 +223,7 @@ void main() {
       'should return false when service mode and CreateMutex fails even if '
       'provider is fail_open',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 0,
           setLastError: (_) {},
           getLastError: () => 5,
@@ -216,7 +247,7 @@ void main() {
       'should return false on exception in service mode even if provider is '
       'fail_open',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => throw StateError('mutex_error'),
           setLastError: (_) {},
           getLastError: () => 0,
@@ -249,7 +280,7 @@ void main() {
           },
         );
 
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (attrs, _, _) {
             capturedAttrs = attrs;
             return 0;
@@ -275,7 +306,7 @@ void main() {
       'returns null',
       () async {
         Pointer<NativeType>? capturedAttrs;
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (attrs, _, _) {
             capturedAttrs = attrs;
             return 123;
@@ -297,7 +328,7 @@ void main() {
       'should deny startup in fail_open when active IPC server is detected '
       'after mutex creation fails',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 0,
           setLastError: (_) {},
           getLastError: () => ERROR_ACCESS_DENIED,
@@ -322,7 +353,7 @@ void main() {
       'should deny startup in fail_open when active IPC server is detected '
       'after exception',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => throw StateError('mutex_error'),
           setLastError: (_) {},
           getLastError: () => 0,
@@ -347,7 +378,7 @@ void main() {
       'should swallow IPC probe failure in fail_open path and still allow '
       'startup when no owner is detected',
       () async {
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) => 0,
           setLastError: (_) {},
           getLastError: () => ERROR_ACCESS_DENIED,
@@ -373,7 +404,7 @@ void main() {
         var createMutexCallCount = 0;
         var closeHandleCallCount = 0;
 
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) {
             createMutexCallCount++;
             return 999;
@@ -407,7 +438,7 @@ void main() {
         var createMutexCallCount = 0;
         var closeHandleCallCount = 0;
 
-        final service = SingleInstanceService.forTest(
+        final service = createService(
           createMutex: (_, _, _) {
             createMutexCallCount++;
             return 555;
@@ -435,7 +466,7 @@ void main() {
 
   group('SingleInstanceService.isInstanceMutexHeld', () {
     test('should return false when OpenMutex reports the mutex is missing', () {
-      final service = SingleInstanceService.forTest(
+      final service = createService(
         openMutex: (_, _, _) => 0,
         setLastError: (_) {},
         getLastError: () => ERROR_FILE_NOT_FOUND,
@@ -447,7 +478,7 @@ void main() {
 
     test('should return true and close the handle when the mutex exists', () {
       var closeCount = 0;
-      final service = SingleInstanceService.forTest(
+      final service = createService(
         openMutex: (_, _, _) => 42,
         setLastError: (_) {},
         getLastError: () => 0,
@@ -463,7 +494,7 @@ void main() {
     });
 
     test('should keep retrying when OpenMutex fails for another reason', () {
-      final service = SingleInstanceService.forTest(
+      final service = createService(
         openMutex: (_, _, _) => 0,
         setLastError: (_) {},
         getLastError: () => ERROR_ACCESS_DENIED,
