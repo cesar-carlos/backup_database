@@ -32,46 +32,77 @@ class FTPSocket {
 
   TransferType get transferType => _transferType;
 
-  Future<FTPReply> readResponse() async {
-    final res = StringBuffer();
-    await Future.doWhile(() async {
-      var dataReceivedSuccessfully = false;
+  final List<int> _responseBytes = [];
+  bool _closed = false;
+  final Set<Socket> _dataSockets = {};
+  Completer<void> _aborted = Completer<void>();
 
-      while (_socket.available() > 0) {
-        res.write(Utf8Codec().decode(_socket.read()!).trim());
-        dataReceivedSuccessfully = true;
-      }
-      if (dataReceivedSuccessfully) return false;
+  Future<void> get whenAborted => _aborted.future;
 
-      await Future.delayed(const Duration(milliseconds: 300));
-      return true;
-    }).timeout(Duration(seconds: timeout), onTimeout: () {
-      throw FTPConnectException('Timeout reached for Receiving response !');
-    });
-
-    var r = res.toString();
-    if (r.startsWith('\n')) r = r.replaceFirst('\n', '');
-
-    if (r.length < 3) throw FTPConnectException('Illegal Reply Exception', r);
-
-    int? code;
-    final lines = r.split('\n');
-    String? line;
-    for (line in lines) {
-      if (line.length >= 3) code = int.tryParse(line.substring(0, 3)) ?? code;
+  void abort() {
+    _closed = true;
+    if (!_aborted.isCompleted) _aborted.complete();
+    for (final data in _dataSockets) {
+      data.destroy();
     }
-    if (line != null && line.length >= 4 && line[3] == '-') {
-      return readResponse();
+    _dataSockets.clear();
+    try {
+      _socket.shutdown(SocketDirection.both);
+      unawaited(_socket.close());
+    } catch (_) {
+      // The connection may still be opening.
     }
-
-    if (code == null) throw FTPConnectException('Illegal Reply Exception', r);
-
-    final reply = FTPReply(code, r);
-    logger.log('< ${reply.toString()}');
-    return reply;
   }
 
-  Future<FTPReply> sendCommand(String cmd) {
+  void releaseDataSocket(Socket socket) {
+    _dataSockets.remove(socket);
+    socket.destroy();
+  }
+
+  void _checkOpen() {
+    if (_closed) throw FTPConnectException('FTP connection aborted');
+  }
+
+  Future<FTPReply> readResponse() async {
+    final elapsed = Stopwatch()..start();
+    final lines = <String>[];
+    int? code;
+    while (elapsed.elapsed < Duration(seconds: timeout)) {
+      _checkOpen();
+      final end = _responseBytes.indexOf(10);
+      if (end >= 0) {
+        final line = utf8
+            .decode(_responseBytes.sublist(0, end), allowMalformed: true)
+            .replaceFirst(RegExp(r'\r$'), '');
+        _responseBytes.removeRange(0, end + 1);
+        lines.add(line);
+        if (code == null) {
+          if (!RegExp(r'^\d{3}[ -]').hasMatch(line)) {
+            throw FTPConnectException('Illegal Reply Exception', line);
+          }
+          code = int.parse(line.substring(0, 3));
+        }
+        if (line.startsWith('$code ')) {
+          final reply = FTPReply(code, lines.join('\n'));
+          logger.log('< $reply');
+          return reply;
+        }
+        continue;
+      }
+      final bytes = _socket.available() > 0 ? _socket.read() : null;
+      if (bytes != null) {
+        _responseBytes.addAll(bytes);
+      } else {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+    // A late reply must never be mistaken for the next command's response.
+    abort();
+    throw TimeoutException('Timeout reached for Receiving response');
+  }
+
+  Future<FTPReply> sendCommand(String cmd) async {
+    _checkOpen();
     logger.log('> $cmd');
     _socket.write(Utf8Codec().encode('$cmd\r\n'));
 
@@ -79,11 +110,28 @@ class FTPSocket {
   }
 
   void sendCommandWithoutWaitingResponse(String cmd) {
+    _checkOpen();
     logger.log('> $cmd');
     _socket.write(Utf8Codec().encode('$cmd\r\n'));
   }
 
   Future<bool> connect(String user, String pass, {String? account}) async {
+    _closed = false;
+    _aborted = Completer<void>();
+    _responseBytes.clear();
+    _transferType = TransferType.auto;
+    _dataChannelProtected = false;
+    try {
+      return await _connect(user, pass, account: account);
+    } catch (_) {
+      // Login/TLS failures happen before callers consider this connected.
+      // Close here; their connected-only cleanup cannot release this socket.
+      abort();
+      rethrow;
+    }
+  }
+
+  Future<bool> _connect(String user, String pass, {String? account}) async {
     logger.log('Connecting...');
 
     final timeout = Duration(seconds: this.timeout);
@@ -110,6 +158,7 @@ class FTPSocket {
       );
     }
 
+    _checkOpen();
     logger.log('Connection established, waiting for welcome message...');
     await readResponse();
 
@@ -176,35 +225,40 @@ class FTPSocket {
   }
 
   Future<Socket> openDataSocket(int port) async {
+    _checkOpen();
     final timeout = Duration(seconds: this.timeout);
+    final Socket socket;
     if (_dataChannelProtected) {
-      return SecureSocket.connect(
+      socket = await SecureSocket.connect(
         host,
         port,
         timeout: timeout,
         onBadCertificate: (_) => allowInvalidCertificates,
       );
+    } else {
+      socket = await Socket.connect(host, port, timeout: timeout);
     }
-    return Socket.connect(host, port, timeout: timeout);
+    if (_closed) {
+      socket.destroy();
+      _checkOpen();
+    }
+    _dataSockets.add(socket);
+    return socket;
   }
 
   Future<void> setTransferType(TransferType pTransferType) async {
     if (_transferType == pTransferType) return;
-    switch (pTransferType) {
-      case TransferType.auto:
-        await sendCommand('TYPE A');
-        break;
-      case TransferType.ascii:
-        await sendCommand('TYPE A');
-        break;
-      case TransferType.binary:
-        await sendCommand('TYPE I');
-        break;
+    final reply = await sendCommand(
+      pTransferType == TransferType.binary ? 'TYPE I' : 'TYPE A',
+    );
+    if (!reply.isSuccessCode()) {
+      throw FTPConnectException('Transfer type refused', reply.message);
     }
     _transferType = pTransferType;
   }
 
   Future<bool> disconnect() async {
+    if (_closed) return true;
     logger.log('Disconnecting...');
 
     try {
@@ -212,8 +266,7 @@ class FTPSocket {
     } catch (ignored) {
       // Ignore
     } finally {
-      await _socket.close();
-      _socket.shutdown(SocketDirection.both);
+      abort();
     }
 
     logger.log('Disconnected!');

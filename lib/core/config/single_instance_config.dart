@@ -111,9 +111,7 @@ class SingleInstanceConfig {
 
   // Retry configuration
   ///
-  /// Pior caso de janela morta ao acionar SHOW_WINDOW antes do dialog:
-  /// `maxRetryAttempts * (showWindowConnectTimeout + retryDelay)`.
-  /// Com 3 * (1000 + 100) = 3,3s, é tolerável para o usuário desktop.
+  /// Each attempt bounds connection and window restoration separately.
   static const int maxRetryAttempts = 3;
   static const Duration retryDelay = Duration(milliseconds: 100);
 
@@ -123,12 +121,10 @@ class SingleInstanceConfig {
   static const Duration defaultScheduledDelegationTimeout = Duration(hours: 24);
   static const Duration quickConnectionTimeout = Duration(milliseconds: 500);
 
-  /// Timeout para o comando `SHOW_WINDOW` enviado pela 2ª instância à
-  /// dona do lock. Mantido CURTO (pipe local) para evitar a
-  /// percepção de "app travado" quando o usuário clica no atalho —
-  /// pior caso, `maxRetryAttempts * (this + retryDelay)` define o
-  /// teto da janela morta antes do dialog de aviso aparecer.
+  /// Connecting to a local pipe should be fast, but restoring the native
+  /// window can take longer than one second (including fallback animations).
   static const Duration showWindowConnectTimeout = Duration(seconds: 1);
+  static const Duration showWindowResponseTimeout = Duration(seconds: 5);
 
   static Duration get ipcConnectTimeout => durationFromSecondsEnvValue(
     envValue: _envValue('SINGLE_INSTANCE_IPC_CONNECT_TIMEOUT_SECONDS'),

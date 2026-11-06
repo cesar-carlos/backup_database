@@ -17,13 +17,42 @@ import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_auth_client.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_errors.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_folder_ops.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_upload_client.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 class GoogleDriveUploader {
-  GoogleDriveUploader(this._authClient, this._folderOps);
+  GoogleDriveUploader(
+    this._authClient,
+    this._folderOps, {
+    http.Client Function()? clientFactory,
+    this.idleTimeout = const Duration(minutes: 2),
+    this.retryDelay = AppConstants.retryDelay,
+  }) : _clientFactory = clientFactory ?? http.Client.new;
+  final http.Client Function() _clientFactory;
+  final Duration idleTimeout;
+  final Duration retryDelay;
+
+  Future<T> _withClient<T>(
+    Future<T> Function(drive.DriveApi, GoogleDriveUploadClient) action,
+    bool Function()? isCancelled,
+  ) => _authClient.executeWithTokenRefresh(() async {
+    UploadCancellation.throwIfCancelled(isCancelled);
+    final session = (await _authClient.getAuthenticatedClient()).getOrThrow();
+    UploadCancellation.throwIfCancelled(isCancelled);
+    final client = GoogleDriveUploadClient(
+      _clientFactory(),
+      session.accessToken,
+    );
+    return client.run(
+      () => action(drive.DriveApi(client), client),
+      idleTimeout: idleTimeout,
+      isCancelled: isCancelled,
+    );
+  });
 
   final GoogleDriveAuthClient _authClient;
   final GoogleDriveFolderOps _folderOps;
@@ -39,6 +68,7 @@ class GoogleDriveUploader {
     final stopwatch = Stopwatch()..start();
 
     try {
+      if (maxRetries < 1) throw ArgumentError.value(maxRetries, 'maxRetries');
       LoggerService.info('Enviando para Google Drive: ${config.folderName}');
       UploadCancellation.throwIfCancelled(isCancelled);
 
@@ -48,16 +78,24 @@ class GoogleDriveUploader {
       if (missingSource != null) return rd.Failure(missingSource);
       final sourceFile = File(sourceFilePath);
 
-      final mainFolderId = await _folderOps.getOrCreateFolder(
-        config.folderName,
-        config.folderId,
+      final mainFolderId = await _withClient(
+        (api, _) => _folderOps.getOrCreateFolder(
+          config.folderName,
+          config.folderId,
+          api: api,
+        ),
+        isCancelled,
       );
       UploadCancellation.throwIfCancelled(isCancelled);
 
       final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final dateFolderId = await _folderOps.getOrCreateFolder(
-        dateFolder,
-        mainFolderId,
+      final dateFolderId = await _withClient(
+        (api, _) => _folderOps.getOrCreateFolder(
+          dateFolder,
+          mainFolderId,
+          api: api,
+        ),
+        isCancelled,
       );
       UploadCancellation.throwIfCancelled(isCancelled);
 
@@ -75,21 +113,24 @@ class GoogleDriveUploader {
         );
       }
 
+      final fileId = await _withClient((api, _) async {
+        final ids = await api.files.generateIds(count: 1, space: 'drive');
+        if (ids.ids == null || ids.ids!.length != 1) {
+          throw const GoogleDriveFailure(
+            message: 'Google Drive não retornou ID para o envio.',
+          );
+        }
+        return ids.ids!.single;
+      }, isCancelled);
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
         UploadCancellation.throwIfCancelled(isCancelled);
         try {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
-          final result = await _authClient.executeWithTokenRefresh(() async {
-            final clientResult = await _authClient.getAuthenticatedClient();
-            if (clientResult.isError()) {
-              throw clientResult.exceptionOrNull()!;
-            }
-
-            final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-
+          final result = await _withClient((driveApi, client) async {
             final driveFile = drive.File()
+              ..id = fileId
               ..name = fileName
               ..parents = [dateFolderId];
 
@@ -107,6 +148,7 @@ class GoogleDriveUploader {
                     sink.close();
                     return;
                   }
+                  client.touch();
                   final chunkLength = data.length;
                   bytesSent += chunkLength;
                   if (onProgress != null && fileSize > 0) {
@@ -122,61 +164,61 @@ class GoogleDriveUploader {
               fileSize,
             );
 
-            final uploadedFile = await driveApi.files.create(
-              driveFile,
-              uploadMedia: media,
-              $fields: 'id, name, size, md5Checksum',
-            );
-
-            if (uploadedFile.size != null) {
-              final remoteSize = int.parse(uploadedFile.size!);
-              if (remoteSize != fileSize) {
-                try {
-                  await driveApi.files.delete(uploadedFile.id!);
-                } on Object catch (e) {
-                  LoggerService.warning(
-                    'Não foi possível remover arquivo corrompido: $e',
-                  );
-                }
-
-                throw Exception(
-                  'Arquivo corrompido no Google Drive. '
-                  'Local: $fileSize, Remoto: $remoteSize',
-                );
-              }
+            drive.File uploadedFile;
+            try {
+              uploadedFile = await driveApi.files.create(
+                driveFile,
+                uploadMedia: media,
+                uploadOptions: useResumableUpload
+                    ? drive.ResumableUploadOptions()
+                    : drive.UploadOptions.defaultOptions,
+                $fields: 'id,name,size,md5Checksum',
+              );
+            } on drive.DetailedApiRequestError catch (e) {
+              if (e.status != 409) rethrow;
+              // A previous request may have committed before its response was lost.
+              uploadedFile = await driveApi.files.get(
+                fileId,
+                $fields: 'id,name,size,md5Checksum',
+              ) as drive.File;
             }
-
-            final remoteMd5 = uploadedFile.md5Checksum;
-            if (remoteMd5 == null || remoteMd5.isEmpty) {
-              throw GoogleDriveFailure(
-                message:
-                    'Não foi possível confirmar integridade no Google Drive '
-                    '(md5Checksum não retornado pela API).',
+            UploadCancellation.throwIfCancelled(isCancelled);
+            if (uploadedFile.id != fileId ||
+                uploadedFile.size == null ||
+                uploadedFile.md5Checksum == null ||
+                uploadedFile.md5Checksum!.isEmpty) {
+              uploadedFile = await driveApi.files.get(
+                fileId,
+                $fields: 'id,name,size,md5Checksum',
+              ) as drive.File;
+            }
+            UploadCancellation.throwIfCancelled(isCancelled);
+            if (uploadedFile.id != fileId ||
+                uploadedFile.size == null ||
+                uploadedFile.md5Checksum == null ||
+                uploadedFile.md5Checksum!.isEmpty) {
+              throw const GoogleDriveFailure(
+                message: 'Não foi possível confirmar integridade no Google Drive (metadados ausentes).',
                 code: FailureCodes.integrityValidationInconclusive,
-                originalError: Exception('Google Drive md5Checksum ausente'),
               );
             }
-            if (remoteMd5.toLowerCase() != localMd5.toLowerCase()) {
+            if (int.tryParse(uploadedFile.size!) != fileSize ||
+                uploadedFile.md5Checksum!.toLowerCase() !=
+                    localMd5.toLowerCase()) {
               try {
-                await driveApi.files.delete(uploadedFile.id!);
+                await driveApi.files.delete(fileId);
               } on Object catch (e) {
                 LoggerService.warning(
-                  'Não foi possível remover arquivo com hash divergente: $e',
+                  'Não foi possível remover arquivo com integridade inválida: $e',
                 );
               }
-              throw GoogleDriveFailure(
-                message:
-                    'Falha de integridade no Google Drive: hash remoto difere '
-                    'do arquivo local (MD5).',
+              throw const GoogleDriveFailure(
+                message: 'Falha de integridade no Google Drive: tamanho ou MD5 divergente.',
                 code: FailureCodes.integrityValidationFailed,
-                originalError: Exception(
-                  'Google Drive MD5 mismatch: local=$localMd5 remote=$remoteMd5',
-                ),
               );
             }
-
             return uploadedFile;
-          });
+          }, isCancelled);
 
           stopwatch.stop();
 
@@ -197,14 +239,31 @@ class GoogleDriveUploader {
           LoggerService.info('Upload Google Drive cancelado pelo usuário');
           return UploadCancellation.cancelledResult();
         } on Object catch (e) {
+          if (isCancelled?.call() ?? false) {
+            return UploadCancellation.cancelledResult();
+          }
+          if (e is GoogleDriveFailure &&
+              e.code == FailureCodes.integrityValidationFailed) {
+            return rd.Failure(e);
+          }
+          if (e is drive.DetailedApiRequestError &&
+              e.status != 429 &&
+              e.status != 408 &&
+              !(e.status == 403 &&
+                  e.toString().toLowerCase().contains('ratelimit')) &&
+              (e.status ?? 0) < 500) {
+            rethrow;
+          }
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Tentativa $attempt falhou: $e');
 
           if (attempt < maxRetries) {
-            final delay = useResumableUpload
-                ? AppConstants.retryDelay * 2
-                : AppConstants.retryDelay;
-            await Future.delayed(delay);
+            final delay = useResumableUpload ? retryDelay * 2 : retryDelay;
+            final waiting = Stopwatch()..start();
+            while (waiting.elapsed < delay) {
+              UploadCancellation.throwIfCancelled(isCancelled);
+              await Future<void>.delayed(const Duration(milliseconds: 100));
+            }
           }
         }
       }

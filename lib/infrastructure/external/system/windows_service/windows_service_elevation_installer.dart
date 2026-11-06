@@ -4,7 +4,6 @@ import 'package:backup_database/core/constants/windows_service_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart';
-import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -25,10 +24,7 @@ class WindowsServiceElevationInstaller {
 
   void Function(bool waiting)? onElevationWaitChanged;
 
-  static const String _serviceName = WindowsServiceConstants.serviceName;
-  static const String _localSystemAccount = 'LocalSystem';
   static const int _successExitCode = 0;
-  static const int _scriptTimeoutExitCode = 124;
   static const int _elevatedLogTailMaxChars = 2000;
   static const int _elevatedLogFilesToRead = 5;
 
@@ -42,12 +38,21 @@ class WindowsServiceElevationInstaller {
       '4. Atualizar o status e tentar novamente';
 
   Future<rd.Result<void>> install({
-    required String nssmPath,
+    required String wrapperPath,
     required String appPath,
     required String appDir,
     required String? serviceUser,
     required String? servicePassword,
   }) async {
+    if (serviceUser != null &&
+        serviceUser.isNotEmpty &&
+        (servicePassword == null || servicePassword.isEmpty)) {
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Informe a senha da conta do serviço.',
+        ),
+      );
+    }
     final logPath = WindowsServiceConstants.logPath;
     final configPath = WindowsServiceConstants.configPath;
     final logDir = Directory(logPath).parent.path;
@@ -68,8 +73,6 @@ class WindowsServiceElevationInstaller {
     final lockedPassword = servicePassword != null && servicePassword.isNotEmpty
         ? servicePassword
         : null;
-    final plan = NssmConfigPlan.build(appDir: appDir, logPath: logPath);
-    final planSets = plan.toElevatedPowerShellSets();
     final scriptTimeoutMs = _timing.elevatedInstallTimeout.inMilliseconds;
 
     File? passwordFile;
@@ -87,7 +90,7 @@ class WindowsServiceElevationInstaller {
       }
 
       final scriptContent = buildElevatedInstallScript(
-        nssmPath: nssmPath,
+        wrapperPath: wrapperPath,
         appPath: appPath,
         appDir: appDir,
         logPath: logPath,
@@ -96,7 +99,7 @@ class WindowsServiceElevationInstaller {
         installLogPath: installLogPath,
         serviceUser: serviceUser,
         passwordFilePath: passwordFile?.path,
-        planSets: planSets,
+        planSets: '',
       );
 
       File? scriptFile;
@@ -113,10 +116,14 @@ class WindowsServiceElevationInstaller {
 
       await _restrictScriptAcl(scriptPath);
 
-      final scriptPathEscaped = scriptPath.replaceAll('"', '`"');
+      final scriptArguments =
+          '-NoProfile -ExecutionPolicy Bypass -File "$scriptPath"'.replaceAll(
+            "'",
+            "''",
+          );
       final elevatedCommand =
           r'$p = Start-Process -FilePath "powershell.exe" '
-          '-ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File","$scriptPathEscaped" '
+          "-ArgumentList '$scriptArguments' "
           '-Verb RunAs -WindowStyle Hidden -PassThru; '
           r'if ($null -eq $p) { exit 1223 }; '
           'if (-not \$p.WaitForExit($scriptTimeoutMs)) { '
@@ -174,11 +181,7 @@ class WindowsServiceElevationInstaller {
             );
           }
 
-          final timedOut = processResult.exitCode == _scriptTimeoutExitCode;
           if (processResult.exitCode != _successExitCode) {
-            if (timedOut) {
-              await _rollbackPartialInstall(nssmPath);
-            }
             var detail = logContent != null && logContent.isNotEmpty
                 ? logContent.trim()
                 : (output.isNotEmpty ? output : '');
@@ -213,7 +216,6 @@ class WindowsServiceElevationInstaller {
           );
         },
         (failure) async {
-          await _rollbackPartialInstall(nssmPath);
           return rd.Failure(
             ServerFailure(
               message:
@@ -230,7 +232,7 @@ class WindowsServiceElevationInstaller {
 
   @visibleForTesting
   static String buildElevatedInstallScript({
-    required String nssmPath,
+    required String wrapperPath,
     required String appPath,
     required String appDir,
     required String logPath,
@@ -246,187 +248,28 @@ class WindowsServiceElevationInstaller {
         ? ''
         : safePath(passwordFilePath);
     return '''
-\$ErrorActionPreference = "Stop"
-if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
-  \$PSNativeCommandUseErrorActionPreference = \$false
-}
-\$selfScript = \$MyInvocation.MyCommand.Path
-\$installLog = '${safePath(installLogPath)}'
-\$nssmPath = '${safePath(nssmPath)}'
-\$appPath = '${safePath(appPath)}'
-\$appDir = '${safePath(appDir)}'
-\$serviceUser = '${safePath(serviceUser ?? '')}'
+\$ErrorActionPreference = 'Stop'
+Import-Module (Join-Path \$PSHOME 'Modules\\Microsoft.PowerShell.Security') -ErrorAction Stop
 \$passwordFile = '$passwordFile'
-\$logPath = '${safePath(logPath)}'
-\$logDir = '${safePath(logDir)}'
-\$configPath = '${safePath(configPath)}'
-
-function Write-InstallLog { param(\$msg) Add-Content -Path \$installLog -Value \$msg }
-function Fail { param(\$step,\$err) Write-InstallLog "ERRO em \$step`: \$err"; exit 1 }
-
-function Restrict-Acl { param(\$path)
-  try {
-    if (Test-Path \$path) {
-      icacls \$path /inheritance:r /grant:r 'NT AUTHORITY\\SYSTEM:(F)' 'BUILTIN\\Administrators:(F)' | Out-Null
-    }
-  } catch {}
-}
-
-function Set-NssmKeyWithRetry {
-  param(
-    [string]\$KeyName,
-    [string[]]\$Values,
-    [int]\$MaxAttempts = 3
-  )
-  \$lastErr = \$null
-  for (\$attempt = 1; \$attempt -le \$MaxAttempts; \$attempt++) {
-    \$r = & \$nssmPath set $_serviceName \$KeyName @Values 2>&1
-    if (\$LASTEXITCODE -eq 0) { return }
-    \$lastErr = \$r -join " "
-    if (\$lastErr -notmatch "Can't open service") { Fail \$KeyName \$lastErr }
-    Start-Sleep -Seconds 2
-  }
-  Fail \$KeyName "Can't open service apos \$MaxAttempts tentativas: \$lastErr"
-}
-
-function Set-NssmKeyOptional {
-  param(
-    [string]\$KeyName,
-    [string[]]\$Values,
-    [int]\$MaxAttempts = 3
-  )
-  \$lastErr = \$null
-  for (\$attempt = 1; \$attempt -le \$MaxAttempts; \$attempt++) {
-    \$r = & \$nssmPath set $_serviceName \$KeyName @Values 2>&1
-    if (\$LASTEXITCODE -eq 0) { return }
-    \$lastErr = \$r -join " "
-    if (\$lastErr -notmatch "Can't open service") {
-      Write-InstallLog "AVISO \$KeyName`: \$lastErr"
-      return
-    }
-    Start-Sleep -Seconds 2
-  }
-  Write-InstallLog "AVISO \$KeyName`: Can't open service apos \$MaxAttempts tentativas: \$lastErr"
-}
-
-function Set-ServiceAccountFromFile {
-  param([string]\$User, [string]\$SecretFile)
-  if (-not (Test-Path -LiteralPath \$SecretFile)) {
-    Fail "ObjectName" "arquivo de senha ausente"
-  }
-  \$servicePassword = [System.IO.File]::ReadAllText(\$SecretFile)
-  if (-not ('BackupDbServiceConfig' -as [type])) {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class BackupDbServiceConfig {
-  [DllImport("advapi32.dll", EntryPoint="OpenSCManagerW", SetLastError=true, CharSet=CharSet.Unicode)]
-  public static extern IntPtr OpenSCManager(string machine, string database, uint access);
-
-  [DllImport("advapi32.dll", EntryPoint="OpenServiceW", SetLastError=true, CharSet=CharSet.Unicode)]
-  public static extern IntPtr OpenService(IntPtr scm, string name, uint access);
-
-  [DllImport("advapi32.dll", EntryPoint="ChangeServiceConfigW", SetLastError=true, CharSet=CharSet.Unicode)]
-  public static extern bool ChangeServiceConfig(
-    IntPtr service,
-    uint serviceType,
-    uint startType,
-    uint errorControl,
-    string binaryPath,
-    string loadOrderGroup,
-    IntPtr tagId,
-    string dependencies,
-    string startName,
-    string password,
-    string displayName);
-
-  [DllImport("advapi32.dll", SetLastError=true)]
-  public static extern bool CloseServiceHandle(IntPtr handle);
-}
-'@
-  }
-  \$scm = [BackupDbServiceConfig]::OpenSCManager(\$null, \$null, 1)
-  if (\$scm -eq [IntPtr]::Zero) {
-    Fail "ObjectName" ("OpenSCManager " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
-  }
-  try {
-    \$svc = [BackupDbServiceConfig]::OpenService(\$scm, "$_serviceName", 2)
-    if (\$svc -eq [IntPtr]::Zero) {
-      Fail "ObjectName" ("OpenService " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
-    }
-    try {
-      \$noChange = [uint32]::MaxValue
-      \$ok = [BackupDbServiceConfig]::ChangeServiceConfig(
-        \$svc, \$noChange, \$noChange, \$noChange,
-        \$null, \$null, [IntPtr]::Zero, \$null,
-        \$User, \$servicePassword, \$null)
-      if (-not \$ok) {
-        Fail "ObjectName" ("ChangeServiceConfig " + [System.Runtime.InteropServices.Marshal]::GetLastWin32Error())
-      }
-    } finally {
-      [BackupDbServiceConfig]::CloseServiceHandle(\$svc) | Out-Null
-      \$servicePassword = \$null
-    }
-  } finally {
-    [BackupDbServiceConfig]::CloseServiceHandle(\$scm) | Out-Null
-  }
-}
-
-if (-not (Test-Path \$logDir)) { New-Item -ItemType Directory -Path \$logDir -Force | Out-Null }
-if (-not (Test-Path \$logPath)) { New-Item -ItemType Directory -Path \$logPath -Force | Out-Null }
-if (-not (Test-Path \$configPath)) { New-Item -ItemType Directory -Path \$configPath -Force | Out-Null }
-Restrict-Acl \$installLog
-Restrict-Acl \$selfScript
-Restrict-Acl \$logPath
-Restrict-Acl \$configPath
-
-\$envDest = Join-Path \$configPath '.env'
-if (-not (Test-Path \$envDest)) {
-  \$envCandidates = @(
-    (Join-Path \$appDir '.env'),
-    (Join-Path \$appDir '.env.example'),
-    (Join-Path \$configPath '.env.example')
-  )
-  foreach (\$candidate in \$envCandidates) {
-    if (Test-Path \$candidate) {
-      Copy-Item -Path \$candidate -Destination \$envDest -Force
-      Write-InstallLog "Copiado \$candidate -> \$envDest"
-      break
-    }
-  }
-}
-
 try {
-  try {
-    sc.exe query $_serviceName 2>\$null | Out-Null
-    if (\$LASTEXITCODE -eq 0) {
-      sc.exe stop $_serviceName 2>\$null | Out-Null
-      Start-Sleep -Seconds 2
-      & \$nssmPath remove $_serviceName confirm 2>\$null | Out-Null
-      Start-Sleep -Seconds 2
-    }
-
-    \$r = & \$nssmPath install $_serviceName \$appPath 2>&1
-    if (\$LASTEXITCODE -ne 0) { Fail "install" (\$r -join " ") }
-
-    Start-Sleep -Seconds 5
-
-$planSets
-    if (\$serviceUser -ne '' -and \$passwordFile -ne '') {
-      Set-ServiceAccountFromFile -User \$serviceUser -PasswordFile \$passwordFile
-    } else {
-      Set-NssmKeyOptional -KeyName "ObjectName" -Values @("$_localSystemAccount")
-    }
-
-    exit 0
-  } catch {
-    Fail "geral" \$_.Exception.Message
+  \$parameters = @{
+    AppPath = '${safePath(appPath)}'
+    AppDirectory = '${safePath(appDir)}'
+    ServiceUser = '${safePath(serviceUser ?? '')}'
+    NonInteractive = \$true
   }
-} finally {
   if (\$passwordFile -ne '') {
-    try { if (Test-Path -LiteralPath \$passwordFile) { Remove-Item -LiteralPath \$passwordFile -Force } } catch {}
+    \$parameters.ServicePassword = ConvertTo-SecureString ([IO.File]::ReadAllText(\$passwordFile)) -AsPlainText -Force
   }
-  try { if (Test-Path \$selfScript) { Remove-Item -Force \$selfScript } } catch {}
+  & '${safePath(p.join(appDir, 'tools', 'install_service.ps1'))}' @parameters
+  exit \$LASTEXITCODE
+} catch {
+  [IO.File]::WriteAllText('${safePath(installLogPath)}', \$_.Exception.Message)
+  exit 1
+} finally {
+  if (\$passwordFile -ne '' -and (Test-Path -LiteralPath \$passwordFile)) {
+    Remove-Item -LiteralPath \$passwordFile -Force
+  }
 }
 ''';
   }
@@ -555,25 +398,6 @@ $planSets
     } on Object catch (e, s) {
       LoggerService.warning(
         'Não foi possível restringir ACL do script UAC em $scriptPath',
-        e,
-        s,
-      );
-    }
-  }
-
-  Future<void> _rollbackPartialInstall(String nssmPath) async {
-    LoggerService.warning(
-      'Instalação elevada incompleta ou em timeout; tentando nssm remove',
-    );
-    try {
-      await _processService.run(
-        executable: nssmPath,
-        arguments: ['remove', _serviceName, 'confirm'],
-        timeout: _timing.longTimeout,
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        'Rollback nssm remove falhou (o filho elevado pode ainda existir)',
         e,
         s,
       );

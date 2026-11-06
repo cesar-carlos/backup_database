@@ -198,28 +198,28 @@ class WindowsServiceElevationController {
     );
   }
 
-  Future<rd.Result<void>> uninstallWithElevation({
-    required String nssmPath,
-  }) async {
+  Future<rd.Result<void>> uninstallWithElevation() async {
     final delaySeconds = _timing.serviceDelay.inSeconds;
     final pollSeconds = _timing.longTimeout.inSeconds;
-    final nssmPs = nssmPath.replaceAll('`', '``').replaceAll('"', '`"');
     final inner =
-        '\$nssm = "$nssmPs"; '
+        r'$stopped = $false; '
         'sc.exe stop $_serviceName | Out-Null; '
         '\$deadline = (Get-Date).AddSeconds($pollSeconds); '
         'do { '
         '  \$q = sc.exe query $_serviceName 2>\$null | Out-String; '
-        r"  if ($q -match 'STOPPED' -or $q -match 'PARADO') { break }; "
+        r'  if ($LASTEXITCODE -eq 1060) { exit 0 }; '
+        r"  if ($q -match 'STOPPED' -or $q -match 'PARADO') { $stopped = $true; break }; "
         '  Start-Sleep -Seconds 1 '
         r'} while ((Get-Date) -lt $deadline); '
+        r'if (-not $stopped) { exit 1 }; '
         'Start-Sleep -Seconds $delaySeconds; '
-        '& \$nssm remove $_serviceName confirm; '
+        'sc.exe delete $_serviceName; '
         r'exit $LASTEXITCODE';
+    final escapedInner = inner.replaceAll("'", "''");
     final elevatedCommand =
         r'$p = Start-Process -FilePath "powershell.exe" '
         "-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-Command',"
-        " '$inner' "
+        " '$escapedInner' "
         '-Verb RunAs -WindowStyle Hidden -PassThru -Wait; '
         r'if ($null -eq $p) { exit 1223 }; exit $p.ExitCode';
 

@@ -47,13 +47,7 @@ class FtpIntegrityVerifier {
   }
 
   Future<void> _ensureBinaryTransferType(FTPConnect ftp) async {
-    try {
-      await ftp.setTransferType(TransferType.binary);
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Não foi possível fixar transferência em modo binário (TYPE I): $e',
-      );
-    }
+    await ftp.setTransferType(TransferType.binary);
   }
 
   Future<String?> computeSha256Streaming(File file) async {

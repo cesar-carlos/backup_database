@@ -11,6 +11,8 @@ class RemoteStagingCleanupScheduler implements IRemoteStagingCleanupScheduler {
 
   final ITransferStagingService _staging;
   Timer? _timer;
+  @override
+  bool get isRunning => _timer?.isActive ?? false;
 
   @override
   void start({

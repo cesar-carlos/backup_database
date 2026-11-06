@@ -8,6 +8,30 @@ import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'automatic mutex access failure exits without any modal dialog',
+    () async {
+      final exits = <int>[];
+      final messageBox = _FakeWindowsMessageBox();
+      final ipc = _FakeSingleInstanceIpcClient();
+      final checker = SingleInstanceChecker(
+        singleInstanceService: _FakeSingleInstanceService(
+          checkAndLockResult: false,
+          lockDenialReason: SingleInstanceLockDenialReason.creationFailed,
+        ),
+        ipcClient: ipc,
+        messageBox: messageBox,
+        launchOrigin: LaunchOrigin.windowsStartup,
+        exitProcess: exits.add,
+      );
+      expect(await checker.checkAndHandleSecondInstance(), isFalse);
+      expect(exits, [UiBootstrapExitCode.fatalBootstrapError]);
+      expect(messageBox.warningMessage, isNull);
+      expect(messageBox.errorMessage, isNull);
+      expect(ipc.getExistingInstanceInfoCallCount, 0);
+      expect(ipc.notifyAttemptCount, 0);
+    },
+  );
   group('SingleInstanceChecker', () {
     test('should continue startup when first instance is acquired', () async {
       final singleInstanceService = _FakeSingleInstanceService(
@@ -24,7 +48,7 @@ void main() {
       expect(canContinue, isTrue);
     });
 
-    test('should show focus success message when notify succeeds', () async {
+    test('restores existing window without a modal dialog', () async {
       final messageBox = _FakeWindowsMessageBox();
       final checker = SingleInstanceChecker(
         singleInstanceService: _FakeSingleInstanceService(
@@ -42,14 +66,8 @@ void main() {
       final canContinue = await checker.checkAndHandleSecondInstance();
 
       expect(canContinue, isFalse);
-      expect(
-        messageBox.warningTitle,
-        equals(SingleInstanceChecker.dialogTitle),
-      );
-      expect(
-        messageBox.warningMessage,
-        contains('A janela existente foi trazida para frente.'),
-      );
+      expect(messageBox.warningTitle, isNull);
+      expect(messageBox.warningMessage, isNull);
     });
 
     test('should show focus failure message when notify fails', () async {
@@ -105,104 +123,61 @@ void main() {
       );
     });
 
-    test(
-      'should stay silent on windowsStartup when owner is the same user UI',
-      () async {
-        final messageBox = _FakeWindowsMessageBox();
-        final ipcClient = _FakeSingleInstanceIpcClient(
-          existingUser: 'local_user',
-          existingRole: 'ui',
-          notifyResults: [true],
-        );
-        final checker = SingleInstanceChecker(
-          singleInstanceService: _FakeSingleInstanceService(
-            checkAndLockResult: false,
-          ),
-          ipcClient: ipcClient,
-          messageBox: messageBox,
-          getCurrentUsername: () => 'local_user',
-          launchOrigin: LaunchOrigin.windowsStartup,
-          maxRetryAttempts: 1,
-          exitProcess: (_) {},
-        );
-
-        final canContinue = await checker.checkAndHandleSecondInstance();
-
-        expect(canContinue, isFalse);
-        expect(ipcClient.notifyAttemptCount, 0);
-        expect(messageBox.warningMessage, isNull);
-        expect(messageBox.errorMessage, isNull);
-      },
-    );
-
-    test(
-      'should explain windowsStartup when owner is not the same user UI',
-      () async {
+    for (final owner in [
+      (label: 'same user', user: 'local_user', role: 'ui'),
+      (label: 'another Terminal Server user', user: 'other_user', role: 'ui'),
+      (label: 'Windows service', user: 'SYSTEM', role: 'service'),
+      (label: 'unknown owner or unavailable IPC', user: null, role: null),
+    ]) {
+      test('automatic duplicate exits silently for ${owner.label}', () async {
         final messageBox = _FakeWindowsMessageBox();
         final exitCodes = <int>[];
         final ipcClient = _FakeSingleInstanceIpcClient(
-          existingUser: 'admin_user',
-          existingRole: 'ui',
-          notifyResults: [true],
+          existingUser: owner.user,
+          existingRole: owner.role,
         );
         final checker = SingleInstanceChecker(
           singleInstanceService: _FakeSingleInstanceService(
             checkAndLockResult: false,
+            lockDenialReason: SingleInstanceLockDenialReason.alreadyRunning,
           ),
           ipcClient: ipcClient,
           messageBox: messageBox,
-          getCurrentUsername: () => 'local_user',
+          getCurrentUsername: () => throw StateError('must not query user'),
           launchOrigin: LaunchOrigin.windowsStartup,
-          maxRetryAttempts: 1,
           exitProcess: exitCodes.add,
         );
 
-        final canContinue = await checker.checkAndHandleSecondInstance();
-
-        expect(canContinue, isFalse);
-        expect(ipcClient.notifyAttemptCount, 0);
-        expect(messageBox.warningMessage, contains('logon'));
-        expect(
-          messageBox.warningMessage,
-          isNot(contains('trazida para frente')),
-        );
+        expect(await checker.checkAndHandleSecondInstance(), isFalse);
         expect(exitCodes, [UiBootstrapExitCode.success]);
-      },
-    );
-
-    test(
-      'should explain windowsStartup when the lock owner is the service',
-      () async {
-        final messageBox = _FakeWindowsMessageBox();
-        final ipcClient = _FakeSingleInstanceIpcClient(
-          existingUser: 'local_user',
-          existingRole: 'service',
-          notifyResults: [true],
-        );
-        final checker = SingleInstanceChecker(
-          singleInstanceService: _FakeSingleInstanceService(
-            checkAndLockResult: false,
-          ),
-          ipcClient: ipcClient,
-          messageBox: messageBox,
-          getCurrentUsername: () => 'local_user',
-          launchOrigin: LaunchOrigin.windowsStartup,
-          maxRetryAttempts: 1,
-        );
-
-        await checker.checkAndHandleSecondInstance();
-
+        expect(messageBox.warningMessage, isNull);
+        expect(messageBox.errorMessage, isNull);
         expect(ipcClient.notifyAttemptCount, 0);
-        expect(messageBox.warningMessage, contains('serviço'));
-        expect(
-          messageBox.warningMessage,
-          isNot(contains('trazida para frente')),
-        );
-      },
-    );
+        expect(ipcClient.getExistingInstanceInfoCallCount, 0);
+        expect(ipcClient.getExistingInstanceUserCallCount, 0);
+        expect(ipcClient.delegatedScheduleIds, isEmpty);
+      });
+    }
 
+    test('automatic first instance continues without exiting', () async {
+      final exitCodes = <int>[];
+      final messageBox = _FakeWindowsMessageBox();
+      final checker = SingleInstanceChecker(
+        singleInstanceService: _FakeSingleInstanceService(
+          checkAndLockResult: true,
+        ),
+        ipcClient: _FakeSingleInstanceIpcClient(),
+        messageBox: messageBox,
+        launchOrigin: LaunchOrigin.windowsStartup,
+        exitProcess: exitCodes.add,
+      );
+      expect(await checker.checkAndHandleSecondInstance(), isTrue);
+      expect(exitCodes, isEmpty);
+      expect(messageBox.warningMessage, isNull);
+      expect(messageBox.errorMessage, isNull);
+    });
     test(
-      'should exit with success after showing manual duplicate dialog',
+      'should exit with success after restoring existing window',
       () async {
         final exitCodes = <int>[];
         final checker = SingleInstanceChecker(

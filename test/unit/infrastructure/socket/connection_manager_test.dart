@@ -78,6 +78,26 @@ void main() {
   });
 
   group('ConnectionManager', () {
+    test(
+      'captured connection can be restored after installer disconnect',
+      () async {
+        expect(manager.captureReconnectAction(), isNull);
+        final port = getPort();
+        await server.start(port: port);
+        await manager.connect(
+          host: '127.0.0.1',
+          port: port,
+          refreshCapabilitiesOnConnect: false,
+        );
+        final reconnect = manager.captureReconnectAction();
+        expect(reconnect, isNotNull);
+        await manager.disconnect();
+        expect(manager.captureReconnectAction(), isNull);
+        await reconnect!();
+        expect(manager.isConnected, isTrue);
+        expect(manager.activePort, port);
+      },
+    );
     test('should not be connected when created', () {
       expect(manager.isConnected, isFalse);
       expect(manager.status, ConnectionStatus.disconnected);

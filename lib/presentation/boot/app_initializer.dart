@@ -127,6 +127,7 @@ class AppInitializer {
         );
       };
       autoUpdateService.beforeInstallHook = AppCleanup.prepareForInstall;
+      autoUpdateService.installFailureHook = AppCleanup.recoverFailedInstall;
       await autoUpdateService.initialize();
       if (!autoUpdateService.isInitialized) {
         LoggerService.info(
@@ -163,7 +164,10 @@ class AppInitializer {
     );
 
     final scheduleId = ScheduleArgs.extract(args);
-    final startMinimized = startMinimizedFromArgs || startMinimizedFromSettings;
+    final startMinimized =
+        startMinimizedFromArgs ||
+        (bootstrapContext.launchOrigin == LaunchOrigin.windowsStartup &&
+            startMinimizedFromSettings);
 
     LoggerService.info(
       'Iniciar minimizado: $startMinimized '

@@ -60,6 +60,9 @@ class FTPConnect {
 
   Future<bool> disconnect() => _socket.disconnect();
 
+  /// Immediately interrupts control and data I/O without sending QUIT.
+  void abort() => _socket.abort();
+
   Future<FTPReply> sendCustomCommand(String pCmd) => _socket.sendCommand(pCmd);
 
   Future<bool> uploadFile(

@@ -8,6 +8,44 @@ import 'package:result_dart/result_dart.dart' as rd;
 class _MockProcessService extends Mock implements ProcessService {}
 
 void main() {
+  test(
+    'rejects custom account without password before configuring service',
+    () async {
+      final process = _MockProcessService();
+      final result = await WindowsServiceNssmConfigurator(
+        processService: process,
+      ).configure(nssmPath: 'nssm.exe', serviceUser: r'DOMAIN\backup');
+      expect(result.isError(), isTrue);
+      verifyZeroInteractions(process);
+    },
+  );
+
+  for (final key in ['ObjectName', 'Start', 'AppExit', 'AppRestartDelay']) {
+    test('configuration failure for $key is fatal', () async {
+      final process = _MockProcessService();
+      when(
+        () => process.run(
+          executable: any(named: 'executable'),
+          arguments: any(named: 'arguments'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer((invocation) async {
+        final args = invocation.namedArguments[#arguments]! as List<String>;
+        return rd.Success(
+          ProcessResult(
+            exitCode: args.contains(key) ? 5 : 0,
+            stdout: '',
+            stderr: 'denied',
+            duration: Duration.zero,
+          ),
+        );
+      });
+      final result = await WindowsServiceNssmConfigurator(
+        processService: process,
+      ).configure(nssmPath: 'nssm.exe');
+      expect(result.isError(), isTrue);
+    });
+  }
   setUpAll(() {
     registerFallbackValue(<String>[]);
     registerFallbackValue(Duration.zero);

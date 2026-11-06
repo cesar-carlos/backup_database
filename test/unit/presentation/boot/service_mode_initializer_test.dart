@@ -50,7 +50,9 @@ void main() {
         appendLog: (String message) async {
           logs.add(message);
         },
-        exitProcess: exits.add,
+        flushAndExit: (code) async {
+          exits.add(code);
+        },
       );
 
       expect(service.releaseCount, 1);
@@ -71,7 +73,9 @@ void main() {
       await ServiceModeInitializer.completeGracefulShutdown(
         singleInstanceService: service,
         appendLog: (String _) async {},
-        exitProcess: exits.add,
+        flushAndExit: (code) async {
+          exits.add(code);
+        },
       );
 
       expect(service.releaseCount, 1);
@@ -84,7 +88,9 @@ void main() {
       await ServiceModeInitializer.completeGracefulShutdown(
         singleInstanceService: null,
         appendLog: (String _) async {},
-        exitProcess: exits.add,
+        flushAndExit: (code) async {
+          exits.add(code);
+        },
       );
 
       expect(exits, [ServiceModeExitCode.gracefulShutdown]);

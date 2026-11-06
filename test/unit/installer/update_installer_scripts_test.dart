@@ -11,6 +11,21 @@ Future<SetupIssParser> _loadSetupIssParser() async {
 }
 
 void main() {
+  test(
+    'installer only stops at commit and refuses failed service stop',
+    () async {
+      final iss = await _loadSetupIssParser();
+      expect(iss.routineContains('InitializeSetup', 'StopService('), isFalse);
+      expect(iss.routineContains('InitializeSetup', 'CloseApp('), isFalse);
+      expect(
+        iss.routineContains(
+          'PrepareToInstall',
+          "if not StopService('BackupDatabaseService') then",
+        ),
+        isTrue,
+      );
+    },
+  );
   group('installer static startup contract', () {
     test(
       'setup.iss does not create HKLM Run entry and cleans legacy entries',
@@ -524,7 +539,7 @@ void main() {
           'VcRedistFailed',
           'EnvFeedUrlMissing',
           'ServiceScriptMissing',
-          'NssmMissing',
+          'WrapperMissing',
           'ServiceNotRunning',
           'ServiceInstallFailed',
           'ServiceScriptLaunchFailed',
@@ -700,7 +715,7 @@ void main() {
       expect(workflow, contains('flutter build windows --release'));
       expect(
         workflow,
-        contains('test/scripts/windows_single_instance_smoke.ps1'),
+        contains('test/scripts/windows_winsw_smoke.ps1'),
       );
     });
   });
@@ -759,7 +774,7 @@ void main() {
     );
 
     test(
-      'install restore and uninstall wait for service removal',
+      'install preserves existing service and removal uses polling',
       () async {
         final install = await _repoFile(
           p.join('installer', 'install_service.ps1'),
@@ -780,36 +795,9 @@ void main() {
           p.join('installer', 'build_installer.py'),
         ).readAsString();
 
-        expect(install, contains('Wait-ServiceRemoved'));
-        expect(install, contains('Wait-ServiceStopped'));
-        expect(install, contains('Set-NssmCritical -Key "AppNoConsole"'));
-        expect(
-          install,
-          contains(
-            'Set-NssmCritical -Key "AppExit" -ExtraArgs @("77", "Exit")',
-          ),
-        );
-        expect(
-          install,
-          contains(
-            'Set-NssmCritical -Key "AppExit" -ExtraArgs @("78", "Exit")',
-          ),
-        );
-        expect(install, contains('ChangeServiceConfigW'));
-        expect(install, contains('Set-ServiceAccountFromFile'));
-        expect(
-          install,
-          contains(r'Remove-Item -LiteralPath $secretFile -Force'),
-        );
-        expect(
-          install,
-          isNot(
-            contains(
-              r'& $NssmPath set $ServiceName ObjectName $ServiceUser $plainPassword',
-            ),
-          ),
-        );
-        expect(restore, contains('Wait-ServiceRemoved'));
+        expect(install, contains('winsw_service.ps1'));
+        expect(install, isNot(contains(r'& $NssmPath')));
+        expect(restore, isNot(contains(r'& $NssmPath remove')));
         expect(restore, contains('Wait-ServiceStopped'));
         expect(restore, contains('Test-SupportedServiceAccount'));
         expect(restore, contains('RUNNING nao foi confirmado por polling'));
@@ -821,7 +809,7 @@ void main() {
         expect(
           build,
           contains(
-            '727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743',
+            '05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da',
           ),
         );
       },
@@ -1206,7 +1194,7 @@ void main() {
     );
 
     test(
-      'restore_update_state ignores expired context and deletes it',
+      'restore_update_state reports expired context and preserves it',
       () async {
         final tempDir = await Directory.systemTemp.createTemp(
           'restore_context_expired_test',
@@ -1262,8 +1250,8 @@ void main() {
           environment: <String, String>{'MARKER_PATH': markerPath},
         );
 
-        expect(result.exitCode, 0, reason: result.stderr.toString());
-        expect(await File(contextPath).exists(), isFalse);
+        expect(result.exitCode, 2, reason: result.stderr.toString());
+        expect(await File(contextPath).exists(), isTrue);
         expect(await File(markerPath).exists(), isFalse);
 
         await _deleteTempDirBestEffort(tempDir);
@@ -1496,83 +1484,91 @@ void main() {
       skip: !Platform.isWindows,
     );
 
-    test(
-      'restore_update_state skips service replay for UI origin',
-      () async {
-        final tempDir = await Directory.systemTemp.createTemp(
-          'restore_ui_skips_service_test',
-        );
-        final nssmLogPath = p.join(tempDir.path, 'nssm.log');
-        final nssmPath = p.join(tempDir.path, 'nssm.cmd');
-        final markerPath = p.join(tempDir.path, 'relaunch_args.txt');
-        final appScriptPath = p.join(tempDir.path, 'write_args.ps1');
-        final contextPath = p.join(tempDir.path, 'update_context.json');
+    for (final wasRunning in [false, true]) {
+      test(
+        'restore UI preserves service settings (running=$wasRunning)',
+        () async {
+          final tempDir = await Directory.systemTemp.createTemp(
+            'restore_ui_skips_service_test',
+          );
+          await _writeStubServiceUtils(tempDir);
+          final nssmLogPath = p.join(tempDir.path, 'nssm.log');
+          final nssmPath = p.join(tempDir.path, 'nssm.cmd');
+          final markerPath = p.join(tempDir.path, 'relaunch_args.txt');
+          final appScriptPath = p.join(tempDir.path, 'write_args.ps1');
+          final contextPath = p.join(tempDir.path, 'update_context.json');
 
-        await File(nssmPath).writeAsString(
-          '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
-        );
-        await File(appScriptPath).writeAsString(
-          r'Set-Content -Path "$env:MARKER_PATH" -Value ($args -join "`n")',
-        );
-        await File(contextPath).writeAsString(
-          jsonEncode(<String, Object?>{
-            'schemaVersion': 2,
-            'contextId': 'ui-skips-service',
-            'origin': 'ui',
-            'appMode': 'server',
-            'currentVersion': '3.0.1',
-            'targetVersion': '3.0.2',
-            'relaunchArguments': <String>[
-              '-NoProfile',
-              '-ExecutionPolicy',
-              'Bypass',
-              '-File',
-              appScriptPath,
-              '--mode=server',
+          await File(nssmPath).writeAsString(
+            '@echo off\r\necho %*>>"%NSSM_LOG_PATH%"\r\nexit /b 0\r\n',
+          );
+          await File(appScriptPath).writeAsString(
+            r'Set-Content -Path "$env:MARKER_PATH" -Value ($args -join "`n")',
+          );
+          await File(contextPath).writeAsString(
+            jsonEncode(<String, Object?>{
+              'schemaVersion': 2,
+              'contextId': 'ui-skips-service',
+              'origin': 'ui',
+              'appMode': 'server',
+              'currentVersion': '3.0.1',
+              'targetVersion': '3.0.2',
+              'relaunchArguments': <String>[
+                '-NoProfile',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-File',
+                appScriptPath,
+                '--mode=server',
+              ],
+              'executablePath': 'powershell.exe',
+              'createdAt': DateTime.now().toUtc().toIso8601String(),
+              'expiresAt': DateTime.now()
+                  .add(const Duration(minutes: 30))
+                  .toUtc()
+                  .toIso8601String(),
+              'serviceName': 'BackupDatabaseService',
+              'serviceExists': true,
+              'serviceWasRunning': wasRunning,
+              'serviceConfig': <String, Object?>{
+                'ObjectName': 'LocalSystem',
+              },
+            }),
+          );
+
+          final result = await _runPowerShellScript(
+            scriptRelativePath: p.join('installer', 'restore_update_state.ps1'),
+            arguments: <String>[
+              '-ContextPath',
+              contextPath,
+              '-AppPath',
+              'powershell.exe',
+              '-AppDirectory',
+              tempDir.path,
+              '-NssmPath',
+              nssmPath,
             ],
-            'executablePath': 'powershell.exe',
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
-            'expiresAt': DateTime.now()
-                .add(const Duration(minutes: 30))
-                .toUtc()
-                .toIso8601String(),
-            'serviceName': 'BackupDatabaseService',
-            'serviceExists': true,
-            'serviceConfig': <String, Object?>{
-              'ObjectName': 'LocalSystem',
+            environment: <String, String>{
+              'NSSM_LOG_PATH': nssmLogPath,
+              'MARKER_PATH': markerPath,
             },
-          }),
-        );
+          );
 
-        final result = await _runPowerShellScript(
-          scriptRelativePath: p.join('installer', 'restore_update_state.ps1'),
-          arguments: <String>[
-            '-ContextPath',
-            contextPath,
-            '-AppPath',
-            'powershell.exe',
-            '-AppDirectory',
-            tempDir.path,
-            '-NssmPath',
-            nssmPath,
-          ],
-          environment: <String, String>{
-            'NSSM_LOG_PATH': nssmLogPath,
-            'MARKER_PATH': markerPath,
-          },
-        );
+          expect(result.exitCode, 0, reason: result.stderr.toString());
+          if (wasRunning) {
+            final commands = await File(nssmLogPath).readAsString();
+            expect(commands.trim(), 'start BackupDatabaseService');
+          } else {
+            expect(await File(nssmLogPath).exists(), isFalse);
+          }
+          expect(await File(contextPath).exists(), isFalse);
+          final markerFile = await _waitForFile(markerPath);
+          expect(await markerFile.readAsString(), contains('--mode=server'));
 
-        expect(result.exitCode, 0, reason: result.stderr.toString());
-        expect(await File(nssmLogPath).exists(), isFalse);
-        expect(await File(contextPath).exists(), isFalse);
-        final markerFile = await _waitForFile(markerPath);
-        expect(await markerFile.readAsString(), contains('--mode=server'));
-
-        await _deleteTempDirBestEffort(tempDir);
-      },
-      skip: !Platform.isWindows,
-    );
-
+          await _deleteTempDirBestEffort(tempDir);
+        },
+        skip: !Platform.isWindows,
+      );
+    }
     test(
       'restore_update_state replays LocalSystem service configuration',
       () async {

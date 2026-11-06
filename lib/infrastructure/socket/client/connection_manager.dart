@@ -113,6 +113,11 @@ class ConnectionManager {
   String? get activeHost => _activeHost;
   int? get activePort => _activePort;
   bool get isConnected => _client?.isConnected ?? false;
+  Future<void> Function()? _reconnectAction;
+
+  /// Captures the current session before an installer preparation disconnect.
+  Future<void> Function()? captureReconnectAction() =>
+      _client == null ? null : _reconnectAction;
   ConnectionStatus get status =>
       _client?.status ?? ConnectionStatus.disconnected;
   String? get lastErrorMessage => _client?.lastErrorMessage;
@@ -158,6 +163,14 @@ class ConnectionManager {
     );
     _activeHost = host;
     _activePort = port;
+    _reconnectAction = () => connect(
+      host: host,
+      port: port,
+      serverId: serverId,
+      password: password,
+      enableAutoReconnect: enableAutoReconnect,
+      refreshCapabilitiesOnConnect: refreshCapabilitiesOnConnect,
+    );
     _messageSubscription = _client!.messageStream.listen(_onMessage);
     _statusSubscription = _client!.statusStream.listen(_onStatusChanged);
     final useAuth =
@@ -314,6 +327,7 @@ class ConnectionManager {
   }
 
   Future<void> disconnect() async {
+    _reconnectAction = null;
     final messageSub = _messageSubscription;
     _messageSubscription = null;
     await messageSub?.cancel();

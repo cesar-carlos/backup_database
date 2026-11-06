@@ -20,6 +20,18 @@ AUTO_UPDATE_FEED_URL=https://raw.githubusercontent.com/cesar-carlos/backup_datab
 
 ## Teste manual na UI
 
+Antes da homologacao instalada, execute na raiz do repositorio:
+
+```powershell
+flutter test test/unit/application/services/auto_update_service_test.dart test/unit/application/services/auto_update_artifact_regression_test.dart test/unit/installer/update_installer_scripts_test.dart
+```
+
+Os testes de scripts usam NSSM simulado, sem instalar/remover servicos reais.
+Confira tambem em VM Windows: cancelar o wizard com servico ativo, falha ao
+parar o servico, update da UI com servico previamente ativo/parado, lock antigo
+com processo vivo, download interrompido e retorno apos falha do instalador.
+Somente `.exe` com tamanho e hash validados deve ficar pronto para execucao.
+
 1. Execute uma versao antiga do app.
 2. Abra `Configuracoes > Atualizacoes`.
 3. Verifique:
@@ -158,3 +170,19 @@ Confira o `appcast.xml` publicado e valide:
 - Confirme que existe exatamente um instalador `.exe`
 - Confirme que a release atinge `min_publication_age_minutes` e nao esta abaixo de `min_supported_app_version`
 - Se houver `rollout_percentages`, recheque o calculo: `FNV1a("<targetVersion>:<MachineGuid>") % 100 < porcentagem`
+
+## Regressao de rollback persistente
+
+Execute `flutter test test/unit/installer/rollback_update_test.dart` no Windows.
+Os cenarios executam o nucleo PowerShell em diretorios isolados, com callbacks
+de servico simulados: copia parcial, servico originalmente parado, cancelamento
+antes da copia, transacao confirmada, snapshot corrompido, falha de copia,
+falha de configuracao/start do servico, interrupcao entre renomeacoes,
+diretorio inexistente antes do upgrade e alteracao concorrente antes de armar.
+Confiram a restauracao conjunta de binarios/dados e a retomada idempotente.
+
+Em VM, interrompa o setup apos iniciar a copia e execute-o novamente. Verifique
+o journal, a versao anterior, as permissoes dos segredos, a conta do servico e
+o estado RUNNING (ou STOPPED se ja estava parado). Simule disco cheio e arquivo
+bloqueado durante a recuperacao: nao deve haver restart de uma arvore parcial.
+Os testes unitarios nao substituem essa homologacao real do SCM/Inno Setup.

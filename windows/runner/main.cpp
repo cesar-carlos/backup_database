@@ -139,6 +139,28 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                   (service_mode ? "true" : "false"));
 
   if (service_mode) {
+    // WinSW stops a child with Ctrl+C before resorting to TerminateProcess.
+    // A GUI-subsystem executable launched with hidewindow has no console to
+    // receive that signal. Allocate one in session 0 before Dart registers
+    // its signal handlers, preserving the wrapper's stdout/stderr pipes.
+    if (::GetConsoleCP() == 0) {
+      const HANDLE saved_stdout = ::GetStdHandle(STD_OUTPUT_HANDLE);
+      const HANDLE saved_stderr = ::GetStdHandle(STD_ERROR_HANDLE);
+      if (!::AllocConsole()) {
+        AppendRunnerLog("wWinMain: cannot create service control console");
+        ::CoUninitialize();
+        return EXIT_FAILURE;
+      }
+      if (const HWND console = ::GetConsoleWindow()) {
+        ::ShowWindow(console, SW_HIDE);
+      }
+      if (saved_stdout != nullptr && saved_stdout != INVALID_HANDLE_VALUE) {
+        ::SetStdHandle(STD_OUTPUT_HANDLE, saved_stdout);
+      }
+      if (saved_stderr != nullptr && saved_stderr != INVALID_HANDLE_VALUE) {
+        ::SetStdHandle(STD_ERROR_HANDLE, saved_stderr);
+      }
+    }
     AppendRunnerLog("wWinMain: entering headless engine branch");
     flutter::FlutterEngine engine(project);
     if (!engine.Run()) {

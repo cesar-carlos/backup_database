@@ -21,7 +21,7 @@ import 'package:backup_database/infrastructure/external/system/single_instance_i
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
 import 'package:backup_database/presentation/app_widget.dart';
-import 'package:backup_database/presentation/boot/app_cleanup.dart';
+import 'package:backup_database/presentation/boot/app_exit_coordinator.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
@@ -31,6 +31,7 @@ import 'package:backup_database/presentation/boot/scheduled_backup_executor.dart
 import 'package:backup_database/presentation/boot/service_mode_initializer.dart';
 import 'package:backup_database/presentation/boot/single_instance_checker.dart';
 import 'package:backup_database/presentation/boot/socket_server_startup_task.dart';
+import 'package:backup_database/presentation/boot/startup_loading_app.dart';
 import 'package:backup_database/presentation/boot/temporary_backup_cleanup_startup_task.dart';
 import 'package:backup_database/presentation/boot/tray_manager_startup_task.dart';
 import 'package:backup_database/presentation/boot/ui_scheduler_policy.dart';
@@ -446,43 +447,44 @@ class AppBootstrap {
       'bootstrap=ui_single_instance_mutex=${SingleInstanceConfig.uiMutexName.split(r'\').last}',
     );
 
-    _dependencies.environment.ensureWidgetsFlutterBinding();
-    final envOutcome = await _dependencies.environment.loadEnvironmentIfNeeded(
-      logPrefix: '[main]',
-    );
-    _logEnvironmentOutcome(envOutcome, prefix: '[main]');
-
-    final bootstrapConfig = _dependencies.environment.resolveBootstrapConfig(
-      rawArgs: rawArgs,
-    );
-    _dependencies.environment.applyBootstrapConfig(bootstrapConfig);
-    _dependencies.runtime.logInfo(
-      'Modo do aplicativo: ${bootstrapConfig.appMode.name}',
-    );
-
-    _dependencies.runtime.logInfo(
-      '[main] singleInstanceLockFallbackUi='
-      '${bootstrapConfig.uiSingleInstanceLockFallbackMode.name}',
-    );
-
-    _dependencies.uiServices.checkOsCompatibility();
-
-    if (bootstrapConfig.singleInstanceEnabled) {
-      final canContinue = await _dependencies.uiServices.checkSingleInstance(
-        bootstrapContext: bootstrapContext,
-        bootstrapConfig: bootstrapConfig,
-      );
-      if (!canContinue) {
-        return;
-      }
-      _logBootstrapPhase(bootstrapWatch, 'single_instance_ok');
-    } else {
-      _dependencies.runtime.logInfo(
-        'Single instance check desabilitado via configuracao',
-      );
-    }
-
     try {
+      _dependencies.environment.ensureWidgetsFlutterBinding();
+      final envOutcome = await _dependencies.environment
+          .loadEnvironmentIfNeeded(
+            logPrefix: '[main]',
+          );
+      _logEnvironmentOutcome(envOutcome, prefix: '[main]');
+
+      final bootstrapConfig = _dependencies.environment.resolveBootstrapConfig(
+        rawArgs: rawArgs,
+      );
+      _dependencies.environment.applyBootstrapConfig(bootstrapConfig);
+      _dependencies.runtime.logInfo(
+        'Modo do aplicativo: ${bootstrapConfig.appMode.name}',
+      );
+
+      _dependencies.runtime.logInfo(
+        '[main] singleInstanceLockFallbackUi='
+        '${bootstrapConfig.uiSingleInstanceLockFallbackMode.name}',
+      );
+
+      _dependencies.uiServices.checkOsCompatibility();
+
+      if (bootstrapConfig.singleInstanceEnabled) {
+        final canContinue = await _dependencies.uiServices.checkSingleInstance(
+          bootstrapContext: bootstrapContext,
+          bootstrapConfig: bootstrapConfig,
+        );
+        if (!canContinue) {
+          return;
+        }
+        _logBootstrapPhase(bootstrapWatch, 'single_instance_ok');
+      } else {
+        _dependencies.runtime.logInfo(
+          'Single instance check desabilitado via configuracao',
+        );
+      }
+
       await _dependencies.environment.setupServiceLocator();
       _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
 
@@ -491,17 +493,15 @@ class AppBootstrap {
       );
       _logBootstrapPhase(bootstrapWatch, 'ipc_ready');
 
-      await _dependencies.uiServices.initializeApp(
-        appMode: bootstrapConfig.appMode,
-      );
-      _logBootstrapPhase(bootstrapWatch, 'app_initializer_done');
-
       final launchConfig = await _dependencies.uiServices.getLaunchConfig(
         bootstrapContext: bootstrapContext,
       );
       _logBootstrapPhase(bootstrapWatch, 'launch_config_ready');
 
       if (launchConfig.scheduleId != null) {
+        await _dependencies.uiServices.initializeApp(
+          appMode: bootstrapConfig.appMode,
+        );
         await _dependencies.uiServices.executeScheduledBackupAndExit(
           launchConfig.scheduleId!,
         );
@@ -512,6 +512,11 @@ class AppBootstrap {
         launchConfig: launchConfig,
         bootstrapConfig: bootstrapConfig,
       );
+      _dependencies.runtime.runApp(const StartupLoadingApp());
+      await _dependencies.uiServices.initializeApp(
+        appMode: bootstrapConfig.appMode,
+      );
+      _logBootstrapPhase(bootstrapWatch, 'app_initializer_done');
       await _dependencies.uiServices.localSchedulerStartupTask.start(
         bootstrapConfig,
       );
@@ -639,6 +644,9 @@ class AppBootstrap {
   }) async {
     final features = service_locator.getIt<FeatureAvailabilityService>();
     final windowManager = WindowManagerService();
+    windowManager.setCallbacks(
+      onClose: AppExitCoordinator.instance.requestExit,
+    );
     await _prepareTrayCloseBehavior(
       features: features,
       windowManager: windowManager,
@@ -651,14 +659,15 @@ class AppBootstrap {
       appMode: bootstrapConfig.appMode,
     ).start();
 
-    await _buildTrayManagerStartupTask(features: features).start();
-
-    windowManager.setCallbacks(
-      onClose: () async {
-        await AppCleanup.cleanup();
-        exit(0);
+    await _buildTrayManagerStartupTask(
+      features: features,
+      onUnavailable: () async {
+        windowManager.trayAvailable = false;
+        await windowManager.setMinimizeToTray(false);
+        await windowManager.setCloseToTray(false);
+        if (launchConfig.startMinimized) await windowManager.show();
       },
-    );
+    ).start();
   }
 
   static WindowManagerStartupTask _buildWindowManagerStartupTask({
@@ -721,8 +730,10 @@ class AppBootstrap {
 
   static TrayManagerStartupTask _buildTrayManagerStartupTask({
     required FeatureAvailabilityService features,
+    required Future<void> Function() onUnavailable,
   }) {
     return TrayManagerStartupTask(
+      onUnavailable: onUnavailable,
       isTrayEnabled: () => features.isTrayEnabled,
       trayDisabledLabel: () =>
           features.trayDisabledReason?.diagnosticLabel ?? 'unknown',
@@ -730,6 +741,7 @@ class AppBootstrap {
         await TrayManagerService().initialize(
           onMenuAction: TrayMenuHandler.handleAction,
         );
+        WindowManagerService().trayAvailable = true;
       },
       logWarning: LoggerService.warning,
     );

@@ -1,61 +1,69 @@
-import 'package:backup_database/infrastructure/external/system/windows_service/nssm_config_plan.dart';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_installer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('WindowsServiceElevationInstaller.buildElevatedInstallScript', () {
-    const secret = 'S3cret-Pa55-not-in-script!';
-    final planSets = NssmConfigPlan.build(
-      appDir: r'C:\Program Files\Backup Database',
-      logPath: r'C:\ProgramData\BackupDatabase\logs',
-    ).toElevatedPowerShellSets();
-
-    test('does not embed the service password or pass it to nssm', () {
+  for (final scenario in ['local-system', 'custom-account', 'failure']) {
+    test('WinSW UAC adapter delegates securely: $scenario', () async {
+      final temp = await Directory.systemTemp.createTemp("service install '& ");
+      addTearDown(() => temp.delete(recursive: true));
+      final tools = await Directory('${temp.path}/tools').create();
+      final secret = File('${temp.path}/password.txt');
+      await secret.writeAsString('test-password');
+      final report = File('${temp.path}/report.json');
+      await File('${tools.path}/install_service.ps1').writeAsString(r'''
+param($AppPath,$AppDirectory,$ServiceUser,[SecureString]$ServicePassword,[switch]$NonInteractive)
+$matches=$false
+if ($ServicePassword) {
+  $credential=New-Object Management.Automation.PSCredential('user',$ServicePassword)
+  $matches=$credential.GetNetworkCredential().Password -eq 'test-password'
+}
+@{ user=$ServiceUser; passwordMatches=$matches; app=$AppPath; nonInteractive=$NonInteractive.IsPresent } |
+  ConvertTo-Json | Set-Content -LiteralPath $env:TEST_REPORT
+if ($env:TEST_SCENARIO -eq 'failure') { exit 31 }
+exit 0
+''');
       final script =
           WindowsServiceElevationInstaller.buildElevatedInstallScript(
-            nssmPath: r'C:\Program Files\Backup Database\tools\nssm.exe',
-            appPath: r'C:\Program Files\Backup Database\backup_database.exe',
-            appDir: r'C:\Program Files\Backup Database',
-            logPath: r'C:\ProgramData\BackupDatabase\logs',
-            logDir: r'C:\ProgramData\BackupDatabase',
-            configPath: r'C:\ProgramData\BackupDatabase\config',
-            installLogPath: r'C:\Temp\install.log',
-            serviceUser: r'CONTOSO\backupsvc',
-            passwordFilePath: r'C:\Temp\locked.secret',
-            planSets: planSets,
+            wrapperPath: '${tools.path}/BackupDatabaseService.exe',
+            appPath: '${temp.path}/backup_database.exe',
+            appDir: temp.path,
+            logPath: temp.path,
+            logDir: temp.path,
+            configPath: temp.path,
+            installLogPath: '${temp.path}/install.log',
+            serviceUser: scenario == 'local-system' ? null : r'CONTOSO\backup',
+            passwordFilePath: scenario == 'local-system' ? null : secret.path,
+            planSets: '',
           );
-
-      expect(script.contains(secret), isFalse);
-      expect(script, isNot(contains(r"$servicePassword = '")));
-      expect(script, contains('ReadAllText'));
-      expect(script, contains(r'C:\Temp\locked.secret'));
-      expect(script, contains('ChangeServiceConfig'));
-      expect(script, contains('Set-ServiceAccountFromFile'));
-      expect(
-        script,
-        isNot(contains('Set-NssmKeyWithRetry -KeyName "ObjectName"')),
+      expect(script, isNot(contains('test-password')));
+      expect(script, isNot(contains('nssm')));
+      final generated = await File('${temp.path}/run.ps1')
+          .writeAsString(script);
+      final result = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          generated.path,
+        ],
+        environment: {'TEST_REPORT': report.path, 'TEST_SCENARIO': scenario},
       );
-      expect(script, contains(r'Remove-Item -LiteralPath $passwordFile'));
-    });
-
-    test('local system install has no password file and no secret', () {
-      final script =
-          WindowsServiceElevationInstaller.buildElevatedInstallScript(
-            nssmPath: r'C:\tools\nssm.exe',
-            appPath: r'C:\app\backup_database.exe',
-            appDir: r'C:\app',
-            logPath: r'C:\logs',
-            logDir: r'C:\logs',
-            configPath: r'C:\config',
-            installLogPath: r'C:\Temp\install.log',
-            serviceUser: null,
-            passwordFilePath: null,
-            planSets: planSets,
-          );
-
-      expect(script.contains(secret), isFalse);
-      expect(script, contains(r"$passwordFile = ''"));
-      expect(script, contains('LocalSystem'));
-    });
-  });
+      expect(
+        result.exitCode,
+        scenario == 'failure' ? 31 : 0,
+        reason: '${result.stdout}\n${result.stderr}',
+      );
+      final data =
+          jsonDecode(await report.readAsString()) as Map<String, dynamic>;
+      expect(data['app'], '${temp.path}/backup_database.exe');
+      expect(data['nonInteractive'], isTrue);
+      expect(data['passwordMatches'], scenario != 'local-system');
+      if (scenario != 'local-system') expect(secret.existsSync(), isFalse);
+    }, skip: !Platform.isWindows);
+  }
 }

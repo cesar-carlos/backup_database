@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/core/utils/appending_file_sink.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 
 class ServiceBootstrapLog {
   ServiceBootstrapLog({this._logPath}) {
@@ -45,6 +47,19 @@ class ServiceBootstrapLog {
   /// Aguarda a fila do sink drenar. Útil em testes ou em paths de erro
   /// fatal antes de `exit()`.
   Future<void> flush() => _sink.flush();
+
+  Future<void> flushBeforeExit(
+    int code, {
+    void Function(int)? exitProcess,
+    Duration timeout = const Duration(seconds: 2),
+  }) async {
+    try {
+      await flush().timeout(timeout);
+    } on Object catch (e, s) {
+      LoggerService.warning('Falha ao drenar log antes de sair', e, s);
+    }
+    (exitProcess ?? exit)(ServiceModeExitCode.forWrapper(code));
+  }
 
   static String _defaultLogPath() {
     final programData =

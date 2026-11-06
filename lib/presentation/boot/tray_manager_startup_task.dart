@@ -6,18 +6,21 @@ class TrayManagerStartupTask {
     required this.trayDisabledLabel,
     required this.initializeTray,
     required this.logWarning,
+    this.onUnavailable,
   });
 
   final bool Function() isTrayEnabled;
   final String Function() trayDisabledLabel;
   final Future<void> Function() initializeTray;
   final BootstrapLogWithError logWarning;
+  final Future<void> Function()? onUnavailable;
 
   Future<void> start() async {
     if (!isTrayEnabled()) {
       logWarning(
         'Tray icon omitido (compatibilidade): ${trayDisabledLabel()}',
       );
+      await onUnavailable?.call();
       return;
     }
 
@@ -25,6 +28,7 @@ class TrayManagerStartupTask {
       await initializeTray();
     } on Object catch (e, stackTrace) {
       logWarning('Erro ao inicializar tray manager: $e', e, stackTrace);
+      await onUnavailable?.call();
     }
   }
 }

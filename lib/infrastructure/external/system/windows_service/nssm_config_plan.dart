@@ -43,6 +43,7 @@ class NssmConfigPlan {
       const NssmConfigEntry(
         key: 'Start',
         values: ['SERVICE_AUTO_START'],
+        critical: true,
       ),
       const NssmConfigEntry(
         key: 'AppNoConsole',
@@ -62,6 +63,7 @@ class NssmConfigPlan {
       const NssmConfigEntry(
         key: 'AppExit',
         values: ['Default', 'Restart'],
+        critical: true,
       ),
       const NssmConfigEntry(
         key: 'AppExit',
@@ -76,6 +78,7 @@ class NssmConfigPlan {
       const NssmConfigEntry(
         key: 'AppRestartDelay',
         values: ['60000'],
+        critical: true,
       ),
     ]);
   }

@@ -474,9 +474,19 @@ void main() {
           },
         );
 
+        var prepared = false;
+        var recovered = false;
+        service.beforeInstallHook = () async {
+          prepared = true;
+        };
+        service.installFailureHook = () async {
+          recovered = true;
+        };
         await service.initialize();
         await service.checkNow(source: AppUpdateSource.manual);
 
+        expect(prepared, isTrue);
+        expect(recovered, isTrue);
         expect(exitCode, isNull);
         expect(service.snapshot.status, AppUpdateStatus.error);
         expect(
@@ -538,6 +548,8 @@ void main() {
         );
 
         var exitCalled = false;
+        final preparationFinished = Completer<void>();
+        final recoveryFinished = Completer<void>();
         final hookEntered = Completer<void>();
         final service = AutoUpdateService(
           dio: Dio(),
@@ -558,9 +570,12 @@ void main() {
         );
         service.beforeInstallHook = () async {
           hookEntered.complete();
-          await Completer<void>().future;
+          await preparationFinished.future;
         };
 
+        service.installFailureHook = () async {
+          recoveryFinished.complete();
+        };
         await service.initialize();
         final checkFuture = service.checkNow(source: AppUpdateSource.manual);
         await hookEntered.future.timeout(const Duration(seconds: 5));
@@ -582,6 +597,11 @@ void main() {
         );
         expect(await updateContext.exists(), isFalse);
 
+        expect(recoveryFinished.isCompleted, isFalse);
+        final retry = service.checkNow(source: AppUpdateSource.manual);
+        preparationFinished.complete();
+        await recoveryFinished.future;
+        await retry;
         await service.dispose();
         await server.close(force: true);
         await tempDir.delete(recursive: true);
@@ -589,98 +609,120 @@ void main() {
       skip: !Platform.isWindows,
     );
 
-    test(
-      'keeps global lock while beforeInstallHook is running',
-      () async {
-        final tempDir = await Directory.systemTemp.createTemp(
-          'auto_update_lock_held_test',
-        );
-        final locksDir = Directory(p.join(tempDir.path, 'locks'));
-        final updatesDir = Directory(p.join(tempDir.path, 'updates'));
-        final installerBytes = <int>[1, 2, 3, 4, 5, 6];
-        final payloadFile = File(p.join(tempDir.path, 'payload.exe'));
-        await payloadFile.writeAsBytes(installerBytes);
-        final installerSha256 = await FileHashUtils.computeSha256(payloadFile);
+    for (final shutdown in [false, true]) {
+      test(
+        'keeps lock during preparation and cancels handoff on shutdown (shutdown=$shutdown)',
+        () async {
+          final tempDir = await Directory.systemTemp.createTemp(
+            'auto_update_lock_held_test',
+          );
+          final locksDir = Directory(p.join(tempDir.path, 'locks'));
+          final updatesDir = Directory(p.join(tempDir.path, 'updates'));
+          final installerBytes = <int>[1, 2, 3, 4, 5, 6];
+          final payloadFile = File(p.join(tempDir.path, 'payload.exe'));
+          await payloadFile.writeAsBytes(installerBytes);
+          final installerSha256 = await FileHashUtils.computeSha256(
+            payloadFile,
+          );
 
-        late final HttpServer server;
-        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-        final baseUrl = 'http://${server.address.address}:${server.port}';
+          late final HttpServer server;
+          server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+          final baseUrl = 'http://${server.address.address}:${server.port}';
 
-        unawaited(
-          server.forEach((request) async {
-            if (request.uri.path == '/appcast.xml') {
-              request.response.headers.contentType = ContentType(
-                'application',
-                'xml',
-                charset: 'utf-8',
-              );
-              request.response.write(
-                _buildFeed(
-                  items: [
-                    _buildItem(
-                      version: '3.0.2',
-                      length: installerBytes.length,
-                      sha256: installerSha256,
-                      url: '$baseUrl/BackupDatabase-Setup-3.0.2.exe',
-                    ),
-                  ],
-                ),
-              );
-            } else if (request.uri.path == '/BackupDatabase-Setup-3.0.2.exe') {
-              request.response.add(installerBytes);
-            } else {
-              request.response.statusCode = HttpStatus.notFound;
-            }
-            await request.response.close();
-          }),
-        );
+          unawaited(
+            server.forEach((request) async {
+              if (request.uri.path == '/appcast.xml') {
+                request.response.headers.contentType = ContentType(
+                  'application',
+                  'xml',
+                  charset: 'utf-8',
+                );
+                request.response.write(
+                  _buildFeed(
+                    items: [
+                      _buildItem(
+                        version: '3.0.2',
+                        length: installerBytes.length,
+                        sha256: installerSha256,
+                        url: '$baseUrl/BackupDatabase-Setup-3.0.2.exe',
+                      ),
+                    ],
+                  ),
+                );
+              } else if (request.uri.path ==
+                  '/BackupDatabase-Setup-3.0.2.exe') {
+                request.response.add(installerBytes);
+              } else {
+                request.response.statusCode = HttpStatus.notFound;
+              }
+              await request.response.close();
+            }),
+          );
 
-        final hookEntered = Completer<void>();
-        final releaseHook = Completer<void>();
-        final service = AutoUpdateService(
-          dio: Dio(),
-          packageInfoLoader: () async => PackageInfo(
-            appName: 'Backup Database',
-            packageName: 'backup_database',
-            version: '3.0.1',
-            buildNumber: '',
-          ),
-          feedUrlReader: () => '$baseUrl/appcast.xml',
-          locksDirectoryResolver: () async => locksDir,
-          updatesDirectoryResolver: () async => updatesDir,
-          detachedProcessStarter: (executable, arguments) async => null,
-          exitProcess: (code) {},
-          beforeInstallHookTimeout: const Duration(seconds: 30),
-        );
-        service.beforeInstallHook = () async {
-          hookEntered.complete();
-          await releaseHook.future;
-        };
+          var launches = 0;
+          var recoveries = 0;
+          final hookEntered = Completer<void>();
+          final releaseHook = Completer<void>();
+          final service = AutoUpdateService(
+            dio: Dio(),
+            packageInfoLoader: () async => PackageInfo(
+              appName: 'Backup Database',
+              packageName: 'backup_database',
+              version: '3.0.1',
+              buildNumber: '',
+            ),
+            feedUrlReader: () => '$baseUrl/appcast.xml',
+            locksDirectoryResolver: () async => locksDir,
+            updatesDirectoryResolver: () async => updatesDir,
+            detachedProcessStarter: (executable, arguments) async {
+              launches++;
+              return null;
+            },
+            exitProcess: (code) {},
+            beforeInstallHookTimeout: const Duration(seconds: 30),
+          );
+          service.beforeInstallHook = () async {
+            hookEntered.complete();
+            await releaseHook.future;
+          };
 
-        await service.initialize();
-        final firstCheck = service.checkNow(source: AppUpdateSource.manual);
-        await hookEntered.future.timeout(const Duration(seconds: 5));
+          service.installFailureHook = () async {
+            recoveries++;
+          };
+          await service.initialize();
+          final firstCheck = service.checkNow(source: AppUpdateSource.manual);
+          await hookEntered.future.timeout(const Duration(seconds: 5));
 
-        final secondLock = await AutoUpdateService.tryAcquireGlobalLock(
-          locksDir: locksDir,
-          metadata: const {
-            'source': 'periodic',
-            'attempt': '2',
-            'currentVersion': '3.0.1',
-            'stage': 'fetching_feed',
-          },
-        );
-        expect(secondLock, isNull);
+          final secondLock = await AutoUpdateService.tryAcquireGlobalLock(
+            locksDir: locksDir,
+            metadata: const {
+              'source': 'periodic',
+              'attempt': '2',
+              'currentVersion': '3.0.1',
+              'stage': 'fetching_feed',
+            },
+          );
+          expect(secondLock, isNull);
 
-        releaseHook.complete();
-        await firstCheck;
+          if (shutdown) await service.dispose();
+          releaseHook.complete();
+          await firstCheck;
+          if (shutdown) {
+            expect(launches, 0);
+            expect(recoveries, 0);
+            await service.checkNow(source: AppUpdateSource.manual);
+            expect(launches, 0);
+          } else {
+            expect(launches, 1);
+          }
 
-        await service.dispose();
-        await server.close(force: true);
-        await tempDir.delete(recursive: true);
-      },
-      skip: !Platform.isWindows,
-    );
+          await service.dispose();
+          await server.close(force: true);
+          await tempDir.delete(recursive: true);
+        },
+        skip: !Platform.isWindows,
+      );
+    }
 
     test(
       'blocks install when readiness check reports active backup',

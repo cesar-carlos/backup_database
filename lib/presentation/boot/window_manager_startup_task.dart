@@ -18,6 +18,7 @@ class WindowManagerStartupTask {
     required this.isWindowsPlatform,
     required this.logInfo,
     required this.logWarning,
+    this.initializationTimeout = const Duration(seconds: 15),
   });
 
   final bool Function() isWindowManagementEnabled;
@@ -28,6 +29,7 @@ class WindowManagerStartupTask {
   final bool Function() isWindowsPlatform;
   final BootstrapLog logInfo;
   final BootstrapLogWithError logWarning;
+  final Duration initializationTimeout;
 
   Future<void> start() async {
     if (!isWindowManagementEnabled()) {
@@ -38,8 +40,10 @@ class WindowManagerStartupTask {
       return;
     }
 
+    // A failed native window is fatal. Continuing would leave an invisible
+    // process holding the instance lock until manually killed.
+    await initializeWindow().timeout(initializationTimeout);
     try {
-      await initializeWindow();
       if (isWindowsPlatform()) {
         final prefs = await loadWindowsBackdropPreferences();
         await applyWindowsBackdrop(
@@ -50,7 +54,7 @@ class WindowManagerStartupTask {
       logInfo('Window manager pronto');
     } on Object catch (e, stackTrace) {
       logWarning(
-        'Erro ao inicializar window manager (continuando sem UI): $e',
+        'Erro ao aplicar aparência da janela (mantendo janela funcional): $e',
         e,
         stackTrace,
       );

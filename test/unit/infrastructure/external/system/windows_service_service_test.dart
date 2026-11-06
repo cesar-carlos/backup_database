@@ -7,7 +7,6 @@ import 'package:backup_database/infrastructure/external/system/windows_service/w
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_elevation_installer.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_env_provisioner.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_install_orchestrator.dart';
-import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_nssm_configurator.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_sc_client.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service_service.dart';
@@ -851,17 +850,17 @@ void main() {
     });
 
     test(
-      'should return failure when NSSM is not found in tools directory',
+      'should return failure when WinSW is not found in tools directory',
       () async {
         final result = await windowsServiceService.installService();
 
         result.fold(
-          (_) => fail('Expected failure when NSSM not found'),
+          (_) => fail('Expected failure when WinSW not found'),
           (failure) {
             expect(failure, isA<ValidationFailure>());
             expect(
               (failure as ValidationFailure).message.toLowerCase(),
-              contains('nssm'),
+              contains('winsw'),
             );
           },
         );
@@ -879,26 +878,31 @@ void main() {
       windowsServiceService = WindowsServiceService(mockProcessService);
     });
 
-    test(
-      'should return failure when NSSM is not found in tools directory',
-      () async {
-        final result = await windowsServiceService.uninstallService();
-
-        result.fold(
-          (_) => fail('Expected failure when NSSM not found'),
-          (failure) {
-            expect(failure, isA<ValidationFailure>());
-            expect(
-              (failure as ValidationFailure).message.toLowerCase(),
-              contains('nssm'),
-            );
-          },
+    test('uninstalls through SCM without either wrapper binary', () async {
+      var deleted = false;
+      when(
+        () => mockProcessService.run(
+          executable: 'sc',
+          arguments: any(named: 'arguments'),
+          timeout: any(named: 'timeout'),
+        ),
+      ).thenAnswer((invocation) async {
+        final args = invocation.namedArguments[#arguments]! as List<String>;
+        if (args.first == 'delete') deleted = true;
+        return rd.Success(
+          ProcessResult(
+            exitCode: deleted && args.first == 'query' ? 1060 : 0,
+            stdout: deleted ? '' : 'STATE: 1 STOPPED',
+            stderr: '',
+            duration: Duration.zero,
+          ),
         );
-      },
-      skip: !Platform.isWindows,
-    );
+      });
+      final result = await windowsServiceService.uninstallService();
+      expect(result.isSuccess(), isTrue);
+      expect(deleted, isTrue);
+    }, skip: !Platform.isWindows);
   });
-
   group('WindowsServiceService idempotência', () {
     late MockProcessService mockProcessService;
     late WindowsServiceService windowsServiceService;
@@ -982,7 +986,7 @@ void main() {
     );
   });
 
-  group('WindowsServiceInstallOrchestrator.removeExistingInstallIfNeeded', () {
+  group('WindowsServiceInstallOrchestrator.ensureServiceNotInstalled', () {
     late MockProcessService mockProcessService;
 
     setUp(() {
@@ -1012,10 +1016,6 @@ void main() {
       return WindowsServiceInstallOrchestrator(
         processService: mockProcessService,
         timing: timing,
-        nssmConfigurator: WindowsServiceNssmConfigurator(
-          processService: mockProcessService,
-          timing: timing,
-        ),
         envProvisioner: const WindowsServiceEnvProvisioner(),
         scClient: scClient,
         scmPoller: scmPoller,
@@ -1040,7 +1040,7 @@ void main() {
         () async => const rd.Failure(ServerFailure(message: 'scm busy')),
       );
 
-      final result = await orchestrator.removeExistingInstallIfNeeded();
+      final result = await orchestrator.ensureServiceNotInstalled();
 
       expect(result.isError(), isTrue);
       result.fold(
@@ -1054,64 +1054,70 @@ void main() {
       );
     });
 
-    test('aborts when uninstall of existing service fails', () async {
-      final tempDir = await Directory.systemTemp.createTemp('bd_nssm');
-      addTearDown(() => tempDir.delete(recursive: true));
-      final nssmFile = File('${tempDir.path}${Platform.pathSeparator}nssm.exe');
-      await nssmFile.writeAsString('dummy');
+    test(
+      'preserves existing service without invoking stop or remove',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('bd_nssm');
+        addTearDown(() => tempDir.delete(recursive: true));
+        final nssmFile = File(
+          '${tempDir.path}${Platform.pathSeparator}nssm.exe',
+        );
+        await nssmFile.writeAsString('dummy');
 
-      Future<rd.Result<WindowsServiceStatus>> getStatus() async =>
-          const rd.Success(
-            WindowsServiceStatus(
-              isInstalled: true,
-              isRunning: false,
-              stateCode: WindowsServiceStateCode.stopped,
-            ),
-          );
+        Future<rd.Result<WindowsServiceStatus>> getStatus() async =>
+            const rd.Success(
+              WindowsServiceStatus(
+                isInstalled: true,
+                isRunning: false,
+                stateCode: WindowsServiceStateCode.stopped,
+              ),
+            );
 
-      when(
-        () => mockProcessService.run(
-          executable: 'sc',
-          arguments: any(named: 'arguments'),
-          timeout: any(named: 'timeout'),
-        ),
-      ).thenAnswer(
-        (_) async => const rd.Success(_stoppedQueryResult),
-      );
-      when(
-        () => mockProcessService.run(
-          executable: nssmFile.path,
-          arguments: any(named: 'arguments'),
-          timeout: any(named: 'timeout'),
-        ),
-      ).thenAnswer(
-        (_) async => const rd.Success(
-          ProcessResult(
-            exitCode: 1,
-            stdout: '',
-            stderr: 'remove failed',
-            duration: Duration(milliseconds: 10),
+        when(
+          () => mockProcessService.run(
+            executable: 'sc',
+            arguments: any(named: 'arguments'),
+            timeout: any(named: 'timeout'),
           ),
-        ),
-      );
+        ).thenAnswer(
+          (_) async => const rd.Success(_stoppedQueryResult),
+        );
+        when(
+          () => mockProcessService.run(
+            executable: nssmFile.path,
+            arguments: any(named: 'arguments'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer(
+          (_) async => const rd.Success(
+            ProcessResult(
+              exitCode: 1,
+              stdout: '',
+              stderr: 'remove failed',
+              duration: Duration(milliseconds: 10),
+            ),
+          ),
+        );
 
-      final orchestrator = orchestratorFor(
-        getStatus,
-        nssmPath: nssmFile.path,
-      );
+        final orchestrator = orchestratorFor(
+          getStatus,
+          nssmPath: nssmFile.path,
+        );
 
-      final result = await orchestrator.removeExistingInstallIfNeeded();
+        final result = await orchestrator.ensureServiceNotInstalled();
 
-      expect(result.isError(), isTrue);
-      result.fold(
-        (_) => fail('should abort when uninstall fails'),
-        (failure) {
-          expect(
-            (failure as Failure).message.toLowerCase(),
-            contains('remover'),
-          );
-        },
-      );
-    });
+        expect(result.isError(), isTrue);
+        result.fold(
+          (_) => fail('should preserve existing registration'),
+          (failure) {
+            expect(
+              (failure as Failure).message.toLowerCase(),
+              contains('preservar'),
+            );
+          },
+        );
+        verifyZeroInteractions(mockProcessService);
+      },
+    );
   });
 }

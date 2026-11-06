@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/exit_codes.dart';
 import 'package:backup_database/presentation/boot/boot.dart';
+import 'package:backup_database/presentation/boot/startup_loading_app.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +80,44 @@ void main() {
       expect(events, isNot(contains('run_app')));
     });
 
+    for (final stage in ['binding', 'environment', 'config', 'instance']) {
+      test('treats early $stage failure as fatal', () async {
+        final events = <String>[];
+        final base = _buildDependencies(context: _uiContext(), events: events);
+        final dependencies = base.copyWith(
+          environment: base.environment.copyWith(
+            ensureWidgetsFlutterBinding: stage == 'binding'
+                ? () => throw StateError(stage)
+                : null,
+            loadEnvironmentIfNeeded: stage == 'environment'
+                ? ({String? logPrefix}) async => throw StateError(stage)
+                : null,
+            resolveBootstrapConfig: stage == 'config'
+                ? ({required rawArgs}) => throw StateError(stage)
+                : null,
+          ),
+          uiServices: base.uiServices.copyWith(
+            checkSingleInstance: stage == 'instance'
+                ? ({
+                    required bootstrapContext,
+                    required bootstrapConfig,
+                  }) async => throw StateError(stage)
+                : null,
+          ),
+        );
+        await AppBootstrap(dependencies: dependencies).start();
+        expect(
+          events,
+          containsAllInOrder([
+            'cleanup',
+            'exit:${UiBootstrapExitCode.fatalBootstrapError}',
+          ]),
+        );
+        expect(events, isNot(contains('di')));
+        expect(events, isNot(contains('run_app')));
+      });
+    }
+
     test('aborts ui boot after second instance is detected', () async {
       final events = <String>[];
       final dependencies = _buildDependencies(
@@ -147,6 +188,57 @@ void main() {
       expect(events, isNot(contains('scheduler_start')));
     });
 
+    test('shows loading UI while server initialization is pending', () async {
+      final events = <String>[];
+      final entered = Completer<void>();
+      final ready = Completer<void>();
+      final base = _buildDependencies(context: _uiContext(), events: events);
+      final boot = AppBootstrap(
+        dependencies: base.copyWith(
+          uiServices: base.uiServices.copyWith(
+            initializeApp: ({required appMode}) async {
+              entered.complete();
+              await ready.future;
+            },
+          ),
+        ),
+      ).start();
+      await entered.future;
+      expect(events, contains('loading_app'));
+      expect(events, isNot(contains('run_app')));
+      ready.complete();
+      await boot;
+      expect(events, contains('run_app'));
+    });
+
+    test(
+      'window initialization failure releases resources and exits',
+      () async {
+        final events = <String>[];
+        final base = _buildDependencies(context: _uiContext(), events: events);
+        await AppBootstrap(
+          dependencies: base.copyWith(
+            uiServices: base.uiServices.copyWith(
+              initializeUiServices:
+                  ({required launchConfig, required bootstrapConfig}) async {
+                    throw StateError('native window failed');
+                  },
+            ),
+          ),
+        ).start();
+        expect(
+          events,
+          containsAllInOrder([
+            'cleanup',
+            'exit:${UiBootstrapExitCode.fatalBootstrapError}',
+          ]),
+        );
+        expect(events, isNot(contains('app_init:server')));
+        expect(events, isNot(contains('loading_app')));
+        expect(events, isNot(contains('run_app')));
+      },
+    );
+
     test('runs app only after critical initializations', () async {
       final events = <String>[];
       final dependencies = _buildDependencies(
@@ -167,9 +259,10 @@ void main() {
           'single_instance',
           'di',
           'ipc',
-          'app_init:server',
           'launch_config',
           'ui_services',
+          'loading_app',
+          'app_init:server',
           'scheduler_policy:failOpen',
           'scheduler_start',
           'queue_init',
@@ -202,8 +295,8 @@ void main() {
           contains('phase=single_instance_ok'),
           contains('phase=service_locator_ready'),
           contains('phase=ipc_ready'),
-          contains('phase=app_initializer_done'),
           contains('phase=launch_config_ready'),
+          contains('phase=app_initializer_done'),
           contains('phase=scheduler_and_socket_ready'),
           contains('phase=run_app_called'),
         ],
@@ -383,8 +476,7 @@ BootstrapRuntimeHooks _buildRuntime(
       },
     ),
     runApp: (app) {
-      expect(app, isA<SizedBox>());
-      events.add('run_app');
+      events.add(app is StartupLoadingApp ? 'loading_app' : 'run_app');
     },
     createApp: () => const SizedBox.shrink(),
     logInfo: logLines.add,

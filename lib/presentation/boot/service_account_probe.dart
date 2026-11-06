@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/process/process_service.dart'
     as ps;
@@ -36,6 +38,39 @@ class ServiceAccountProbe {
 
   final String serviceName;
   final ps.ProcessService _processService;
+
+  Future<String?> silentUpdateBlockReason(
+    String? account, {
+    String? wrapper,
+  }) async {
+    if ((wrapper ?? Platform.environment['BACKUP_SERVICE_WRAPPER']) !=
+        'winsw') {
+      return buildUnsupportedServiceAccountMessage(account);
+    }
+    if (account == null || account.trim().isEmpty) {
+      return 'Não foi possível confirmar a conta do serviço para atualizar.';
+    }
+    // Credentials stay in SCM, but the installer still needs an administrator
+    // token. Never attempt an interactive UAC prompt from session 0.
+    final result = await _processService.run(
+      executable: 'powershell.exe',
+      arguments: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
+      ],
+      timeout: _probeTimeout,
+    );
+    final response = result.getOrNull();
+    if (response?.exitCode == 0 &&
+        response?.stdout.trim().toLowerCase() == 'true') {
+      return null;
+    }
+    return 'A conta do serviço não confirmou permissões administrativas para '
+        'atualização silenciosa. Execute o instalador como Administrador; '
+        'a conta e as credenciais do serviço serão preservadas.';
+  }
 
   Future<String?> probeInstalledAccount() async {
     final result = await _processService.run(

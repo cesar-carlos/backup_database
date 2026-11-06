@@ -42,17 +42,8 @@ SGBDs.
 - permissao de administrador para instalacao e configuracao do ambiente
 - Visual C++ Redistributable 2015-2022 (x64), instalado automaticamente quando necessario
 
-Dependencias por banco:
-
-- SQL Server: `sqlcmd` no PATH
-- Sybase SQL Anywhere: `dbisql` e `dbbackup` no PATH; `dbvalid` e `dbverify`
-  sao recomendados
-- PostgreSQL: `psql` e `pg_basebackup` no PATH; `pg_verifybackup` e
-  recomendado para fluxos com verificacao
-- Firebird: `gbak`, `nbackup`, `gstat` e `isql` no PATH
-
-Alguns recursos dependem tambem da versao do Windows detectada em runtime,
-como auto update, OAuth externo e integracoes visuais nativas.
+Dependencias por banco e limites por versao do Windows: veja [requisitos](docs/requirements.md).
+Operacao, retencao e transferencias: veja [guia operacional](docs/operations/server_and_transfers.md).
 
 ## Instalacao
 
@@ -161,13 +152,13 @@ Fluxo recomendado:
 
 Se precisar do fluxo manual, use como referencia os scripts em `installer/`,
 principalmente `installer/install_service.ps1`. Ele configura parametros e
-variaveis que nao aparecem em um `nssm install` minimo.
+variaveis necessarias para o WinSW. A migracao preserva registros NSSM existentes; veja [migracao WinSW](docs/install/winsw_migration.md).
 
 Observacoes importantes:
 
 - o servico e configurado para `LocalSystem` por padrao
 - nesta rodada, auto update silencioso em modo servico so e suportado para
-  servicos em `LocalSystem`
+  servicos WinSW com token administrativo (incluindo contas customizadas)
 - se voce trocar a conta do servico, o produto continua podendo operar, mas o
   auto update silencioso passa a exigir acao manual
 

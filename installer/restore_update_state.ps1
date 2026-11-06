@@ -209,19 +209,51 @@ $expiresAt = Get-DateValue -Value $context.expiresAt
 $targetVersion = [string]$context.targetVersion
 
 if ($schemaVersion -lt 2 -or [string]::IsNullOrWhiteSpace($targetVersion)) {
-    Remove-Item -Path $ContextPath -Force -ErrorAction SilentlyContinue
-    exit 0
+    Write-RestoreError -Message 'Contexto invalido; restauracao nao realizada'
+    exit 2
 }
 
 if ($null -eq $expiresAt -or $expiresAt -lt (Get-Date).ToUniversalTime()) {
-    Remove-Item -Path $ContextPath -Force -ErrorAction SilentlyContinue
-    exit 0
+    Write-RestoreError -Message 'Contexto expirado; restauracao nao realizada'
+    exit 2
 }
 
 $origin = [string]$context.origin
+if ($origin -notin @('ui', 'service')) {
+    Write-RestoreError -Message 'Origem do contexto invalida'
+    exit 2
+}
 $serviceExists = [bool]$context.serviceExists
 $serviceConfig = $context.serviceConfig
 $shouldRestoreService = $serviceExists -and ($origin -ne 'ui')
+
+# WinSW migration is completed by Setup before this step. Never replay NSSM
+# commands, account credentials or defaults over the retained SCM registration.
+$winSwPath = Join-Path $AppDirectory 'tools\BackupDatabaseService.exe'
+if ($serviceConfig.Wrapper -eq 'winsw' -and -not (Test-Path -LiteralPath $winSwPath -PathType Leaf)) {
+    throw 'WinSW binary missing; legacy service reconfiguration is forbidden'
+}
+if (Test-Path -LiteralPath $winSwPath) {
+    $serviceUtilsPath = Get-RestoreServiceUtilsPath
+    if (-not $serviceUtilsPath) { throw 'Service polling helpers missing' }
+    . $serviceUtilsPath
+    if ($serviceExists) {
+        if ([string]::IsNullOrWhiteSpace([string]$serviceConfig.ObjectName)) { throw 'Original service account missing; restoration blocked' }
+        $registered = Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName" -ErrorAction Stop
+        if ($registered.ImagePath.Trim('"') -ne $winSwPath) { throw 'WinSW migration not confirmed' }
+        if ($registered.ObjectName -ne $serviceConfig.ObjectName) { throw 'Service account changed during update' }
+        $wasRunning = $origin -eq 'service' -or [bool]$context.serviceWasRunning
+        if ($wasRunning) {
+            Start-Service $ServiceName -ErrorAction Stop
+            if (-not (Wait-ServiceRunning -ServiceName $ServiceName)) { throw 'WinSW service did not reach RUNNING' }
+        }
+    }
+    if ($origin -eq 'ui') {
+        Start-Process -FilePath $AppPath -WorkingDirectory $AppDirectory -ArgumentList @($context.relaunchArguments) -WindowStyle Hidden | Out-Null
+    }
+    Remove-Item -LiteralPath $ContextPath -Force
+    exit 0
+}
 
 if ($shouldRestoreService) {
     $objectName = Get-ConfigValue -Config $serviceConfig -Name "ObjectName" -Default "LocalSystem"
@@ -246,32 +278,26 @@ if ($shouldRestoreService) {
         . $serviceUtilsPath
     }
 
+    if ($null -eq $serviceUtilsPath) {
+        Write-RestoreError -Message 'service_utils.ps1 ausente; restauracao abortada antes de alterar o servico'
+        exit 2
+    }
     $existingService = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($null -ne $existingService) {
-        & $NssmPath stop $ServiceName 2>$null | Out-Null
-        if ($null -ne $serviceUtilsPath) {
+        if ($existingService.Status -ne 'Stopped') {
+            & $NssmPath stop $ServiceName 2>$null | Out-Null
             if (-not (Wait-ServiceStopped -ServiceName $ServiceName)) {
-                throw "Servico $ServiceName nao atingiu STOPPED antes do nssm remove"
+                throw "Servico $ServiceName nao atingiu STOPPED antes da reconfiguracao"
             }
-        } else {
-            Start-Sleep -Seconds 2
         }
-        & $NssmPath remove $ServiceName confirm 2>$null | Out-Null
-        if ($null -ne $serviceUtilsPath) {
-            if (-not (Wait-ServiceRemoved -ServiceName $ServiceName)) {
-                throw "Servico $ServiceName ainda marcado para exclusao apos nssm remove"
-            }
-        } else {
-            Start-Sleep -Seconds 2
+        # Nao remover: uma falha subsequente deve manter o registro e credenciais.
+        Set-NssmValue -Arguments @('set', $ServiceName, 'Application', $AppPath)
+    } else {
+        & $NssmPath install $ServiceName "`"$AppPath`""
+        if ($LASTEXITCODE -ne 0) {
+            throw "Falha ao instalar servico $ServiceName (exit $LASTEXITCODE)"
         }
     }
-
-    & $NssmPath install $ServiceName "`"$AppPath`""
-    if ($LASTEXITCODE -ne 0) {
-        throw "Falha ao executar: $NssmPath install $ServiceName `"$AppPath`""
-    }
-    Start-Sleep -Seconds 2
-
     Set-NssmValue -Arguments @(
         "set",
         $ServiceName,
@@ -380,11 +406,32 @@ if ($shouldRestoreService) {
 }
 
 if ($origin -eq "ui") {
+    # O instalador tambem para um servico existente quando a origem e UI.
+    # Reiniciar sem recriar preserva conta, credenciais e configuracoes.
+    $wasRunning = ($null -eq $context.PSObject.Properties['serviceWasRunning']) -or
+        [bool]$context.serviceWasRunning
+    if ($serviceExists -and $wasRunning) {
+        & $NssmPath start $ServiceName | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-RestoreError -Message 'Falha ao reiniciar servico existente apos update da UI'
+            exit 2
+        }
+        $serviceUtilsPath = Get-RestoreServiceUtilsPath
+        if ($null -eq $serviceUtilsPath) {
+            Write-RestoreError -Message 'service_utils.ps1 ausente; RUNNING nao confirmado apos update da UI'
+            exit 2
+        }
+        . $serviceUtilsPath
+        if (-not (Wait-ServiceRunning -ServiceName $ServiceName)) {
+            Write-RestoreError -Message 'Servico nao atingiu RUNNING apos update da UI'
+            exit 2
+        }
+    }
     $argumentList = @()
     if ($null -ne $context.relaunchArguments) {
         $argumentList = @($context.relaunchArguments | ForEach-Object { [string]$_ })
     }
-    Start-Process -FilePath $AppPath -WorkingDirectory $AppDirectory -ArgumentList $argumentList | Out-Null
+    Start-Process -FilePath $AppPath -WorkingDirectory $AppDirectory -ArgumentList $argumentList -WindowStyle Hidden | Out-Null
 }
 
 Remove-Item -Path $ContextPath -Force -ErrorAction SilentlyContinue

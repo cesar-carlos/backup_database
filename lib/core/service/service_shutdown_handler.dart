@@ -28,7 +28,11 @@ typedef ShutdownCallback = Future<void> Function(Duration timeout);
 /// `factory.legacy()` que delega ao mesmo objeto cacheado — **deprecated**,
 /// novos callers devem usar `getIt<ServiceShutdownHandler>()`.
 class ServiceShutdownHandler {
-  ServiceShutdownHandler();
+  ServiceShutdownHandler({
+    Stream<ProcessSignal> Function(ProcessSignal)? watchSignal,
+  }) : _watchSignal = watchSignal ?? ((signal) => signal.watch());
+
+  final Stream<ProcessSignal> Function(ProcessSignal) _watchSignal;
 
   /// Orçamento padrão do shutdown gracioso (SIGINT/SIGTERM e
   /// `beforeInstallHook` do auto-update em modo serviço).
@@ -55,6 +59,8 @@ class ServiceShutdownHandler {
   }
 
   final List<ShutdownCallback> _shutdownCallbacks = [];
+  final List<void Function()> _completionCallbacks = [];
+  final List<void Function()> _startCallbacks = [];
   final List<StreamSubscription<ProcessSignal>> _signalSubscriptions = [];
   bool _isShuttingDown = false;
   bool _isInitialized = false;
@@ -75,19 +81,14 @@ class ServiceShutdownHandler {
 
     try {
       _signalSubscriptions.add(
-        ProcessSignal.sigint.watch().listen((_) {
+        _watchSignal(ProcessSignal.sigint).listen((_) {
           LoggerService.info('SIGINT recebido (Ctrl+C)');
           unawaited(_handleShutdown(defaultGracefulShutdownTimeout));
         }),
       );
 
-      _signalSubscriptions.add(
-        ProcessSignal.sigterm.watch().listen((_) {
-          LoggerService.info('SIGTERM recebido');
-          unawaited(_handleShutdown(defaultGracefulShutdownTimeout));
-        }),
-      );
-
+      // Dart cannot watch SIGTERM on Windows. WinSW sends Ctrl+C (SIGINT);
+      // registering SIGTERM used to throw and leave initialization incomplete.
       _isInitialized = true;
       LoggerService.info('✅ ServiceShutdownHandler inicializado');
     } on Object catch (e, s) {
@@ -99,7 +100,15 @@ class ServiceShutdownHandler {
   ///
   /// Os callbacks são executados na ordem inversa do registro
   /// (último registrado, primeiro executado - stack behavior).
-  void registerCallback(ShutdownCallback callback) {
+  /// [onComplete] runs after shutdown, including skipped or failed callbacks.
+  /// A timeout stops waiting; it does not cancel the callback's underlying work.
+  void registerCallback(
+    ShutdownCallback callback, {
+    void Function()? onComplete,
+    void Function()? onStart,
+  }) {
+    if (onStart != null) _startCallbacks.add(onStart);
+    if (onComplete != null) _completionCallbacks.add(onComplete);
     _shutdownCallbacks.add(callback);
     LoggerService.debug(
       'Shutdown callback registrado. Total: ${_shutdownCallbacks.length}',
@@ -126,7 +135,14 @@ class ServiceShutdownHandler {
     }
 
     _isShuttingDown = true;
-    final startTime = DateTime.now();
+    for (final start in _startCallbacks) {
+      try {
+        start();
+      } on Object catch (e, s) {
+        LoggerService.error('Erro ao preparar shutdown', e, s);
+      }
+    }
+    final shutdownWatch = Stopwatch()..start();
 
     LoggerService.info('');
     LoggerService.info('═══════════════════════════════════════');
@@ -143,11 +159,11 @@ class ServiceShutdownHandler {
 
     for (var i = _shutdownCallbacks.length - 1; i >= 0; i--) {
       final callback = _shutdownCallbacks[i];
-      final elapsed = DateTime.now().difference(startTime);
+      final elapsed = shutdownWatch.elapsed;
       final remaining = timeout - elapsed;
 
       if (remaining <= Duration.zero) {
-        callbacksSkippedByTimeout = _shutdownCallbacks.length - i;
+        callbacksSkippedByTimeout = i + 1;
         LoggerService.warning(
           '⚠️ Timeout atingido (orçamento esgotado após ${elapsed.inSeconds}s). '
           'Ignorando $callbacksSkippedByTimeout callback(s) restante(s)',
@@ -163,9 +179,9 @@ class ServiceShutdownHandler {
 
       try {
         final stopwatch = Stopwatch()..start();
-        await callback(remaining);
+        await Future<void>.sync(() => callback(remaining)).timeout(remaining);
         stopwatch.stop();
-        final stillRemaining = timeout - DateTime.now().difference(startTime);
+        final stillRemaining = timeout - shutdownWatch.elapsed;
 
         LoggerService.info(
           '[$callbackName] ✅ Concluído em ${stopwatch.elapsedMilliseconds}ms '
@@ -182,7 +198,7 @@ class ServiceShutdownHandler {
       LoggerService.info('');
     }
 
-    final totalElapsed = DateTime.now().difference(startTime);
+    final totalElapsed = shutdownWatch.elapsed;
     LoggerService.info('═══════════════════════════════════════');
     LoggerService.info(
       '✅ SHUTDOWN CONCLUÍDO | '
@@ -200,6 +216,13 @@ class ServiceShutdownHandler {
       } on Object catch (_) {}
     }
     _signalSubscriptions.clear();
+    for (final complete in _completionCallbacks) {
+      try {
+        complete();
+      } on Object catch (e, s) {
+        LoggerService.error('Erro ao concluir shutdown', e, s);
+      }
+    }
   }
 
   /// Verifica se o processo está em shutdown.
@@ -224,6 +247,8 @@ class ServiceShutdownHandler {
     }
     _signalSubscriptions.clear();
     _shutdownCallbacks.clear();
+    _completionCallbacks.clear();
+    _startCallbacks.clear();
     _isShuttingDown = false;
     _isInitialized = false;
   }

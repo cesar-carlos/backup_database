@@ -6,6 +6,7 @@ import 'package:backup_database/core/compatibility/feature_availability_service.
 import 'package:backup_database/core/compatibility/feature_disable_reason.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/boot/app_cleanup.dart';
 import 'package:backup_database/presentation/boot/service_account_probe.dart';
 
 typedef ServiceShutdownHook = Future<void> Function();
@@ -38,6 +39,7 @@ class ServiceAutoUpdateConfigurator {
       ..installContextProvider = _buildInstallContext
       ..installReadinessCheck = _checkInstallReadiness
       ..beforeInstallHook = beforeInstallHook;
+    autoUpdateService.installFailureHook = AppCleanup.recoverFailedInstall;
 
     await autoUpdateService.initialize();
     if (!autoUpdateService.isInitialized) {
@@ -70,9 +72,8 @@ class ServiceAutoUpdateConfigurator {
     AppcastRelease release,
     AppUpdateSource source,
   ) async {
-    // No modo serviço o processo já roda como LocalSystem (validado
-    // pelo `ServiceAccountProbe`). UAC só importa para o caminho UI;
-    // por isso o checador de elevação **não** é chamado aqui.
+    // WinSW preserves SCM credentials; silent updates still require an
+    // administrative token without an interactive UAC prompt in session 0.
     if (isBackupRunning?.call() ?? false) {
       return const AppUpdateBlockOutcome(
         reason: AppUpdateBlockReason.localBackupRunning,
@@ -82,7 +83,7 @@ class ServiceAutoUpdateConfigurator {
       );
     }
     final serviceAccount = await accountProbe.probeInstalledAccount();
-    final message = ServiceAccountProbe.buildUnsupportedServiceAccountMessage(
+    final message = await accountProbe.silentUpdateBlockReason(
       serviceAccount,
     );
     if (message == null) return null;

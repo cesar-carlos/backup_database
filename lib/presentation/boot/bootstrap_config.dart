@@ -61,10 +61,11 @@ class BootstrapConfigResolver {
         isDebugMode: isDebugMode,
         envValue: envValues['SINGLE_INSTANCE_ENABLED'],
       ),
-      uiSingleInstanceLockFallbackMode:
-          SingleInstanceConfig.lockFallbackModeFromEnvValue(
-            envValues['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'],
-          ),
+      uiSingleInstanceLockFallbackMode: !isDebugMode
+          ? SingleInstanceLockFallbackMode.failSafe
+          : SingleInstanceConfig.lockFallbackModeFromEnvValue(
+              envValues['SINGLE_INSTANCE_LOCK_FALLBACK_MODE'],
+            ),
       uiSchedulerFallbackMode: parseUiSchedulerFallbackMode(
         envValues['UI_SCHEDULER_FALLBACK_MODE'],
         onWarning: _onWarning,

@@ -67,6 +67,12 @@ if (-not (Test-Path $ContextPath)) {
 }
 
 $context = Read-Utf8NoBomFile -Path $ContextPath | ConvertFrom-Json
+if ($null -ne $context.PSObject.Properties['capturedAt'] -and
+    -not [string]::IsNullOrWhiteSpace([string]$context.capturedAt)) {
+    # Retrying Setup must not replace the original configuration with the
+    # stopped/partially configured state left by the failed attempt.
+    exit 0
+}
 $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 $serviceExists = $null -ne $service
 
@@ -74,6 +80,10 @@ $serviceConfig = $null
 if ($serviceExists) {
     $imagePath = Get-ServiceRegistryImagePath -Name $ServiceName
     $nssmPath = Resolve-ExecutableFromImagePath -ImagePath $imagePath
+    if ([IO.Path]::GetFileName($nssmPath) -eq 'BackupDatabaseService.exe') {
+        $serviceKey = Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
+        $serviceConfig = [ordered]@{ Wrapper='winsw'; ImagePath=$imagePath; ObjectName=$serviceKey.ObjectName }
+    } else {
     $serviceConfig = [ordered]@{
         NssmPath            = $nssmPath
         Application         = Get-NssmValue -NssmPath $nssmPath -Name $ServiceName -Arguments @("Application")
@@ -92,6 +102,7 @@ if ($serviceExists) {
         AppExit77           = Get-NssmAppExitValue -NssmPath $nssmPath -Name $ServiceName -ExitCode "77"
         AppExit78           = Get-NssmAppExitValue -NssmPath $nssmPath -Name $ServiceName -ExitCode "78"
     }
+    }
 }
 
 $updated = [ordered]@{
@@ -107,6 +118,9 @@ $updated = [ordered]@{
     expiresAt         = $context.expiresAt
     serviceName       = $ServiceName
     serviceExists     = $serviceExists
+    serviceWasRunning = if ($null -ne $context.PSObject.Properties['serviceWasRunning']) {
+        [bool]$context.serviceWasRunning
+    } else { $serviceExists -and ($service.Status -eq 'Running') }
     serviceConfig     = $serviceConfig
     capturedAt        = (Get-Date).ToUniversalTime().ToString("o")
 }

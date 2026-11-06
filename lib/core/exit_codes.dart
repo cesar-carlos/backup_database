@@ -1,3 +1,5 @@
+import 'dart:io';
+
 /// Exit codes used by the application to communicate outcomes to external
 /// monitors (Windows Task Scheduler, NSSM, Nagios/Zabbix).
 ///
@@ -15,6 +17,16 @@ abstract final class ScheduledBackupExitCode {
 }
 
 abstract final class ServiceModeExitCode {
+  /// WinSW reports exit 0 as an orderly stop to SCM. NSSM uses explicit
+  /// per-code exit policies; retain those codes until migration is complete.
+  static int forWrapper(int code, {String? wrapper}) {
+    final selected = wrapper ?? Platform.environment['BACKUP_SERVICE_WRAPPER'];
+    return selected == 'winsw' &&
+            (code == lockDenied || code == handoffForInstaller)
+        ? gracefulShutdown
+        : code;
+  }
+
   /// SCM/NSSM stop after cleanup. `exit` ends the process; the service
   /// runner only leaves its message loop on `WM_QUIT`, which nothing posts.
   static const int gracefulShutdown = 0;

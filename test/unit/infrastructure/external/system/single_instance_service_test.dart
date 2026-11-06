@@ -2,14 +2,80 @@ import 'dart:ffi';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:win32/win32.dart';
 
+class _FailingIpc extends Mock implements IpcService {}
+
 void main() {
+  test(
+    'IPC stop failure still closes mutex and permits reacquisition',
+    () async {
+      final ipc = _FailingIpc();
+      when(ipc.stop).thenThrow(StateError('IPC stop failed'));
+      var nextHandle = 100;
+      final closed = <int>[];
+      final service = SingleInstanceService.forTest(
+        createMutex: (_, _, _) => nextHandle++,
+        setLastError: (_) {},
+        getLastError: () => 0,
+        closeHandle: (handle) {
+          closed.add(handle);
+          return 1;
+        },
+        isWindowsPlatform: () => true,
+        ipcService: ipc,
+      );
+      expect(await service.checkAndLock(), isTrue);
+      await service.releaseLock();
+      expect(closed, [100]);
+      expect(service.isFirstInstance, isFalse);
+      expect(await service.checkAndLock(), isTrue);
+      await service.releaseLock();
+      expect(closed, [100, 101]);
+    },
+  );
   group('SingleInstanceService.checkAndLock', () {
+    for (final throws in [false, true]) {
+      test(
+        'release denies mutex failure despite explicit fail_open (throws=$throws)',
+        () async {
+          var probes = 0;
+          final service = SingleInstanceService.forTest(
+            isDebugMode: false,
+            createMutex: (_, _, _) {
+              if (throws) throw StateError('mutex unavailable');
+              return 0;
+            },
+            setLastError: (_) {},
+            getLastError: () => ERROR_ACCESS_DENIED,
+            isWindowsPlatform: () => true,
+            lockFallbackModeProvider: () =>
+                SingleInstanceLockFallbackMode.failOpen,
+            ipcServerProbe: () async {
+              probes++;
+              return false;
+            },
+          );
+          expect(
+            await service.checkAndLock(
+              fallbackMode: SingleInstanceLockFallbackMode.failOpen,
+            ),
+            isFalse,
+          );
+          expect(
+            service.lockDenialReason,
+            SingleInstanceLockDenialReason.creationFailed,
+          );
+          expect(probes, 0);
+        },
+      );
+    }
     test(
       'should return false when mutex creation fails and fallback is fail_safe',
       () async {

@@ -99,6 +99,26 @@ void main() {
   group('IpcService SHOW_WINDOW', () {
     setUp(IpcShowWindowConfirmation.resetForTest);
 
+    test('waits for slow native restoration before acknowledging', () async {
+      final ipc = _pairedService();
+      await ipc.startServer(
+        role: SingleInstanceConfig.ipcInstanceRoleUi,
+        onShowWindow: () async {
+          await Future<void>.delayed(const Duration(milliseconds: 1200));
+          IpcShowWindowConfirmation.markShown();
+          return null;
+        },
+      );
+      try {
+        expect(
+          await ipc.notifyExistingInstance(),
+          SingleInstanceShowWindowStatus.shown,
+        );
+      } finally {
+        await ipc.stop();
+      }
+    });
+
     test('should ACK SHOW_WINDOW only after the window is shown', () async {
       final ipc = _pairedService();
       var showCount = 0;

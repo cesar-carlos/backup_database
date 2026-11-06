@@ -6,6 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('BootstrapConfigResolver', () {
+    test('release enforces exclusivity even with permissive environment', () {
+      final config = BootstrapConfigResolver(
+        isDebugMode: false,
+        environment: const {
+          'SINGLE_INSTANCE_ENABLED': 'false',
+          'SINGLE_INSTANCE_LOCK_FALLBACK_MODE': 'fail_open',
+        },
+      ).resolve(rawArgs: const ['--launch-origin=windows-startup']);
+      expect(config.singleInstanceEnabled, isTrue);
+      expect(
+        config.uiSingleInstanceLockFallbackMode,
+        SingleInstanceLockFallbackMode.failSafe,
+      );
+    });
     test('resolves app mode and bootstrap flags from centralized inputs', () {
       final warnings = <String>[];
       final resolver = BootstrapConfigResolver(

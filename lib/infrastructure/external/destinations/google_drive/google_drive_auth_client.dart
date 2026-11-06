@@ -16,6 +16,9 @@ class AuthenticatedHttpClient extends http.BaseClient {
     request.headers['Authorization'] = 'Bearer $accessToken';
     return _client.send(request);
   }
+
+  @override
+  void close() => _client.close();
 }
 
 class GoogleDriveClientSession {

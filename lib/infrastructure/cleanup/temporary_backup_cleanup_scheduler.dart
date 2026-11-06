@@ -10,9 +10,15 @@ class TemporaryBackupCleanupScheduler
 
   final ITemporaryBackupCleanupService _cleanupService;
   Timer? _timer;
+  bool _cleanupInProgress = false;
+  @override
+  bool get isRunning => _timer?.isActive ?? false;
 
   @override
   void start({Duration interval = const Duration(hours: 1)}) {
+    if (interval <= Duration.zero) {
+      throw ArgumentError.value(interval, 'interval');
+    }
     stop();
     unawaited(_runOnce());
     _timer = Timer.periodic(interval, (_) {
@@ -30,6 +36,8 @@ class TemporaryBackupCleanupScheduler
   }
 
   Future<void> _runOnce() async {
+    if (_cleanupInProgress) return;
+    _cleanupInProgress = true;
     try {
       await _cleanupService.cleanupOrphanedFailedUploads();
     } on Object catch (e, st) {
@@ -38,6 +46,8 @@ class TemporaryBackupCleanupScheduler
         e,
         st,
       );
+    } finally {
+      _cleanupInProgress = false;
     }
   }
 }

@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart';
-import 'package:window_manager/window_manager.dart';
 
 enum TrayMenuAction {
   show,
@@ -30,8 +30,25 @@ class TrayManagerService with TrayListener {
   bool _isInitialized = false;
   String? _cachedIconPath;
   String? _cachedTrayKey;
+  Future<void> _lifecycle = Future<void>.value();
 
-  Future<void> initialize({Function(TrayMenuAction)? onMenuAction}) async {
+  Future<void> _enqueueLifecycle(Future<void> Function() action) {
+    final operation = _lifecycle.then((_) => action());
+    _lifecycle = operation.catchError((Object _) {});
+    return operation;
+  }
+
+  Future<void> initialize({Function(TrayMenuAction)? onMenuAction}) =>
+      _enqueueLifecycle(() async {
+        try {
+          await _initialize(onMenuAction: onMenuAction);
+        } on Object {
+          await _dispose();
+          rethrow;
+        }
+      });
+
+  Future<void> _initialize({Function(TrayMenuAction)? onMenuAction}) async {
     if (_isInitialized) return;
 
     _onMenuAction = onMenuAction;
@@ -54,6 +71,8 @@ class TrayManagerService with TrayListener {
         await trayManager.setIcon(executablePath);
       } on Object catch (e2) {
         LoggerService.error('Erro crítico ao configurar ícone', e2);
+        trayManager.removeListener(this);
+        rethrow;
       }
     }
 
@@ -230,72 +249,22 @@ class TrayManagerService with TrayListener {
   }
 
   @override
-  void onTrayIconMouseDown() {
-    unawaited(
-      Future.delayed(const Duration(milliseconds: 200), () {
-        unawaited(
-          _restoreWindow()
-              .then((_) {
-                _onMenuAction?.call(TrayMenuAction.show);
-              })
-              .catchError((e) {
-                LoggerService.error('Erro ao restaurar janela do tray', e);
-              }),
-        );
-      }),
-    );
-  }
+  void onTrayIconMouseDown() {}
 
   @override
-  void onTrayIconMouseUp() {
-    unawaited(
-      _restoreWindow()
-          .then((_) {
-            _onMenuAction?.call(TrayMenuAction.show);
-          })
-          .catchError((e) {
-            LoggerService.error('Erro ao restaurar janela do tray', e);
-          }),
-    );
-  }
+  void onTrayIconMouseUp() => _requestShow();
 
-  Future<void> _restoreWindow() async {
-    try {
-      await windowManager.setSkipTaskbar(false);
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      final isMinimized = await windowManager.isMinimized();
-      if (isMinimized) {
-        await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-
-      await windowManager.show();
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      final isVisibleAfterShow = await windowManager.isVisible();
-      if (!isVisibleAfterShow) {
-        await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 200));
-        await windowManager.show();
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-
-      await windowManager.focus();
-      await Future.delayed(const Duration(milliseconds: 100));
-    } on Object catch (e, stackTrace) {
-      LoggerService.error('Erro ao restaurar janela', e, stackTrace);
-      try {
-        await windowManager.setSkipTaskbar(false);
-        await Future.delayed(const Duration(milliseconds: 100));
-        await windowManager.restore();
-        await Future.delayed(const Duration(milliseconds: 200));
-        await windowManager.show();
-        await Future.delayed(const Duration(milliseconds: 200));
-        await windowManager.focus();
-      } on Object catch (e2) {
-        LoggerService.error('Erro crítico ao restaurar janela', e2);
-      }
+  void _requestShow() {
+    if (!_isInitialized) return;
+    final callback = _onMenuAction;
+    if (callback != null) {
+      callback(TrayMenuAction.show);
+    } else {
+      unawaited(
+        WindowManagerService().show().catchError((Object error) {
+          LoggerService.error('Erro ao restaurar janela do tray', error);
+        }),
+      );
     }
   }
 
@@ -307,7 +276,9 @@ class TrayManagerService with TrayListener {
   @override
   void onTrayIconRightMouseUp() {}
 
-  Future<void> _showContextMenu() async {
+  Future<void> _showContextMenu() => _enqueueLifecycle(_showContextMenuNow);
+
+  Future<void> _showContextMenuNow() async {
     if (!_isInitialized) {
       LoggerService.warning('TrayManager não está inicializado');
       return;
@@ -324,17 +295,10 @@ class TrayManagerService with TrayListener {
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
+    if (!_isInitialized) return;
     switch (menuItem.key) {
       case 'show':
-        unawaited(
-          _restoreWindow()
-              .then((_) {
-                _onMenuAction?.call(TrayMenuAction.show);
-              })
-              .catchError((e) {
-                LoggerService.error('Erro ao restaurar janela do menu', e);
-              }),
-        );
+        _requestShow();
 
       case 'settings':
         _onMenuAction?.call(TrayMenuAction.settings);
@@ -347,8 +311,20 @@ class TrayManagerService with TrayListener {
     }
   }
 
-  void dispose() {
+  Future<void> dispose() => _enqueueLifecycle(_dispose);
+
+  Future<void> _dispose() async {
+    _isInitialized = false;
+    _onMenuAction = null;
     trayManager.removeListener(this);
-    unawaited(trayManager.destroy());
+    try {
+      await trayManager.destroy();
+    } on Object catch (error, stackTrace) {
+      LoggerService.error(
+        'Erro ao remover ícone da bandeja',
+        error,
+        stackTrace,
+      );
+    }
   }
 }

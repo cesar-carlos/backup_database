@@ -71,10 +71,8 @@ class AppUpdateGlobalLock {
           now: acquiredAt,
         );
 
-        // Considera obsoleto se (a) excedeu janela de stale OU (b) o
-        // processo dono nao existe mais no S.O. Combinacao reduz a janela
-        // de bloqueio apos crash do dono (antes esperavamos 2h cheias).
-        final isStale = isStaleByAge || !ownerAlive;
+        // Age alone must never steal a lock from a live updater.
+        final isStale = ownerPid == null ? isStaleByAge : !ownerAlive;
         if (!isStale) {
           final summary = await _describeLockOwner(lockFile);
           LoggerService.info(

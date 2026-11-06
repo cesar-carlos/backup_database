@@ -102,6 +102,15 @@ class SchedulerService implements ISchedulerService {
   final Duration _uploadTimeout;
 
   Timer? _checkTimer;
+  Timer? _initialTimer;
+  int _startGeneration = 0;
+  bool _executionsSuspended = false;
+
+  @override
+  void suspendExecutions() => _executionsSuspended = true;
+
+  @override
+  void resumeExecutions() => _executionsSuspended = false;
 
   late final SchedulerExecutionLock _lock;
   late final SchedulerWatchdog _watchdog;
@@ -128,9 +137,11 @@ class SchedulerService implements ISchedulerService {
 
     LoggerService.info('Iniciando serviço de agendamento');
     _isRunning = true;
+    final generation = ++_startGeneration;
 
     await _updateAllNextRuns();
     await _reconcileStaleRunningBackups();
+    if (!_isRunning || generation != _startGeneration) return;
 
     // PR-6: watchdog roda independente do timer local de agendamento.
     // Mesmo quando o operador desabilita `local_schedule_timer_enabled`
@@ -141,6 +152,7 @@ class SchedulerService implements ISchedulerService {
     final localTimerEnabled =
         await _userPreferencesRepository?.getLocalScheduleTimerEnabled() ??
         true;
+    if (!_isRunning || generation != _startGeneration) return;
     if (!localTimerEnabled) {
       LoggerService.info(
         'Timer de agendamento local desativado (preferência); '
@@ -155,8 +167,8 @@ class SchedulerService implements ISchedulerService {
     // reiniciar uma frota de máquinas) consultariam `getEnabledDueForExecution`
     // todos no segundo zero, causando picos de I/O previsíveis.
     final jitterSeconds = Random().nextInt(30);
-    Timer(Duration(seconds: jitterSeconds), () {
-      if (!_isRunning) return;
+    _initialTimer = Timer(Duration(seconds: jitterSeconds), () {
+      if (!_isRunning || generation != _startGeneration) return;
       unawaited(_checkSchedules());
       _checkTimer = Timer.periodic(
         const Duration(minutes: 1),
@@ -173,6 +185,9 @@ class SchedulerService implements ISchedulerService {
   void stop() {
     LoggerService.info('Parando serviço de agendamento');
     _isRunning = false;
+    _startGeneration++;
+    _initialTimer?.cancel();
+    _initialTimer = null;
     _checkTimer?.cancel();
     _checkTimer = null;
     _watchdog.stop();
@@ -923,6 +938,15 @@ class SchedulerService implements ISchedulerService {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
     String? runId,
   }) {
+    if (_executionsSuspended) {
+      return Future.value(
+        const rd.Failure(
+          ValidationFailure(
+            message: 'Novas execuções bloqueadas durante encerramento ou atualização.',
+          ),
+        ),
+      );
+    }
     return _lock.run(
       schedule,
       executionOrigin: executionOrigin,
@@ -989,6 +1013,14 @@ class SchedulerService implements ISchedulerService {
     ExecutionOrigin executionOrigin = ExecutionOrigin.local,
     String? runId,
   }) async {
+    if (_executionsSuspended) {
+      return const rd.Failure(
+        ValidationFailure(
+          message:
+              'Novas execuções bloqueadas durante encerramento ou atualização.',
+        ),
+      );
+    }
     final result = await _scheduleRepository.getById(scheduleId);
 
     return result.fold(

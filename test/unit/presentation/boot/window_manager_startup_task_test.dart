@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 import 'package:backup_database/presentation/boot/window_manager_startup_task.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +17,8 @@ WindowManagerStartupTask _buildTask({
   required List<String> events,
   bool isWindows = false,
   bool throwOnInit = false,
+  Future<void> Function()? initializeWindow,
+  Duration initializationTimeout = const Duration(seconds: 15),
   bool throwOnBackdrop = false,
   ({bool micaEnabled, bool isDark}) prefs = (micaEnabled: true, isDark: false),
   BootstrapLog? logInfo,
@@ -23,12 +27,15 @@ WindowManagerStartupTask _buildTask({
   return WindowManagerStartupTask(
     isWindowManagementEnabled: () => isEnabled,
     windowManagementDisabledLabel: () => 'unsupported_runtime',
-    initializeWindow: () async {
-      events.add('init');
-      if (throwOnInit) {
-        throw StateError('init boom');
-      }
-    },
+    initializationTimeout: initializationTimeout,
+    initializeWindow:
+        initializeWindow ??
+        () async {
+          events.add('init');
+          if (throwOnInit) {
+            throw StateError('init boom');
+          }
+        },
     applyWindowsBackdrop: ({required micaEnabled, required isDark}) async {
       events.add('backdrop:mica=$micaEnabled,dark=$isDark');
       if (throwOnBackdrop) {
@@ -89,7 +96,32 @@ void main() {
       );
     });
 
-    test('logs warning and swallows init failure', () async {
+    test('times out an unresponsive native window', () async {
+      final pending = Completer<void>();
+      final task = _buildTask(
+        isEnabled: true,
+        events: [],
+        initializeWindow: () => pending.future,
+        initializationTimeout: const Duration(milliseconds: 10),
+      );
+      await expectLater(task.start(), throwsA(isA<TimeoutException>()));
+      pending.complete();
+    });
+
+    test('backdrop failure leaves functional window available', () async {
+      final warnings = <String>[];
+      final task = _buildTask(
+        isEnabled: true,
+        events: [],
+        isWindows: true,
+        throwOnBackdrop: true,
+        logWarning: (message, [_, _]) => warnings.add(message),
+      );
+      await task.start();
+      expect(warnings.single, contains('aparência'));
+    });
+
+    test('propagates native window failure', () async {
       final events = <String>[];
       final warnings = <String>[];
       final task = _buildTask(
@@ -99,10 +131,9 @@ void main() {
         logWarning: (message, [_, _]) => warnings.add(message),
       );
 
-      await task.start();
-
+      await expectLater(task.start(), throwsStateError);
       expect(events, equals(['init']));
-      expect(warnings.first, contains('Erro ao inicializar window manager'));
+      expect(warnings, isEmpty);
     });
   });
 }

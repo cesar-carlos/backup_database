@@ -34,11 +34,8 @@ Consulte este documento quando:
 )
 ```
 
-### Metodo 3: CMD (administrador)
-
-```cmd
-setx /M PATH "%PATH%;C:\Caminho\Da\Ferramenta"
-```
+Nao use setx para reconstruir o PATH a partir do ambiente do processo;
+use as variaveis de sistema na interface ou no PowerShell acima.
 
 ## Caminhos comuns por banco
 

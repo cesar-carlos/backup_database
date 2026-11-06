@@ -59,197 +59,136 @@ class FTPFile {
     File fLocalFile, {
     FileProgress? onProgress,
   }) async {
-    _socket.logger.log('Download $sRemoteName to ${fLocalFile.path}');
-    var fileSize = await FTPFile(_socket).size(sRemoteName);
-    if (fileSize == -1) {
-      throw FTPConnectException('Remote File $sRemoteName does not exist!');
-    }
-
-    final response = await _socket.openDataTransferChannel();
-    _socket.sendCommandWithoutWaitingResponse('RETR $sRemoteName');
-
-    final lPort = Utils.parsePort(response.message, _socket.supportIPV6);
-    _socket.logger.log('Opening DataSocket to Port $lPort');
-    final dataSocket = await _socket.openDataSocket(lPort);
-    var response2 = await _socket.readResponse();
-    var isTransferCompleted = response2.isSuccessCode();
-    if (!isTransferCompleted &&
-        response2.code != 125 &&
-        response2.code != 150) {
-      throw FTPConnectException('Connection refused. ', response2.message);
-    }
-
-    _socket.logger.log('Start downloading...');
-    final sink = fLocalFile.openWrite(mode: FileMode.writeOnly);
-    var received = 0;
-    await dataSocket.listen((data) {
-      sink.add(data);
-      if (onProgress != null) {
-        received += data.length;
-        final percent = ((received / fileSize) * 100).toStringAsFixed(2);
-        var percentVal = double.tryParse(percent) ?? 100;
-        if (percentVal.isInfinite || percentVal.isNaN) percentVal = 100;
-        onProgress(percentVal, received, fileSize);
+    final fileSize = await size(sRemoteName);
+    if (fileSize < 0) throw FTPConnectException('Remote file unavailable');
+    final passive = await _socket.openDataTransferChannel();
+    final port = Utils.parsePort(passive.message, _socket.supportIPV6);
+    final data = await _socket.openDataSocket(port);
+    IOSink? sink;
+    final timeout = Duration(seconds: _socket.timeout);
+    try {
+      final initial = await _socket.sendCommand('RETR $sRemoteName');
+      if (initial.code != 125 && initial.code != 150) {
+        throw FTPConnectException('Download refused', initial.message);
       }
-    }).asFuture();
-
-    await dataSocket.close();
-    await sink.flush();
-    await sink.close();
-
-    if (!isTransferCompleted) {
-      response2 = await _socket.readResponse();
-      if (!response2.isSuccessCode()) {
-        throw FTPConnectException('Transfer Error.', response2.message);
+      sink = fLocalFile.openWrite();
+      var received = 0;
+      await sink.addStream(data.timeout(timeout).map((chunk) {
+        received += chunk.length;
+        onProgress?.call(fileSize == 0 ? 100 : received * 100 / fileSize,
+            received, fileSize);
+        return chunk;
+      }));
+      await sink.flush().timeout(timeout);
+      await sink.close().timeout(timeout);
+      sink = null;
+      final completed = await _socket.readResponse();
+      if ((completed.code != 226 && completed.code != 250) ||
+          received != fileSize) {
+        throw FTPConnectException('Incomplete download', completed.message);
+      }
+      return true;
+    } catch (_) {
+      _socket.abort();
+      rethrow;
+    } finally {
+      _socket.releaseDataSocket(data);
+      if (sink != null) {
+        try {
+          await sink.close().timeout(timeout);
+        } catch (_) {}
       }
     }
-
-    _socket.logger.log('File Downloaded!');
-    return true;
   }
 
   Future<bool> upload(
-    File fFile, {
+    File file, {
     String remoteName = '',
     FileProgress? onProgress,
-  }) async {
-    _socket.logger.log('Upload File: ${fFile.path}');
+  }) =>
+      _upload(file, remoteName: remoteName, onProgress: onProgress);
 
-    final response = await _socket.openDataTransferChannel();
-
-    var sFilename = remoteName;
-    if (sFilename.isEmpty) {
-      sFilename = p.basename(fFile.path);
-    }
-
-    _socket.sendCommandWithoutWaitingResponse('STOR $sFilename');
-
-    final iPort = Utils.parsePort(response.message, _socket.supportIPV6);
-    _socket.logger.log('Opening DataSocket to Port $iPort');
-    final dataSocket = await _socket.openDataSocket(iPort);
-    var response2 = await _socket.readResponse();
-    var isTransferCompleted = response2.isSuccessCode();
-    if (!isTransferCompleted &&
-        response2.code != 125 &&
-        response2.code != 150) {
-      throw FTPConnectException('Connection refused. ', response2.message);
-    }
-
-    _socket.logger.log('Start uploading...');
-
-    var received = 0;
-    final fileSize = await fFile.length();
-
-    final readStream = fFile.openRead().transform(
-      StreamTransformer<List<int>, List<int>>.fromHandlers(
-        handleData: (data, sink) {
-          sink.add(data);
-          if (onProgress != null) {
-            received += data.length;
-            final percent = ((received / fileSize) * 100).toStringAsFixed(2);
-            var percentVal = double.tryParse(percent) ?? 100;
-            if (percentVal.isInfinite || percentVal.isNaN) percentVal = 100;
-            onProgress(percentVal, received, fileSize);
-          }
-        },
-      ),
-    );
-
-    await dataSocket.addStream(readStream);
-    await dataSocket.flush();
-    await dataSocket.close();
-
-    if (!isTransferCompleted) {
-      response2 = await _socket.readResponse();
-      if (!response2.isSuccessCode()) {
-        throw FTPConnectException('Transfer Error.', response2.message);
-      }
-    }
-
-    _socket.logger.log('File Uploaded!');
-    return true;
-  }
-
-  /// Upload file with resume support (REST + STOR).
-  /// [offset] - byte offset to resume from (server must have bytes 0..offset-1).
-  /// Progress reports total bytes (offset + sent) over fileSize.
   Future<bool> uploadWithResume(
-    File fFile, {
+    File file, {
     required int offset,
     String remoteName = '',
     FileProgress? onProgress,
+  }) =>
+      _upload(file,
+          offset: offset, remoteName: remoteName, onProgress: onProgress);
+
+  Future<bool> _upload(
+    File file, {
+    int offset = 0,
+    String remoteName = '',
+    FileProgress? onProgress,
   }) async {
-    _socket.logger.log(
-      'Upload File with resume: ${fFile.path} from offset $offset',
-    );
-
-    final fileSize = await fFile.length();
-    if (offset >= fileSize) {
-      _socket.logger.log('Offset >= fileSize, nothing to upload');
-      return true;
+    final size = await file.length();
+    if (offset < 0 || offset > size) {
+      throw ArgumentError.value(offset, 'offset');
+    }
+    final passive = await _socket.openDataTransferChannel();
+    final port = Utils.parsePort(passive.message, _socket.supportIPV6);
+    final data = await _socket.openDataSocket(port);
+    Timer? idleTimer;
+    final stalled = Completer<void>();
+    var timedOut = false;
+    void resetIdleTimer() {
+      idleTimer?.cancel();
+      idleTimer = Timer(Duration(seconds: _socket.timeout), () {
+        timedOut = true;
+        stalled.completeError(TimeoutException('FTP data transfer stalled'));
+        _socket.abort();
+      });
     }
 
-    final restReply = await _socket.sendCommand('REST $offset');
-    if (!restReply.isSuccessCode()) {
-      throw FTPConnectException(
-        'Server does not support REST or refused offset $offset',
-        restReply.message,
-      );
-    }
-
-    final response = await _socket.openDataTransferChannel();
-
-    var sFilename = remoteName;
-    if (sFilename.isEmpty) {
-      sFilename = p.basename(fFile.path);
-    }
-
-    _socket.sendCommandWithoutWaitingResponse('STOR $sFilename');
-
-    final iPort = Utils.parsePort(response.message, _socket.supportIPV6);
-    _socket.logger.log('Opening DataSocket to Port $iPort');
-    final dataSocket = await _socket.openDataSocket(iPort);
-    var response2 = await _socket.readResponse();
-    var isTransferCompleted = response2.isSuccessCode();
-    if (!isTransferCompleted &&
-        response2.code != 125 &&
-        response2.code != 150) {
-      throw FTPConnectException('Connection refused. ', response2.message);
-    }
-
-    _socket.logger.log('Start uploading from offset $offset...');
-
-    var sent = 0;
-
-    final readStream = fFile.openRead(offset).transform(
-      StreamTransformer<List<int>, List<int>>.fromHandlers(
-        handleData: (data, sink) {
-          sink.add(data);
-          if (onProgress != null) {
-            sent += data.length;
-            final totalReceived = offset + sent;
-            final percent =
-                ((totalReceived / fileSize) * 100).toStringAsFixed(2);
-            var percentVal = double.tryParse(percent) ?? 100;
-            if (percentVal.isInfinite || percentVal.isNaN) percentVal = 100;
-            onProgress(percentVal, totalReceived, fileSize);
-          }
-        },
-      ),
-    );
-
-    await dataSocket.addStream(readStream);
-    await dataSocket.flush();
-    await dataSocket.close();
-
-    if (!isTransferCompleted) {
-      response2 = await _socket.readResponse();
-      if (!response2.isSuccessCode()) {
-        throw FTPConnectException('Transfer Error.', response2.message);
+    try {
+      // REST must immediately precede STOR; success here is 350, not 2xx.
+      if (offset > 0) {
+        final rest = await _socket.sendCommand('REST $offset');
+        if (rest.code != 350) {
+          throw FTPConnectException('Resume refused', rest.message);
+        }
       }
+      final name = remoteName.isEmpty ? p.basename(file.path) : remoteName;
+      final initial = await _socket.sendCommand('STOR $name');
+      if (initial.code != 125 && initial.code != 150) {
+        throw FTPConnectException('Upload refused', initial.message);
+      }
+      var sent = offset;
+      resetIdleTimer();
+      final stream = file.openRead(offset).map((chunk) {
+        resetIdleTimer();
+        sent += chunk.length;
+        onProgress?.call(size == 0 ? 100 : sent * 100 / size, sent, size);
+        return chunk;
+      });
+      // Bound a blocked writer and destroy its socket before returning failure.
+      await Future.any<void>([
+        data.addStream(stream),
+        stalled.future,
+        _socket.whenAborted
+            .then((_) => throw FTPConnectException('Upload aborted')),
+      ]);
+      await data.flush().timeout(Duration(seconds: _socket.timeout));
+      await data.close().timeout(Duration(seconds: _socket.timeout));
+      idleTimer?.cancel();
+      if (timedOut) throw TimeoutException('FTP data transfer stalled');
+      final completed = await _socket.readResponse();
+      if (completed.code != 226 && completed.code != 250) {
+        throw FTPConnectException('Transfer Error.', completed.message);
+      }
+      if (sent != size) {
+        throw FTPConnectException('Local file changed during upload');
+      }
+      return true;
+    } catch (_) {
+      // A late 226/426 must not become the reply to a cleanup/retry command.
+      _socket.abort();
+      rethrow;
+    } finally {
+      idleTimer?.cancel();
+      _socket.releaseDataSocket(data);
     }
-
-    _socket.logger.log('File Uploaded (resumed from $offset)!');
-    return true;
   }
 }

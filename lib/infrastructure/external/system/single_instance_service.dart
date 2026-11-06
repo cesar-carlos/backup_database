@@ -7,6 +7,7 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:win32/win32.dart';
 
 final _kernel32 = DynamicLibrary.open('kernel32.dll');
@@ -47,6 +48,7 @@ class SingleInstanceService implements ISingleInstanceService {
     SecurityAttributesProvider? securityAttributesProvider,
     IpcService? ipcService,
     Future<bool> Function()? ipcServerProbe,
+    this._isDebugMode = kDebugMode,
   }) : _createMutexFn = createMutex ?? _createMutex,
        _openMutexFn = openMutex ?? _openMutex,
        _setLastErrorFn =
@@ -70,6 +72,7 @@ class SingleInstanceService implements ISingleInstanceService {
   static final SingleInstanceService _instance = SingleInstanceService._();
 
   SingleInstanceService.forTest({
+    bool isDebugMode = true,
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
     int Function(int, int, Pointer<Utf16>)? openMutex,
     void Function(int)? setLastError,
@@ -81,6 +84,7 @@ class SingleInstanceService implements ISingleInstanceService {
     IpcService? ipcService,
     Future<bool> Function()? ipcServerProbe,
   }) : this._(
+         isDebugMode: isDebugMode,
          createMutex: createMutex,
          openMutex: openMutex,
          setLastError: setLastError,
@@ -97,6 +101,7 @@ class SingleInstanceService implements ISingleInstanceService {
        );
 
   int _mutexHandle = 0;
+  final bool _isDebugMode;
   bool _isFirstInstance = false;
   bool _checkAndLockCompleted = false;
   SingleInstanceLockDenialReason? _lockDenialReason;
@@ -237,6 +242,9 @@ class SingleInstanceService implements ISingleInstanceService {
     required bool isServiceMode,
     SingleInstanceLockFallbackMode? fallbackMode,
   }) {
+    if (!_isDebugMode || isServiceMode) {
+      return SingleInstanceLockFallbackMode.failSafe;
+    }
     if (fallbackMode != null) {
       return fallbackMode;
     }
@@ -376,7 +384,9 @@ class SingleInstanceService implements ISingleInstanceService {
   Future<void> releaseLock() async {
     try {
       await _ipcService.stop();
-
+    } on Object catch (e) {
+      LoggerService.warning('Erro ao parar IPC ao liberar lock: $e');
+    } finally {
       if (_mutexHandle != 0) {
         _closeHandleFn(_mutexHandle);
         _mutexHandle = 0;
@@ -384,8 +394,6 @@ class SingleInstanceService implements ISingleInstanceService {
       }
       _checkAndLockCompleted = false;
       _isFirstInstance = false;
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao liberar lock: $e');
     }
   }
 

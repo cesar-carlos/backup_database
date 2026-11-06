@@ -14,7 +14,6 @@ import 'package:backup_database/infrastructure/external/system/windows_service/w
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_install_orchestrator.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_lifecycle_orchestrator.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_messages.dart';
-import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_nssm_configurator.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_sc_client.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_scm_poller.dart';
 import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_timing_config.dart';
@@ -30,7 +29,6 @@ class WindowsServiceService implements IWindowsServiceService {
     this._processService, {
     WindowsServiceTimingConfig? timingConfig,
     IMetricsCollector? metricsCollector,
-    WindowsServiceNssmConfigurator? nssmConfigurator,
     WindowsServiceScmPoller? scmPoller,
     WindowsServiceElevationInstaller? elevationInstaller,
     WindowsServiceEnvProvisioner? envProvisioner,
@@ -40,12 +38,6 @@ class WindowsServiceService implements IWindowsServiceService {
     WindowsServiceLifecycleOrchestrator? lifecycleOrchestrator,
   }) : _timing = timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
        _metrics = metricsCollector,
-       _nssmConfigurator =
-           nssmConfigurator ??
-           WindowsServiceNssmConfigurator(
-             processService: _processService,
-             timing: timingConfig ?? WindowsServiceTimingConfig.defaultConfig,
-           ),
        _envProvisioner = envProvisioner ?? const WindowsServiceEnvProvisioner(),
        _scClient =
            scClient ??
@@ -86,7 +78,6 @@ class WindowsServiceService implements IWindowsServiceService {
         WindowsServiceInstallOrchestrator(
           processService: _processService,
           timing: _timing,
-          nssmConfigurator: _nssmConfigurator,
           envProvisioner: _envProvisioner,
           scClient: _scClient,
           scmPoller: _scmPoller,
@@ -111,7 +102,6 @@ class WindowsServiceService implements IWindowsServiceService {
   final ProcessService _processService;
   final WindowsServiceTimingConfig _timing;
   final IMetricsCollector? _metrics;
-  final WindowsServiceNssmConfigurator _nssmConfigurator;
   final WindowsServiceEnvProvisioner _envProvisioner;
   final WindowsServiceScClient _scClient;
   late final WindowsServiceScmPoller _scmPoller;

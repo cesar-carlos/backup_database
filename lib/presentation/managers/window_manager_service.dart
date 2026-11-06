@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:backup_database/core/theme/tokens/app_breakpoints.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/window_close_guard.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -13,12 +14,32 @@ class WindowManagerService with WindowListener {
   static final WindowManagerService _instance = WindowManagerService._();
 
   VoidCallback? _onMinimize;
-  VoidCallback? _onClose;
+  FutureOr<void> Function()? _onClose;
   VoidCallback? _onFocus;
 
   bool _isInitialized = false;
   bool _minimizeToTray = false;
   bool _closeToTray = false;
+  bool trayAvailable = true;
+  bool _handlingClose = false;
+  Future<void> _windowOperations = Future<void>.value();
+  int _generation = 0;
+  bool _isShuttingDown = false;
+
+  void beginShutdown() {
+    _isShuttingDown = true;
+    _generation++;
+  }
+
+  Future<void> _enqueueWindowOperation(Future<void> Function() action) {
+    final generation = _generation;
+    final operation = _windowOperations.then((_) async {
+      if (!_isShuttingDown && generation == _generation) await action();
+    });
+    // A failed native operation must not poison subsequent requests.
+    _windowOperations = operation.catchError((Object _) {});
+    return operation;
+  }
 
   bool get isInitialized => _isInitialized;
 
@@ -30,6 +51,7 @@ class WindowManagerService with WindowListener {
     bool startMinimized = false,
   }) async {
     if (_isInitialized) return;
+    _isShuttingDown = false;
 
     await windowManager.ensureInitialized();
 
@@ -43,17 +65,18 @@ class WindowManagerService with WindowListener {
       title: title,
     );
 
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      // O X decide no WM_CLOSE. preventClose tem de valer antes do show.
-      await _updatePreventClose(_keepsProcessOnClose);
-      if (startMinimized) {
-        await windowManager.hide();
-        LoggerService.info('Aplicativo iniciado minimizado (oculto)');
-      } else {
-        await windowManager.show();
-        await windowManager.focus();
-      }
-    });
+    // The plugin callback is void and does not await async work.
+    await windowManager.waitUntilReadyToShow(windowOptions);
+    // O X decide no WM_CLOSE. preventClose tem de valer antes do show.
+    await windowManager.setPreventClose(true);
+    windowManager.addListener(this);
+    if (startMinimized) {
+      await windowManager.hide();
+      LoggerService.info('Aplicativo iniciado minimizado (oculto)');
+    } else {
+      await windowManager.show();
+      await windowManager.focus();
+    }
 
     // Garantir que a janela permaneça oculta se startMinimized for true
     if (startMinimized) {
@@ -74,9 +97,6 @@ class WindowManagerService with WindowListener {
     }
 
     await windowManager.setMinimumSize(minimumSize);
-    await _updatePreventClose(_keepsProcessOnClose);
-
-    windowManager.addListener(this);
     _isInitialized = true;
 
     LoggerService.info(
@@ -96,7 +116,7 @@ class WindowManagerService with WindowListener {
 
   void setCallbacks({
     VoidCallback? onMinimize,
-    VoidCallback? onClose,
+    FutureOr<void> Function()? onClose,
     VoidCallback? onFocus,
   }) {
     _onMinimize = onMinimize;
@@ -104,43 +124,33 @@ class WindowManagerService with WindowListener {
     _onFocus = onFocus;
   }
 
-  bool get _keepsProcessOnClose => keepsProcessWhenWindowCloses(
-    minimizeToTray: _minimizeToTray,
-    closeToTray: _closeToTray,
-  );
+  bool get _keepsProcessOnClose =>
+      trayAvailable &&
+      keepsProcessWhenWindowCloses(
+        minimizeToTray: _minimizeToTray,
+        closeToTray: _closeToTray,
+      );
 
   Future<void> setMinimizeToTray(bool value) async {
     _minimizeToTray = value;
     LoggerService.debug('Minimizar para bandeja: $value');
-    await _updatePreventClose(_keepsProcessOnClose);
   }
 
   Future<void> setCloseToTray(bool value) async {
     _closeToTray = value;
     LoggerService.debug('Fechar para bandeja: $value');
-    await _updatePreventClose(_keepsProcessOnClose);
   }
 
-  Future<void> _updatePreventClose(bool keepProcess) async {
-    try {
-      await windowManager.setPreventClose(keepProcess);
-      LoggerService.debug(
-        keepProcess
-            ? 'PreventClose ativado - fechar irá para bandeja'
-            : 'PreventClose desativado - fechar irá encerrar aplicativo',
-      );
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao configurar preventClose: $e');
-    }
-  }
+  Future<void> show() => _enqueueWindowOperation(_show);
 
-  Future<void> show() async {
+  Future<void> _show() async {
     try {
       LoggerService.info('🪟 Tentando mostrar janela...');
 
       // Garantir que a janela apareça na taskbar
       await windowManager.setSkipTaskbar(false);
       await Future.delayed(const Duration(milliseconds: 100));
+      if (_isShuttingDown) return;
 
       // Verificar estado atual
       final isMinimized = await windowManager.isMinimized();
@@ -155,6 +165,7 @@ class WindowManagerService with WindowListener {
         LoggerService.info('🔄 Janela está minimizada, restaurando...');
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
+        if (_isShuttingDown) return;
       }
 
       // SEMPRE chamar show() mesmo que já esteja visível
@@ -162,6 +173,7 @@ class WindowManagerService with WindowListener {
       LoggerService.info('👁️ Chamando show()...');
       await windowManager.show();
       await Future.delayed(const Duration(milliseconds: 200));
+      if (_isShuttingDown) return;
 
       // Verificar se realmente está visível agora
       final isVisibleAfterShow = await windowManager.isVisible();
@@ -174,14 +186,17 @@ class WindowManagerService with WindowListener {
         );
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
+        if (_isShuttingDown) return;
         await windowManager.show();
         await Future.delayed(const Duration(milliseconds: 200));
+        if (_isShuttingDown) return;
       }
 
       // Focar a janela
       LoggerService.info('🎯 Focando janela...');
       await windowManager.focus();
       await Future.delayed(const Duration(milliseconds: 100));
+      if (_isShuttingDown) return;
 
       // Verificação final
       final finalIsVisible = await windowManager.isVisible();
@@ -197,17 +212,21 @@ class WindowManagerService with WindowListener {
         // Última tentativa
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 300));
+        if (_isShuttingDown) return;
         await windowManager.show();
         await windowManager.focus();
       }
       await _markIpcShowIfWindowIsVisible();
     } on Object catch (e, stackTrace) {
+      if (_isShuttingDown) return;
       LoggerService.error('❌ Erro ao mostrar janela', e, stackTrace);
       // Tentar método alternativo
       try {
         LoggerService.info('🔄 Tentando método alternativo...');
+        await windowManager.setSkipTaskbar(false);
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
+        if (_isShuttingDown) return;
         await windowManager.show();
         await windowManager.focus();
         await _markIpcShowIfWindowIsVisible();
@@ -219,26 +238,19 @@ class WindowManagerService with WindowListener {
   }
 
   Future<void> _markIpcShowIfWindowIsVisible() async {
-    try {
-      final isVisible = await windowManager.isVisible();
-      final isMinimized = await windowManager.isMinimized();
-      if (isVisible && !isMinimized) {
-        IpcShowWindowConfirmation.markShown();
-      }
-    } on Object {
-      // A failed visibility probe must not count as a shown window.
+    if (_isShuttingDown) return;
+    final isVisible = await windowManager.isVisible();
+    final isMinimized = await windowManager.isMinimized();
+    if (isVisible && !isMinimized) {
+      IpcShowWindowConfirmation.markShown();
+      return;
     }
+    throw StateError('A janela não ficou visível após a restauração');
   }
 
-  Future<void> restore() async {
-    await windowManager.restore();
-    await Future.delayed(const Duration(milliseconds: 200));
-    await show();
-  }
+  Future<void> restore() => show();
 
-  Future<void> hide() async {
-    await windowManager.hide();
-  }
+  Future<void> hide() => _enqueueWindowOperation(windowManager.hide);
 
   Future<void> minimize() async {
     await windowManager.minimize();
@@ -275,9 +287,9 @@ class WindowManagerService with WindowListener {
   // WindowListener callbacks
   @override
   void onWindowMinimize() {
-    if (_minimizeToTray) {
+    if (_minimizeToTray && trayAvailable) {
       unawaited(
-        hide().catchError((e) {
+        _hideToTray().catchError((e) {
           LoggerService.error('Erro ao ocultar janela ao minimizar', e);
         }),
       );
@@ -287,6 +299,21 @@ class WindowManagerService with WindowListener {
 
   @override
   Future<void> onWindowClose() async {
+    if (_handlingClose || WindowCloseGuard.isBlocked) return;
+    _handlingClose = true;
+    try {
+      await _handleWindowClose();
+    } finally {
+      _handlingClose = false;
+    }
+  }
+
+  Future<void> _hideToTray() => _enqueueWindowOperation(() async {
+    await windowManager.hide();
+    await windowManager.setSkipTaskbar(true);
+  });
+
+  Future<void> _handleWindowClose() async {
     LoggerService.info(
       'Tentativa de fechar janela - minimizeToTray: $_minimizeToTray, '
       'closeToTray: $_closeToTray',
@@ -294,9 +321,7 @@ class WindowManagerService with WindowListener {
 
     if (_keepsProcessOnClose) {
       try {
-        await windowManager.setPreventClose(true);
-        await hide();
-        await windowManager.setSkipTaskbar(true);
+        await _hideToTray();
         LoggerService.info('Janela ocultada para a bandeja');
       } on Object catch (e, stackTrace) {
         LoggerService.error(
@@ -309,28 +334,21 @@ class WindowManagerService with WindowListener {
     }
 
     try {
-      final isPreventClose = await windowManager.isPreventClose();
-      if (isPreventClose) {
-        LoggerService.debug(
-          'Fechamento prevenido por outro motivo - ignorando evento',
-        );
-        return;
-      }
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao verificar preventClose: $e');
-    }
-
-    try {
-      await windowManager.setPreventClose(false);
       LoggerService.info('Fechamento permitido - encerrando aplicativo');
-      _onClose?.call();
+      final onClose = _onClose;
+      if (onClose != null) {
+        await onClose();
+      } else {
+        LoggerService.warning(
+          'Fechamento aguardando configuração do aplicativo',
+        );
+      }
     } on Object catch (e, stackTrace) {
       LoggerService.error(
-        'Erro ao configurar preventClose para fechar',
+        'Erro ao encerrar aplicativo',
         e,
         stackTrace,
       );
-      _onClose?.call();
     }
   }
 
@@ -367,13 +385,22 @@ class WindowManagerService with WindowListener {
   void onWindowEvent(String eventName) {}
 
   void dispose() {
+    _generation++;
     windowManager.removeListener(this);
+    _isInitialized = false;
+    _onMinimize = null;
+    _onClose = null;
+    _onFocus = null;
+    _minimizeToTray = false;
+    _closeToTray = false;
+    trayAvailable = true;
   }
 }
 
 /// O X encerra o processo só quando as duas opções da bandeja estão desligadas.
-/// "Minimizar para bandeja" também intercepta o fechamento: o plugin nativo
-/// destrói a janela no WM_CLOSE se `preventClose` ainda estiver desligado.
+/// "Minimizar para bandeja" também mantém o processo, conforme a preferência
+/// apresentada na tela de configurações. A interceptação nativa fica ativa
+/// independentemente destas opções para permitir a limpeza antes de sair.
 bool keepsProcessWhenWindowCloses({
   required bool minimizeToTray,
   required bool closeToTray,

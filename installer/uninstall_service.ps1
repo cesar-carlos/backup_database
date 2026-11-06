@@ -23,16 +23,6 @@ if (-not $isAdmin) {
     exit 1
 }
 
-if ([string]::IsNullOrEmpty($NssmPath)) {
-    $NssmPath = Join-Path $PSScriptRoot "nssm.exe"
-}
-
-if (-not (Test-Path $NssmPath)) {
-    Write-Host "ERRO: NSSM não encontrado em: $NssmPath" -ForegroundColor Red
-    Wait-IfInteractive
-    exit 1
-}
-
 $serviceUtilsPath = Join-Path $PSScriptRoot "service_utils.ps1"
 if (-not (Test-Path $serviceUtilsPath)) {
     Write-Host "ERRO: service_utils.ps1 não encontrado em: $serviceUtilsPath" -ForegroundColor Red
@@ -49,7 +39,7 @@ if (-not $service) {
 }
 
 Write-Host "Parando serviço..." -ForegroundColor Yellow
-& $NssmPath stop $ServiceName
+sc.exe stop $ServiceName
 if (-not (Wait-ServiceStopped -ServiceName $ServiceName)) {
     Write-Host "ERRO: serviço '$ServiceName' não atingiu STOPPED." -ForegroundColor Red
     Wait-IfInteractive
@@ -57,9 +47,9 @@ if (-not (Wait-ServiceStopped -ServiceName $ServiceName)) {
 }
 
 Write-Host "Removendo serviço..." -ForegroundColor Yellow
-& $NssmPath remove $ServiceName confirm
+sc.exe delete $ServiceName
 $removeExit = $LASTEXITCODE
-if (-not ($removeExit -eq 0 -or $removeExit -eq 3)) {
+if (-not ($removeExit -eq 0 -or $removeExit -eq 1060)) {
     Write-Host "Erro ao remover serviço (código: $removeExit)" -ForegroundColor Red
     Wait-IfInteractive
     exit 1

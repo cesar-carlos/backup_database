@@ -9,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import urllib.request
-import zipfile
 import stat
 from pathlib import Path
 
@@ -24,10 +23,6 @@ import windows_icon_utils as wiu  # noqa: E402
 
 
 VC_REDIST_URL = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-# Binario oficial 2.24 (win64) — mesmo layout esperado por setup.iss
-NSSM_ZIP_URL = "https://nssm.cc/release/nssm-2.24.zip"
-NSSM_ZIP_MEMBER = "nssm-2.24/win64/nssm.exe"
-NSSM_ZIP_SHA256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
 TRAY_ICON_CUSTOM_MARKER = ".tray_icon_custom"
 
 
@@ -314,53 +309,27 @@ def write_sha256_sidecar(file_path: Path) -> Path:
     return sidecar_path
 
 
-def ensure_nssm_exe(script_root: Path) -> bool:
-    """Garante installer/dependencies/nssm-2.24/win64/nssm.exe (setup.iss)."""
-    nssm_exe = script_root / "dependencies" / "nssm-2.24" / "win64" / "nssm.exe"
-    if nssm_exe.is_file():
-        print("OK: nssm.exe encontrado")
+def ensure_winsw_exe(script_root: Path) -> bool:
+    """Download a pinned WinSW binary; verify cached files as well as downloads."""
+    target = script_root / "dependencies" / "winsw-2.12.0" / "BackupDatabaseService.exe"
+    expected = "05b82d46ad331cc16bdc00de5c6332c1ef818df8ceefcd49c726553209b3a0da"
+    if target.is_file() and wiu.sha256_file(target).lower() == expected:
         return True
-
-    nssm_exe.parent.mkdir(parents=True, exist_ok=True)
-    zip_path = script_root / "dependencies" / ".nssm-2.24.zip.tmp"
-    print("  Baixando nssm-2.24.zip (win64)...")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_suffix(".download")
     try:
-        urllib.request.urlretrieve(NSSM_ZIP_URL, zip_path)
-    except Exception as exc:  # noqa: BLE001
-        print(f"ERRO: falha ao baixar NSSM: {exc}")
-        print(f"Baixe manualmente de: {NSSM_ZIP_URL}")
-        print(f"Extraia win64/nssm.exe para: {nssm_exe}")
-        return False
-
-    digest = wiu.sha256_file(zip_path).lower()
-    if digest != NSSM_ZIP_SHA256:
-        zip_path.unlink(missing_ok=True)
-        print(
-            "ERRO: SHA-256 do nssm-2.24.zip nao confere. "
-            f"obtido={digest} esperado={NSSM_ZIP_SHA256}"
+        urllib.request.urlretrieve(
+            "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe", partial
         )
-        return False
-
-    try:
-        with zipfile.ZipFile(zip_path) as zf:
-            try:
-                data = zf.read(NSSM_ZIP_MEMBER)
-            except KeyError:
-                names = [n for n in zf.namelist() if n.replace("\\", "/").endswith("win64/nssm.exe")]
-                if not names:
-                    print("ERRO: win64/nssm.exe nao encontrado no zip do NSSM.")
-                    return False
-                data = zf.read(names[0])
-        nssm_exe.write_bytes(data)
-    except Exception as exc:  # noqa: BLE001
-        print(f"ERRO: falha ao extrair nssm.exe: {exc}")
+        if wiu.sha256_file(partial).lower() != expected:
+            raise ValueError("WinSW SHA-256 mismatch")
+        partial.replace(target)
+        return True
+    except Exception as exc:
+        print(f"ERRO: WinSW indisponivel: {exc}")
         return False
     finally:
-        zip_path.unlink(missing_ok=True)
-
-    print(f"OK: nssm.exe extraido para {nssm_exe}")
-    return True
-
+        partial.unlink(missing_ok=True)
 
 def main() -> int:
     print("========================================")
@@ -501,8 +470,8 @@ def main() -> int:
         print("OK: vc_redist.x64.exe encontrado")
     print()
 
-    step("Passo 5: Verificando NSSM (servico Windows)...")
-    if not ensure_nssm_exe(script_root):
+    step("Passo 5: Verificando WinSW (servico Windows)...")
+    if not ensure_winsw_exe(script_root):
         return 1
     print()
 

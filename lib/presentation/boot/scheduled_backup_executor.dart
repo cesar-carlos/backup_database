@@ -33,7 +33,14 @@ class ScheduledBackupExecutor {
     var exitCode = ScheduledBackupExitCode.success;
     try {
       final schedulerService = service_locator.getIt<ISchedulerService>();
-      await schedulerService.executeNow(scheduleId);
+      final result = await schedulerService.executeNow(scheduleId);
+      if (result.isError()) {
+        LoggerService.error(
+          'Erro no backup agendado',
+          result.exceptionOrNull(),
+        );
+        return ScheduledBackupExitCode.genericFailure;
+      }
       LoggerService.info('Backup concluído');
     } on Object catch (e, s) {
       // Propaga falha como exit code != 0 para que o Task Scheduler /

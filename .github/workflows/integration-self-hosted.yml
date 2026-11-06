@@ -88,9 +88,10 @@ jobs:
               # Confirma que o .exe recem-compilado realmente embute o PNG
               # gerado por flutter_launcher_icons.
               python scripts/verify_windows_icons.py --require-exe
-              pwsh -NoProfile -ExecutionPolicy Bypass -File test/scripts/windows_single_instance_smoke.ps1 `
-                -AppExePath "build/windows/x64/runner/Release/backup_database.exe" `
-                -NssmPath "installer/dependencies/nssm-2.24/win64/nssm.exe"
+              python -c "import sys; from pathlib import Path; sys.path.insert(0, 'installer'); import build_installer; sys.exit(0 if build_installer.ensure_winsw_exe(Path('installer')) else 1)"
+              if ($LASTEXITCODE -ne 0) { throw "WinSW dependency verification failed" }
+              powershell.exe -NoProfile -ExecutionPolicy Bypass -File test/scripts/windows_winsw_smoke.ps1 `
+                -AppExePath "build/windows/x64/runner/Release/backup_database.exe"
             }
             default {
               throw "Unknown suite: $env:SUITE"

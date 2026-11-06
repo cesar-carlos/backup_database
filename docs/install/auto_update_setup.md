@@ -13,13 +13,16 @@ O runtime faz este pipeline:
 3. Seleciona a release Windows mais nova respeitando `minSupportedAppVersion` e `rolloutPercentage` (ver "Staged rollout")
 4. Compara com a versao atual
 5. Checa espaco livre no diretorio de staging (>= 2x o tamanho do instalador) antes de baixar
-6. Baixa o instalador `BackupDatabase-Setup-<versao>.exe`
-7. Valida `length` e `sha256`
+6. Baixa para `BackupDatabase-Setup-<versao>.exe.part`
+7. Valida `length` e `sha256` antes de disponibilizar o `.exe`. Falhas removem
+   o parcial e preservam um instalador anterior com o mesmo nome.
 8. Persiste `update_context.json` (origin UI ou service) e dispara o instalador com:
 
 ```text
-/VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /MODE=server
 ```
+
+O argumento `/MODE=client` e usado em instalacoes cliente.
 
 9. Verifica que o processo do instalador segue vivo por ate 5 s; se morrer cedo (UAC negado, antivirus, binario corrompido) NAO encerra o app e emite snapshot de erro.
 10. Encerra o processo atual:
@@ -42,14 +45,55 @@ Esse contexto e consumido pelo instalador (`setup.iss`) e por `restore_update_st
 
 ### Restore apos o instalador silencioso
 
-- `origin=ui`: o script **nao** para, remove, reinstala nem starta o Windows
-  Service (os binarios em `{app}` ja foram trocados; o `InitializeSetup` ja
-  parou o servico se existia). So relanca a UI.
-- `origin=service` + conta LocalSystem (aliases `System` /
-  `NT AUTHORITY\SYSTEM`): `nssm stop` → espera STOPPED → remove → replay
-  `nssm install` / `ObjectName LocalSystem` / `start`.
-- Conta customizada: `exit 2`, `update_context.json` preservado, **nenhuma**
-  chamada NSSM (`install`/`remove`/`start`). Reinstale o servico manualmente.
+- `origin=ui`: nao remove nem reinstala o Windows Service. Reinicia o servico
+  existente se estava em execucao antes da instalacao, preservando conta e
+  configuracoes; confirma RUNNING e relanca a UI. Se estava parado, continua
+  parado. Contextos antigos sem `serviceWasRunning` tentam reiniciar o servico.
+- `origin=service` no WinSW: preserva o registro, XML, conta e credenciais e
+  confirma RUNNING. O instalador migra o NSSM antes desta etapa; nunca envia
+  comandos NSSM ao WinSW.
+- Conta customizada: a restauracao mantem a conta. O auto update silencioso
+  requer token administrativo; sem ele, execute Setup como Administrador.
+- Instalacoes legadas sem WinSW mantem o protocolo NSSM anterior apenas como
+  compatibilidade de recuperacao.
+
+Veja [migracao WinSW](winsw_migration.md) para detalhes e limites de conversao.
+Abrir ou cancelar o wizard nao interrompe processos. A parada ocorre em
+`PrepareToInstall`, depois da confirmacao; falha ao confirmar STOPPED bloqueia
+a copia de arquivos. O fechamento de processos usa o caminho instalado.
+
+Se a preparacao falhar antes de `ssInstall`, o encerramento do instalador tenta
+reiniciar o servico que estava ativo, incluindo handoff de `origin=service`.
+Apos iniciar a copia, falhas disparam rollback antes de qualquer restart:
+o instalador guarda os binarios anteriores, as pastas `data`, `config` e
+`secrets` e os arquivos da raiz da maquina (incluindo marcadores de migracao),
+verifica SHA-256 e registra a transacao em
+`%ProgramData%\BackupDatabase\staging\rollback\journal.json`.
+O snapshot tem acesso restrito a Administradores e SYSTEM; exige espaco para
+uma copia completa desses diretorios. Logs, backups agendados e downloads nao
+fazem parte do snapshot. O servico existente conserva registro e credenciais.
+
+A restauracao substitui as arvores completas, inclusive removendo DLLs novas
+da instalacao ativa. Preserva os arquivos substituidos em pastas irmas
+`*.failed-*`, restaura as permissoes e a configuracao do servico e so inicia
+o servico se ele estava ativo antes da atualizacao. Falhas de integridade,
+copia ou restauracao do servico mantem a transacao pendente, sem iniciar
+binarios parcialmente restaurados. A confirmacao ocorre apenas em `ssDone`.
+
+Se houver encerramento forcado ou queda de energia, nao ha recuperacao em
+segundo plano: execute novamente **este instalador ou uma versao posterior
+com o mesmo protocolo de rollback**. Ele recupera a transacao pendente antes
+de permitir outra atualizacao; apos recuperar, cancele o wizard e abra-o
+novamente para atualizar. Snapshot incompleto em `preparing` exige inspecao
+manual (a copia da instalacao ainda nao foi autorizada). Nao apague um snapshot
+pendente. Quarentenas e diretorios `.rollback-ready-*` de tentativas interrompidas
+devem ser revisados e removidos pelo administrador apos validar a recuperacao;
+podem conter banco e segredos. O snapshot concluido e substituido na proxima
+atualizacao. Homologue interrupcoes reais em VM antes de publicar o instalador.
+Falhas de restauracao ou instalacao do servico produzem exit code nao zero,
+mesmo que a copia tenha terminado. Contexto invalido/expirado retorna `2` no
+restore, sem relancar processos nem apagar o contexto. Uma nova tentativa de
+captura preserva o snapshot original, sem sobrescreve-lo pelo estado da falha.
 
 ## Matriz de plataformas suportadas
 
@@ -151,7 +195,7 @@ O fluxo oficial agora e:
 
 Se uma release publicada precisar sair do feed sem ser apagada do GitHub:
 
-1. Edite [scripts/appcast_policy.json](/D:/Developer/Flutter/backup_database/scripts/appcast_policy.json)
+1. Edite [scripts/appcast_policy.json](../../scripts/appcast_policy.json)
 2. Adicione a versao em `blocked_versions`
 3. Faca push na `main` ou rode o workflow manualmente
 
@@ -182,9 +226,9 @@ O workflow reconstroi o `appcast.xml` sem as versoes bloqueadas.
 
 | Arquivo | Onde | Para que |
 | --- | --- | --- |
-| `update_context.json` | `…\staging\updates\` | Contexto da troca de versao (`origin`, `appMode`, `relaunchArguments`, configuracao do servico). TTL de 45 minutos: contextos expirados sao removidos por `restore_update_state.ps1` e pela proxima `initialize()` do servico. |
+| `update_context.json` | `…\staging\updates\` | Contexto da troca de versao (`origin`, `appMode`, `relaunchArguments`, configuracao do servico). TTL de 45 minutos: o restore recusa contexto expirado e preserva o arquivo para diagnostico; a limpeza do runtime ainda pode remove-lo ao inicializar. |
 | `auto_update_history.jsonl` | `…\staging\updates\` | Trilha das ultimas tentativas. Cada linha tem `schemaVersion`, `source`, `status`, `stage`, `installerBytes`, `downloadDurationMs`, `downloadMbps` e `error`. Rotacao automatica em ate `256 KiB` ou `14 dias`. |
-| `auto_update.lock` | `…\locks\` | Coordenacao entre instancias (UI + servico + execucao agendada). Arquivo texto `chave=valor` (`pid`, `acquiredAt`, `source`, `stage`, `targetVersion`). Considerado obsoleto se: (a) excedeu `2h` (`defaultLockStaleAfter`) OU (b) o `pid` registrado ja nao existe. |
+| `auto_update.lock` | `…\locks\` | Coordenacao entre instancias (UI + servico + execucao agendada). Arquivo texto `chave=valor` (`pid`, `acquiredAt`, `source`, `stage`, `targetVersion`). PID vivo sempre preserva o lock, mesmo apos `2h`. PID morto permite recuperacao; sem PID legivel, aplica-se o prazo de `2h` (`defaultLockStaleAfter`). |
 | `BackupDatabase-Setup-*.exe` | `…\staging\updates\` | Instaladores baixados. Limpeza mantem o alvo atual + 1 anterior por ate `7 dias`; cobertura para rollback rapido. |
 
 ## Observacoes

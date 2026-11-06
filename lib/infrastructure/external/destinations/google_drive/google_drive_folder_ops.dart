@@ -10,18 +10,21 @@ class GoogleDriveFolderOps {
 
   Future<String> getOrCreateFolder(
     String folderName,
-    String parentId,
-  ) async {
+    String parentId, {
+    drive.DriveApi? api,
+  }) async {
     return _authClient.executeWithTokenRefresh(() async {
-      final clientResult = await _authClient.getAuthenticatedClient();
-      if (clientResult.isError()) {
-        throw clientResult.exceptionOrNull()!;
+      var driveApi = api;
+      if (driveApi == null) {
+        final clientResult = await _authClient.getAuthenticatedClient();
+        if (clientResult.isError()) {
+          throw clientResult.exceptionOrNull()!;
+        }
+        driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
       }
 
-      final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-
       final query =
-          "name = '$folderName' and '$parentId' in parents and "
+          "name = '${_escape(folderName)}' and '${_escape(parentId)}' in parents and "
           "mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 
       final existing = await driveApi.files.list(
@@ -42,6 +45,9 @@ class GoogleDriveFolderOps {
       return created.id!;
     });
   }
+
+  static String _escape(String value) =>
+      value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
 
   Future<rd.Result<List<drive.File>>> listBackups({
     required String folderId,

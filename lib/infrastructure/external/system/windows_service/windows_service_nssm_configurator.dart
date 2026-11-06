@@ -32,6 +32,15 @@ class WindowsServiceNssmConfigurator {
     String? serviceUser,
     String? servicePassword,
   }) async {
+    if (serviceUser != null &&
+        serviceUser.isNotEmpty &&
+        (servicePassword == null || servicePassword.isEmpty)) {
+      return const rd.Failure(
+        ValidationFailure(
+          message: 'Informe a senha da conta do serviço. A conta não será substituída por LocalSystem.',
+        ),
+      );
+    }
     final appDir = File(Platform.resolvedExecutable).parent.path;
     final logPath = WindowsServiceConstants.logPath;
 
@@ -95,7 +104,7 @@ class WindowsServiceNssmConfigurator {
         nssmPath: nssmPath,
         arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
       );
-      _warnObjectNameLocalSystem(objectResult);
+      return _validateObjectNameLocalSystem(objectResult);
     } else if (servicePassword != null && servicePassword.isNotEmpty) {
       final credsResult = await _accountConfig.setLogonAccount(
         serviceName: _serviceName,
@@ -106,35 +115,29 @@ class WindowsServiceNssmConfigurator {
       if (credsFailure != null) {
         return rd.Failure(_asFailure(credsFailure));
       }
-    } else {
-      LoggerService.warning(
-        'Usuário "$serviceUser" fornecido sem senha — usando LocalSystem',
-      );
-      final objectResult = await _runNssmSet(
-        nssmPath: nssmPath,
-        arguments: ['set', _serviceName, 'ObjectName', _localSystemAccount],
-      );
-      _warnObjectNameLocalSystem(objectResult);
     }
 
     return const rd.Success(unit);
   }
 
-  void _warnObjectNameLocalSystem(rd.Result<ProcessResult> result) {
-    result.fold(
+  rd.Result<void> _validateObjectNameLocalSystem(
+    rd.Result<ProcessResult> result,
+  ) {
+    return result.fold(
       (processResult) {
         if (processResult.exitCode != _successExitCode) {
-          LoggerService.warning(
-            'nssm set ObjectName LocalSystem falhou '
-            '(exit ${processResult.exitCode}): ${_nssmOutput(processResult)}',
+          return rd.Failure(
+            ServerFailure(
+              message:
+                  'nssm set ObjectName LocalSystem falhou '
+                  '(exit ${processResult.exitCode}): ${_nssmOutput(processResult)}',
+            ),
           );
         }
+        return const rd.Success(unit);
       },
       (failure) {
-        LoggerService.warning(
-          'nssm set ObjectName LocalSystem falhou: '
-          '${failureUserMessage(failure)}',
-        );
+        return rd.Failure(_asFailure(failure));
       },
     );
   }

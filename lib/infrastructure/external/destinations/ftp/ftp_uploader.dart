@@ -51,16 +51,7 @@ class FtpUploader {
       LoggerService.info(
         '${context}Cancelamento FTP detectado; encerrando conexão',
       );
-      unawaited(
-        ftp.disconnect().catchError((Object e, StackTrace st) {
-          LoggerService.debug(
-            'FTP disconnect after cancellation signal: $e',
-            e,
-            st,
-          );
-          return false;
-        }),
-      );
+      ftp.abort();
     });
   }
 
@@ -75,6 +66,7 @@ class FtpUploader {
     UploadProgressCallback? onProgress,
     bool Function()? isCancelled,
   }) async {
+    UploadCancellation.throwIfCancelled(isCancelled);
     void ftpProgressAdapter(
       double progressPercent,
       int sent,
@@ -107,7 +99,7 @@ class FtpUploader {
           'Parcial remoto já completo ($remoteSize bytes); '
           'validando sem reenviar',
         );
-        return const FtpPartUploadResult(uploaded: true, resumed: false);
+        return const FtpPartUploadResult(uploaded: true, resumed: true);
 
       case FtpUploadResume(:final offset):
         LoggerService.info(
@@ -220,26 +212,27 @@ class FtpUploader {
   }
 
   Future<void> ensureBinaryTransferType(FTPConnect ftp) async {
-    try {
-      await ftp.setTransferType(TransferType.binary);
-    } on Object catch (e) {
-      LoggerService.warning(
-        'Não foi possível fixar transferência em modo binário (TYPE I): $e',
-      );
-    }
+    await ftp.setTransferType(TransferType.binary);
   }
 
   Future<void> createRemoteDirectories(FTPConnect ftp, String path) async {
     final parts = path.split('/').where((p) => p.isNotEmpty).toList();
-    var currentPath = '';
-
-    for (final part in parts) {
-      currentPath = '$currentPath/$part';
-      await _createRemoteDirectory(ftp, part);
-      await ftp.changeDirectory(part);
+    final original = await ftp.currentDirectory();
+    if (path.startsWith('/') && !await ftp.changeDirectory('/')) {
+      throw Exception('Sem permissão para acessar a raiz FTP');
     }
 
-    await ftp.changeDirectory('/');
+    for (final part in parts) {
+      if (await ftp.changeDirectory(part)) continue;
+      await _createRemoteDirectory(ftp, part);
+      if (!await ftp.changeDirectory(part)) {
+        throw Exception('Sem permissão para acessar diretório FTP: $part');
+      }
+    }
+
+    if (!await ftp.changeDirectory(original)) {
+      throw Exception('Falha ao restaurar diretório FTP: $original');
+    }
   }
 
   Future<void> _createRemoteDirectory(FTPConnect ftp, String dirName) async {

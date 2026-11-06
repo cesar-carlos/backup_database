@@ -178,7 +178,7 @@ class IpcService implements IIpcService {
     try {
       await channel.writeLine(SingleInstanceConfig.ipcShowWindowMessage);
       final ack = await channel.readLine(
-        timeout: SingleInstanceConfig.showWindowConnectTimeout,
+        timeout: SingleInstanceConfig.showWindowResponseTimeout,
       );
       if (IpcV1Codec.isOkAck(ack)) {
         LoggerService.info('ipc_show_window_sent');

@@ -1,10 +1,11 @@
-﻿#define MyAppName "Backup Database"
+#define MyAppName "Backup Database"
 #define MyAppVersion "3.6.3"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
 
 [Setup]
+SetupMutex=Global\BackupDatabaseInstallerTransaction
 AppId=A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
@@ -60,7 +61,7 @@ brazilianportuguese.VcRedistMissing=Visual C++ Redistributables não encontrado.
 brazilianportuguese.VcRedistFailed=Erro ao instalar Visual C++ Redistributables. Código de erro: %1
 brazilianportuguese.EnvFeedUrlMissing=A chave AUTO_UPDATE_FEED_URL nao ficou preenchida em:%n%1%n%nA instalacao continua, mas o auto-update ficara desabilitado ate corrigir o arquivo .env.
 brazilianportuguese.ServiceScriptMissing=Nao foi possivel encontrar o script de instalacao do servico:%n%1%n%nReinstale o aplicativo ou execute manualmente.
-brazilianportuguese.NssmMissing=Nao foi possivel encontrar nssm.exe em:%n%1%n%nReinstale o aplicativo ou copie nssm.exe para a pasta tools.
+brazilianportuguese.WrapperMissing=Nao foi possivel encontrar BackupDatabaseService.exe em:%n%1%n%nReinstale o aplicativo ou copie BackupDatabaseService.exe para a pasta tools.
 brazilianportuguese.ServiceNotRunning=O servico foi instalado, mas nao confirmou RUNNING no tempo de espera.%n%nVerifique o status em Servicos do Windows ou reinstale o servico pelo aplicativo.
 brazilianportuguese.ServiceInstallFailed=Falha ao instalar o servico do Windows (codigo %1).%n%nConsulte o log do instalador e tente novamente.
 brazilianportuguese.ServiceScriptLaunchFailed=Nao foi possivel executar o script de instalacao do servico.
@@ -96,7 +97,7 @@ english.VcRedistMissing=Visual C++ Redistributable was not found. Download and i
 english.VcRedistFailed=Failed to install the Visual C++ Redistributable. Error code: %1
 english.EnvFeedUrlMissing=AUTO_UPDATE_FEED_URL was left empty in:%n%1%n%nInstallation will continue, but auto-update stays disabled until the .env file is corrected.
 english.ServiceScriptMissing=The service installation script was not found:%n%1%n%nReinstall the application or run the script manually.
-english.NssmMissing=nssm.exe was not found at:%n%1%n%nReinstall the application or copy nssm.exe into the tools folder.
+english.WrapperMissing=BackupDatabaseService.exe was not found at:%n%1%n%nReinstall the application or copy BackupDatabaseService.exe into the tools folder.
 english.ServiceNotRunning=The service was installed, but it did not confirm RUNNING within the wait time.%n%nCheck Services in Windows or reinstall the service from the application.
 english.ServiceInstallFailed=Failed to install the Windows service (code %1).%n%nCheck the installer log and try again.
 english.ServiceScriptLaunchFailed=The service installation script could not be started.
@@ -123,22 +124,32 @@ Name: "{commonappdata}\BackupDatabase\config"
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\.env.example"; DestDir: "{commonappdata}\BackupDatabase\config"; Flags: ignoreversion; DestName: ".env.example"
-Source: "..\docs\install\installation_guide.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\docs\path_setup.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\docs\requirements.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\*.md"; DestDir: "{app}\docs"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "TROUBLESHOOTING_SERVICE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "check_dependencies.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
-Source: "dependencies\nssm-2.24\win64\nssm.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "dependencies\winsw-2.12.0\BackupDatabaseService.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "winsw-LICENSE.txt"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "winsw_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "winsw_config.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "service_scm.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "rollback_core.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "dependencies\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "install_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "service_utils.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "uninstall_service.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 Source: "encoding_utils.ps1"; Flags: dontcopy
 Source: "capture_update_context.ps1"; Flags: dontcopy
+Source: "check_update_service_recovery.ps1"; Flags: dontcopy
 Source: "restore_update_state.ps1"; Flags: dontcopy
 Source: "merge_env.ps1"; Flags: dontcopy
+Source: "migrate_startup_entries.ps1"; Flags: dontcopy
 Source: "read_json_app_mode.ps1"; Flags: dontcopy
 Source: "service_utils.ps1"; Flags: dontcopy
+Source: "rollback_core.ps1"; Flags: dontcopy
+Source: "rollback_update.ps1"; Flags: dontcopy
+Source: "service_scm.ps1"; Flags: dontcopy
+Source: "winsw_config.ps1"; Flags: dontcopy
+Source: "winsw_service.ps1"; Flags: dontcopy
 
 [Icons]
 ; Main icons for each mode (all will be created)
@@ -149,7 +160,7 @@ Name: "{group}\Verificar Dependências"; Filename: "powershell.exe"; Parameters:
 ; Service icons (ONLY for Server mode)
 Name: "{group}\Instalar como Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\install_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
 Name: "{group}\Remover Serviço do Windows"; Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\tools\uninstall_service.ps1"""; IconFilename: "{app}\{#MyAppExeName}"; Check: IsServerMode
-Name: "{group}\Documentação"; Filename: "{app}\docs\installation_guide.md"
+Name: "{group}\Documentação"; Filename: "{app}\docs\install\installation_guide.md"
 Name: "{group}\Troubleshooting do Serviço"; Filename: "{app}\docs\TROUBLESHOOTING_SERVICE.md"
 Name: "{group}\{cm:ShortcutUninstall}"; Filename: "{uninstallexe}"
 ; Desktop icon (one per mode — explicit --mode= flag avoids relying on
@@ -176,6 +187,10 @@ var
   ModePage: TInputOptionWizardPage;
   SelectedMode: String;
   RemoveMachineConfig: Boolean;
+  RecoverServiceOnAbort: Boolean;
+  FilesInstallStarted: Boolean;
+  RollbackCommitted: Boolean;
+  OperationalRestoreFailed: Boolean;
 
 function IsServiceInstalled(const ServiceName: String): Boolean; forward;
 function WaitForServiceStopped(const ServiceName: String): Boolean; forward;
@@ -193,7 +208,7 @@ procedure RemoveLegacyStartupEntries(); forward;
 procedure SaveSelectedUiLocale(); forward;
 procedure DeleteClientStartupTask(); forward;
 procedure ConfigureClientStartupTask(const AppExePath: String); forward;
-procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String); forward;
+procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, WrapperPath: String); forward;
 procedure RefreshWindowsIconCache(); forward;
 procedure RemoveExistingDesktopShortcut(); forward;
 procedure TouchDesktopShortcut(); forward;
@@ -230,6 +245,9 @@ var
 begin
   ExtractTemporaryFile('encoding_utils.ps1');
   ExtractTemporaryFile('service_utils.ps1');
+  ExtractTemporaryFile('rollback_core.ps1');
+  ExtractTemporaryFile('service_scm.ps1');
+  ExtractTemporaryFile('winsw_config.ps1');
   ExtractTemporaryFile(ScriptName);
   ScriptPath := ExpandConstant('{tmp}\') + ScriptName;
   Result := Exec(
@@ -487,99 +505,23 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
-var
-  AppExe: String;
-  WaitCount: Integer;
-  UpdateContextPath: String;
-  StartCode: Integer;
 begin
   Result := True;
-  VCRedistNeeded := False;
-  UpdateContextPath := GetUpdateContextPath();
-
-  if IsServiceInstalled('BackupDatabaseService') then
-    StopService('BackupDatabaseService');
-
-  if WizardSilent() and FileExists(UpdateContextPath) then
-  begin
-    if RunTempPowerShellScript(
-      'capture_update_context.ps1',
-      '-ContextPath "' + UpdateContextPath + '" -ServiceName "BackupDatabaseService"'
-    ) then
-      Log('Captured update_context.json before upgrade')
-    else
-    begin
-      Log('Warning: Failed to capture update_context.json before upgrade');
-      if IsServiceInstalled('BackupDatabaseService') then
-        Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE,
-          ewWaitUntilTerminated, StartCode);
-      Result := False;
-      Exit;
-    end;
-  end;
-
-  // {app} ainda nao e conhecido de forma confiavel em InitializeSetup
-  // (o diretorio de instalacao pode mudar no assistente). O fechamento
-  // aqui continua por nome de imagem via CloseApp/taskkill /IM.
-  // PrepareToInstall, com {app} definido, encerra so o executavel instalado.
-  AppExe := ExpandConstant('{#MyAppExeName}');
-
-  if IsAppRunning(AppExe) then
-  begin
-    if WizardSilent() then
-    begin
-      CloseApp(AppExe);
-      WaitCount := 0;
-      while IsAppRunning(AppExe) and (WaitCount < 30) do
-      begin
-        Sleep(500);
-        WaitCount := WaitCount + 1;
-      end;
-    end
-    else
-    begin
-      if MsgBox(
-           ExpandCustomMessage1(
-             'AppRunningClosePrompt',
-             ExpandConstant('{#MyAppName}')
-           ),
-           mbConfirmation,
-           MB_YESNO
-         ) = IDYES then
-      begin
-        CloseApp(AppExe);
-
-        WaitCount := 0;
-        while IsAppRunning(AppExe) and (WaitCount < 30) do
-        begin
-          Sleep(500);
-          WaitCount := WaitCount + 1;
-        end;
-
-        if IsAppRunning(AppExe) then
-        begin
-          if MsgBox(
-               ExpandCustomMessage('AppStillRunningContinuePrompt'),
-               mbConfirmation,
-               MB_YESNO
-             ) = IDNO then
-          begin
-            Result := False;
-            Exit;
-          end;
-        end;
-      end
-      else
-      begin
-        Result := False;
-        Exit;
-      end;
-    end;
-  end;
-
   VCRedistNeeded := not IsVCRedistInstalled();
+  // {app} ainda nao e conhecido. Nao parar servicos nem encerrar processos
+  // enquanto o usuario apenas navega ou cancela o wizard.
+  if WizardSilent() and FileExists(GetUpdateContextPath()) then
+  begin
+    if not RunTempPowerShellScript(
+      'capture_update_context.ps1',
+      '-ContextPath "' + GetUpdateContextPath() + '" -ServiceName "BackupDatabaseService"'
+    ) then
+    begin
+      Log('Failed to capture update_context.json before upgrade');
+      Result := False;
+    end;
+  end;
 end;
-
 procedure SaveSelectedUiLocale();
 var
   LocalePath: String;
@@ -598,6 +540,38 @@ begin
   ForceDirectories(ExpandConstant('{commonappdata}\BackupDatabase\config'));
   if not SaveStringToFile(LocalePath, LocaleCode, False) then
     Log('Warning: failed to save ui_locale');
+end;
+
+procedure DeinitializeSetup();
+var
+  RecoveryCode: Integer;
+begin
+  if FilesInstallStarted and (not RollbackCommitted) then
+  begin
+    if not RunTempPowerShellScriptEx('rollback_update.ps1',
+      '-Action Restore -AppDirectory "' + ExpandConstant('{app}') + '"', RecoveryCode) then
+      Log('ERROR: rollback process could not be launched')
+    else if RecoveryCode <> 0 then
+      Log('ERROR: rollback incomplete; rerun installer to recover persistent transaction');
+    Exit;
+  end;
+  // Antes de ssInstall, os binarios nao foram alterados: reiniciar e seguro.
+  // Apos iniciar a copia, nao iniciar possiveis binarios parcialmente trocados.
+  if RecoverServiceOnAbort and (not FilesInstallStarted) then
+  begin
+    if Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE,
+      ewWaitUntilTerminated, RecoveryCode) then
+      Log('Pre-install recovery: sc start exit=' + IntToStr(RecoveryCode))
+    else
+      Log('ERROR: failed to launch service recovery after aborted preparation');
+  end;
+end;
+
+function GetCustomSetupExitCode(): Integer;
+begin
+  Result := 0;
+  if OperationalRestoreFailed then
+    Result := 1;
 end;
 
 procedure InitializeWizard();
@@ -632,17 +606,50 @@ var
   ExecResult: Boolean;
   AppExePath: String;
   UserChoice: Integer;
+  ServiceQueryCode: Integer;
+  RollbackArgs: String;
 begin
   Result := '';
+  if not RunTempPowerShellScriptEx('rollback_update.ps1',
+    '-Action RecoverPending -AppDirectory "' + ExpandConstant('{app}') + '"', ServiceQueryCode) then
+  begin
+    Result := 'Nao foi possivel verificar a recuperacao pendente.';
+    Exit;
+  end;
+  if ServiceQueryCode <> 0 then
+  begin
+    if ServiceQueryCode = 10 then
+      Result := 'Versao anterior recuperada. Cancele e execute novamente para atualizar.'
+    else
+      Result := 'Recuperacao pendente falhou. Consulte staging\rollback\journal.json.';
+    Exit;
+  end;
 
-  // Reforco defensivo: NSSM pode ter reiniciado o servico entre
-  // InitializeSetup e PrepareToInstall (ex.: usuario passou tempo no
-  // wizard). Parar de novo antes de copiar arquivos garante que o .exe
-  // sera substituido — atalho da area de trabalho passa a refletir o
-  // icone novo no primeiro launch.
+  // Parar somente quando a instalacao foi confirmada. Falhar antes de
+  // copiar arquivos se o SCM nao confirmar STOPPED.
   if IsServiceInstalled('BackupDatabaseService') then
-    StopService('BackupDatabaseService');
-
+  begin
+    if RunTempPowerShellScriptEx('check_update_service_recovery.ps1',
+      '-ContextPath "' + GetUpdateContextPath() + '"', ServiceQueryCode) then
+    begin
+      if ServiceQueryCode > 1 then
+      begin
+        Result := 'Nao foi possivel determinar o estado de recuperacao do servico.';
+        Exit;
+      end;
+      RecoverServiceOnAbort := RecoverServiceOnAbort or (ServiceQueryCode = 0);
+    end
+    else
+    begin
+      Result := 'Falha ao consultar o estado de recuperacao do servico.';
+      Exit;
+    end;
+    if not StopService('BackupDatabaseService') then
+    begin
+      Result := 'Nao foi possivel parar BackupDatabaseService. Nenhum arquivo foi substituido.';
+      Exit;
+    end;
+  end;
   // {app} ja esta definido. taskkill mira somente esse caminho
   // (ExecutablePath), nao qualquer backup_database.exe da maquina.
   AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
@@ -734,6 +741,13 @@ begin
 
     VCRedistPage.Hide;
   end;
+  RollbackArgs := '-Action Prepare -AppDirectory "' + ExpandConstant('{app}') + '"';
+  if RecoverServiceOnAbort then
+    RollbackArgs := RollbackArgs + ' -RestartService';
+  if not RunTempPowerShellScriptEx('rollback_update.ps1', RollbackArgs, ServiceQueryCode) then
+    Result := 'Falha ao iniciar snapshot de recuperacao.'
+  else if ServiceQueryCode <> 0 then
+    Result := 'Snapshot de recuperacao falhou. Nenhum arquivo foi substituido.';
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -763,7 +777,7 @@ var
   MigratedBackupPath: String;
   UpdateContextPath: String;
   AppExePath: String;
-  NssmPath: String;
+  WrapperPath: String;
   MergeExitCode: Integer;
   RestoreExitCode: Integer;
 begin
@@ -772,6 +786,12 @@ begin
   // em ingles do Menu Iniciar antes do Inno recriar os atalhos do idioma.
   if CurStep = ssInstall then
   begin
+    if not RunTempPowerShellScriptEx('rollback_update.ps1',
+      '-Action Arm -AppDirectory "' + ExpandConstant('{app}') + '"', RestoreExitCode) then
+      RaiseException('Nao foi possivel armar o rollback');
+    if RestoreExitCode <> 0 then
+      RaiseException('Snapshot de rollback indisponivel');
+    FilesInstallStarted := True;
     RemoveExistingDesktopShortcut();
     RemoveLegacyEnglishStartMenuShortcuts();
   end;
@@ -785,7 +805,15 @@ begin
     MigratedBackupPath := ExpandConstant('{commonappdata}\BackupDatabase\config\.env.migrated-from-appdir.bak');
     UpdateContextPath := GetUpdateContextPath();
     AppExePath := ExpandConstant('{app}\{#MyAppExeName}');
-    NssmPath := ExpandConstant('{app}\tools\nssm.exe');
+    WrapperPath := ExpandConstant('{app}\tools\BackupDatabaseService.exe');
+    if IsServiceInstalled('BackupDatabaseService') then
+    begin
+      if not RunTempPowerShellScriptEx('winsw_service.ps1',
+        '-Migrate -AppPath "' + AppExePath + '" -AppDirectory "' + ExpandConstant('{app}') + '"', RestoreExitCode) then
+        RaiseException('Nao foi possivel iniciar a migracao para WinSW');
+      if RestoreExitCode <> 0 then
+        RaiseException('Migracao WinSW falhou; restaurando a instalacao anterior');
+    end;
 
     // merge_env.ps1 retorna:
     //   0 = OK (merge feito ou no-op)
@@ -847,7 +875,7 @@ begin
     else if WizardIsTaskSelected('startup') then
     begin
       if SelectedMode = 'server' then
-        InstallAndStartServiceFromInstaller(AppExePath, ExpandConstant('{app}'), NssmPath)
+        InstallAndStartServiceFromInstaller(AppExePath, ExpandConstant('{app}'), WrapperPath)
       else
         ConfigureClientStartupTask(AppExePath);
     end
@@ -861,8 +889,8 @@ begin
         DeleteClientStartupTask();
         if (not WizardIsTaskSelected('startup')) and
            IsServiceInstalled('BackupDatabaseService') then
-          Exec('sc.exe', 'start BackupDatabaseService', '', SW_HIDE,
-            ewWaitUntilTerminated, RestoreExitCode);
+          InstallAndStartServiceFromInstaller(AppExePath, ExpandConstant('{app}'),
+            ExpandConstant('{app}\tools\BackupDatabaseService.exe'));
       end
       else if IsServiceInstalled('BackupDatabaseService') then
         Exec(
@@ -887,11 +915,12 @@ begin
         '-ContextPath "' + UpdateContextPath + '" ' +
         '-AppPath "' + AppExePath + '" ' +
         '-AppDirectory "' + ExpandConstant('{app}') + '" ' +
-        '-NssmPath "' + NssmPath + '" ' +
+        '-NssmPath "' + WrapperPath + '" ' +
         '-ServiceName "BackupDatabaseService"',
         RestoreExitCode
       ) then
       begin
+        OperationalRestoreFailed := OperationalRestoreFailed or (RestoreExitCode <> 0);
         if RestoreExitCode = 0 then
           Log('Restored update operational state from update_context.json')
         else if RestoreExitCode = 2 then
@@ -907,11 +936,25 @@ begin
           );
       end
       else
+      begin
+        OperationalRestoreFailed := True;
         Log('Warning: failed to launch restore_update_state.ps1 from installer');
+      end;
     end;
 
     RefreshWindowsIconCache();
     TouchDesktopShortcut();
+    if OperationalRestoreFailed then
+      RaiseException('Falha operacional: restaurando a versao anterior.');
+  end;
+  if CurStep = ssDone then
+  begin
+    if not RunTempPowerShellScriptEx('rollback_update.ps1',
+      '-Action Commit -AppDirectory "' + ExpandConstant('{app}') + '"', RestoreExitCode) then
+      RaiseException('Falha ao confirmar transacao de atualizacao');
+    if RestoreExitCode <> 0 then
+      RaiseException('Transacao de atualizacao nao confirmada');
+    RollbackCommitted := True;
   end;
 end;
 
@@ -990,6 +1033,15 @@ procedure RemoveLegacyStartupEntries();
 var
   ResultCode: Integer;
 begin
+  if not RunTempPowerShellScriptEx(
+    'migrate_startup_entries.ps1',
+    '-AppExePath "' + ExpandConstant('{app}\{#MyAppExeName}') + '" ' +
+    '-AppMode "' + SelectedMode + '"',
+    ResultCode
+  ) then
+    Log('Warning: failed to launch startup profile migration')
+  else if ResultCode <> 0 then
+    Log('Warning: startup profile migration incomplete, exit=' + IntToStr(ResultCode));
   Exec('reg.exe', 'delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('reg.exe', 'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "BackupDatabase" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Exec('reg.exe', 'delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v "{#MyAppName}" /f', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -1018,19 +1070,35 @@ begin
     Log('Warning: failed to create client startup scheduled task, exit=' + IntToStr(ResultCode));
 end;
 
-procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, NssmPath: String);
+procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, WrapperPath: String);
 var
   ResultCode: Integer;
   ScriptPath: String;
   Args: String;
 begin
   ScriptPath := ExpandConstant('{app}\tools\install_service.ps1');
+  // Preserve registration and credentials of an existing service during upgrade.
+  if IsServiceInstalled('BackupDatabaseService') then
+  begin
+    if not RecoverServiceOnAbort then
+    begin
+      Log('Existing service was stopped before upgrade; preserving STOPPED');
+      Exit;
+    end;
+    if not RunTempPowerShellScriptEx('rollback_update.ps1',
+      '-Action StartExisting -AppDirectory "' + AppDirectory + '"', ResultCode) then
+      OperationalRestoreFailed := True
+    else
+      OperationalRestoreFailed := OperationalRestoreFailed or (ResultCode <> 0);
+    Exit;
+  end;
 
   // Pre-condicoes: scripts e binarios necessarios. Sem isso o
   // install_service.ps1 falha tarde (ResultCode 1) e o atalho "Iniciar com o
   // Windows" silenciosamente nao registra o servico.
   if not FileExists(ScriptPath) then
   begin
+    OperationalRestoreFailed := True;
     Log('ERROR: install_service.ps1 ausente em ' + ScriptPath
       + '; servico nao sera registrado.');
     if not WizardSilent() then
@@ -1041,13 +1109,14 @@ begin
       );
     Exit;
   end;
-  if not FileExists(NssmPath) then
+  if not FileExists(WrapperPath) then
   begin
-    Log('ERROR: nssm.exe ausente em ' + NssmPath
+    OperationalRestoreFailed := True;
+    Log('ERROR: BackupDatabaseService.exe ausente em ' + WrapperPath
       + '; servico nao sera registrado.');
     if not WizardSilent() then
       MsgBox(
-        ExpandCustomMessage1('NssmMissing', NssmPath),
+        ExpandCustomMessage1('WrapperMissing', WrapperPath),
         mbError,
         MB_OK
       );
@@ -1060,9 +1129,10 @@ begin
     '-StartAfterInstall ' +
     '-AppPath "' + AppExePath + '" ' +
     '-AppDirectory "' + AppDirectory + '" ' +
-    '-NssmPath "' + NssmPath + '"';
+    '-NssmPath "' + WrapperPath + '"';
   if Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
+    OperationalRestoreFailed := OperationalRestoreFailed or (ResultCode <> 0);
     if ResultCode = 0 then
       Log('BackupDatabaseService installed and RUNNING confirmed')
     else if ResultCode = 2 then
@@ -1085,6 +1155,7 @@ begin
   else
   begin
     Log('Warning: failed to launch install_service.ps1 from installer');
+    OperationalRestoreFailed := True;
     if not WizardSilent() then
       MsgBox(ExpandCustomMessage('ServiceScriptLaunchFailed'), mbError, MB_OK);
   end;

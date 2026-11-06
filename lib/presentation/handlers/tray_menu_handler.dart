@@ -1,19 +1,19 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
-import 'package:backup_database/presentation/boot/app_cleanup.dart';
+import 'package:backup_database/presentation/boot/app_exit_coordinator.dart';
 import 'package:backup_database/presentation/managers/managers.dart';
 
 class TrayMenuHandler {
   static void handleAction(TrayMenuAction action) {
+    if (AppExitCoordinator.instance.isExiting) return;
     switch (action) {
       case TrayMenuAction.show:
-        unawaited(WindowManagerService().show());
+        unawaited(_showWindow());
 
       case TrayMenuAction.executeBackup:
         unawaited(_executeManualBackup());
@@ -98,13 +98,24 @@ class TrayMenuHandler {
   static void _navigateToSettings() {
     LoggerService.info('Navegando para configurações via tray menu');
 
-    unawaited(WindowManagerService().show());
+    unawaited(_showWindow());
 
     appRouter.go(RouteNames.settings);
   }
 
   static Future<void> _exitApp() async {
-    await AppCleanup.cleanup();
-    exit(0);
+    await AppExitCoordinator.instance.requestExit();
+  }
+
+  static Future<void> _showWindow() async {
+    try {
+      await WindowManagerService().show();
+    } on Object catch (error, stackTrace) {
+      LoggerService.error(
+        'Erro ao restaurar janela pela bandeja',
+        error,
+        stackTrace,
+      );
+    }
   }
 }

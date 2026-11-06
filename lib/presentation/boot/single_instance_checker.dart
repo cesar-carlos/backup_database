@@ -107,16 +107,6 @@ class SingleInstanceChecker {
       'estar iniciando sem interface.\n\n'
       'N\u00E3o \u00E9 poss\u00EDvel executar mais de uma inst\u00E2ncia '
       'ao mesmo tempo.';
-  static const String _dialogMessageStartupServiceOwner =
-      'O Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o como '
-      'servi\u00E7o do Windows.\n\n'
-      'A abertura autom\u00E1tica no logon n\u00E3o exibiu uma janela.';
-  static const String _dialogMessageStartupOwnerUnconfirmed =
-      'O Backup Database j\u00E1 est\u00E1 em execu\u00E7\u00E3o, mas '
-      'n\u00E3o foi poss\u00EDvel confirmar que \u00E9 a sua janela.\n\n'
-      'A abertura autom\u00E1tica no logon n\u00E3o trouxe nenhuma '
-      'janela \u00E0 frente.';
-
   Future<bool> checkAndHandleSecondInstance() async {
     final isFirstInstance = await _singleInstanceService.checkAndLock(
       fallbackMode: _lockFallbackMode,
@@ -137,7 +127,7 @@ class SingleInstanceChecker {
     }
 
     if (_launchOrigin == LaunchOrigin.windowsStartup) {
-      await _handleWindowsStartupSecondInstance();
+      _handleWindowsStartupSecondInstance();
       return;
     }
 
@@ -214,6 +204,11 @@ class SingleInstanceChecker {
       );
     }
 
+    if (showWindowStatus == SingleInstanceShowWindowStatus.shown) {
+      _exitDuplicateUi();
+      return;
+    }
+
     final dialogMessage = _getDialogMessage(
       isServiceOwner: isServiceOwner,
       isDifferentUser: isDifferentUser,
@@ -238,6 +233,10 @@ class SingleInstanceChecker {
       _exitProcess?.call(ScheduledBackupExitCode.genericFailure);
       return;
     }
+    if (_launchOrigin == LaunchOrigin.windowsStartup) {
+      _exitProcess?.call(UiBootstrapExitCode.fatalBootstrapError);
+      return;
+    }
     _messageBox.showError(
       dialogTitleMutexFailure,
       _dialogMessageMutexCreationFailed,
@@ -245,37 +244,13 @@ class SingleInstanceChecker {
     _exitProcess?.call(UiBootstrapExitCode.fatalBootstrapError);
   }
 
-  Future<void> _handleWindowsStartupSecondInstance() async {
-    final ownerInfo = await _getExistingInfo();
-    final existingUser = await _readExistingUser();
-    final currentUser = _getCurrentUsername();
-    final isServiceOwner =
-        ownerInfo?.role == SingleInstanceConfig.ipcInstanceRoleService;
-    final isSameUserUi =
-        !isServiceOwner &&
-        ownerInfo?.role == SingleInstanceConfig.ipcInstanceRoleUi &&
-        existingUser != null &&
-        currentUser != null &&
-        existingUser == currentUser;
-
-    if (isSameUserUi) {
-      LoggerService.infoWithContext(
-        'event=duplicate_launch_suppressed launchOrigin=windows-startup '
-        'ownerRole=${ownerInfo?.role ?? "unknown"}',
-      );
-      _exitDuplicateUi();
-      return;
-    }
-
+  void _handleWindowsStartupSecondInstance() {
+    // The global lock already denied startup. Do not wait for owner IPC or
+    // show a modal dialog: unattended RDP sessions would retain this process.
     LoggerService.infoWithContext(
-      'event=duplicate_launch_startup_notified '
-      'ownerRole=${ownerInfo?.role ?? "unknown"} '
-      'isServiceOwner=$isServiceOwner',
+      'event=duplicate_launch_suppressed launchOrigin=windows-startup '
+      'reason=existing_instance action=exit',
     );
-    final message = isServiceOwner
-        ? _dialogMessageStartupServiceOwner
-        : _dialogMessageStartupOwnerUnconfirmed;
-    _messageBox.showWarning(dialogTitle, message);
     _exitDuplicateUi();
   }
 

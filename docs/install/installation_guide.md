@@ -19,8 +19,8 @@ UI mostra um `InfoBar`; use o instalador manual. Detalhes em
 `auto_update_setup.md` ("Matriz de plataformas suportadas").
 
 Requisitos canonicos (GitHub / clone): [`docs/requirements.md`](../requirements.md)
-e [`docs/path_setup.md`](../path_setup.md). Os stubs nesta pasta (`requirements.md`,
-`path_setup.md`) so redirecionam para esses arquivos.
+e [`docs/path_setup.md`](../path_setup.md). Esses arquivos sao as referencias
+unicas, inclusive na documentacao distribuida com o instalador.
 
 ## Passo 1: baixar o instalador
 
@@ -57,7 +57,7 @@ ela, clientes remotos precisam de regra manual.
 
 Comportamento de startup com Windows (quando voce marca "Iniciar com o Windows"):
 
-- `Server Mode`: o instalador registra o app como Windows Service via NSSM
+- `Server Mode`: o instalador registra o app como Windows Service via WinSW
   (`BackupDatabaseService`) rodando como `LocalSystem`, com `AppParameters
   = --mode=server --minimized --run-as-service`.
 - `Client Mode`: o instalador cria uma Scheduled Task ONLOGON
@@ -116,7 +116,7 @@ Windows encontra as ferramentas externas necessarias.
 
 ### 2. Configurar PATH, se necessario
 
-Se alguma ferramenta estiver ausente, siga `path_setup.md`.
+Se alguma ferramenta estiver ausente, siga [o guia de PATH](../path_setup.md).
 
 Resumo por banco:
 
@@ -166,7 +166,7 @@ Fluxo recomendado:
 3. execute o atalho `Instalar como Servico do Windows`
 4. valide os logs em `C:\ProgramData\BackupDatabase\logs\`
 
-Se preferir o fluxo manual com NSSM, use o `README.md` da raiz do repositorio
+Se preferir o fluxo manual com WinSW, use o `README.md` da raiz do repositorio
 como referencia complementar.
 
 ## Desinstalacao
@@ -186,9 +186,10 @@ Marque Sim so se quiser limpar a maquina por completo.
 
 O produto suporta atualizacao automatica quando `AUTO_UPDATE_FEED_URL` estiver
 configurada no ambiente da maquina. Apos o instalador silencioso, o
-`restore_update_state.ps1` relanca a UI se `origin=ui` (sem mexer no servico)
-e so recria/starta o NSSM quando a origem e o servico e a conta e LocalSystem.
-Conta customizada: exit 2, SCM intacto. Assinatura Authenticode e procedimento
+`restore_update_state.ps1` restaura o estado operacional sem recriar o servico.
+Servicos NSSM sao migrados para WinSW mantendo o registro e as credenciais.
+Contas customizadas precisam de permissoes administrativas para auto update
+silencioso. Consulte [migracao WinSW](winsw_migration.md). Assinatura Authenticode e procedimento
 manual (`release_guide.md`); o pipeline de build nao chama `signtool`.
 
 Para detalhes operacionais:
@@ -201,7 +202,7 @@ Para detalhes operacionais:
 
 ### O app nao encontra uma ferramenta CLI
 
-Use `Verificar Dependencias` e configure o PATH com base em `path_setup.md`.
+Use `Verificar Dependencias` e configure o PATH com base no [guia de PATH](../path_setup.md).
 
 ### O aplicativo instala, mas alguns recursos nao aparecem
 
@@ -225,6 +226,6 @@ Verifique:
 
 ## Proximos documentos
 
-- `requirements.md`
-- `path_setup.md`
+- [Requisitos](../requirements.md)
+- [PATH](../path_setup.md)
 - `../email/guia_funcionamento_notificacoes_email_smtp_oauth.md`

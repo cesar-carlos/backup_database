@@ -73,8 +73,8 @@ class SystemStartupSection extends StatelessWidget {
             ),
             description: appLocaleString(
               context,
-              'Abre a aplicacao ja minimizada na proxima inicializacao.',
-              'Opens the application minimized on the next startup.',
+              'Inicia minimizado na abertura automática com o Windows.',
+              'Starts minimized when opening automatically with Windows.',
             ),
             value: systemSettings.startMinimized,
             onChanged: systemSettings.setStartMinimized,

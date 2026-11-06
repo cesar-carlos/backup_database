@@ -154,7 +154,7 @@ class ServiceModeInitializer {
               reason: 'global_instance_lock_denied',
               exitCode: ServiceModeExitCode.lockDenied,
             );
-            exit(ServiceModeExitCode.lockDenied);
+            await log.flushBeforeExit(ServiceModeExitCode.lockDenied);
           }
         },
       );
@@ -282,6 +282,7 @@ class ServiceModeInitializer {
       await completeGracefulShutdown(
         singleInstanceService: singleInstanceService,
         appendLog: log.append,
+        flushAndExit: log.flushBeforeExit,
       );
     } on Object catch (e, stackTrace) {
       await _handleFatalError(
@@ -332,6 +333,8 @@ class ServiceModeInitializer {
     }
 
     try {
+      schedulerService?.suspendExecutions();
+      schedulerService?.stop();
       await schedulerService?.waitForRunningBackups(
         timeout: _fatalShutdownBackupBudget,
       );
@@ -359,14 +362,14 @@ class ServiceModeInitializer {
       'initialize: exiting process with code '
       '${ServiceModeExitCode.fatalBootstrapError}',
     );
-    exit(ServiceModeExitCode.fatalBootstrapError);
+    await log.flushBeforeExit(ServiceModeExitCode.fatalBootstrapError);
   }
 
   @visibleForTesting
   static Future<void> completeGracefulShutdown({
     required ISingleInstanceService? singleInstanceService,
     required Future<void> Function(String message) appendLog,
-    void Function(int code)? exitProcess,
+    required Future<void> Function(int code) flushAndExit,
   }) async {
     await appendLog('initialize: shutdown signal received');
     try {
@@ -379,7 +382,7 @@ class ServiceModeInitializer {
       );
     }
     await appendLog('initialize: lock released, exiting');
-    (exitProcess ?? exit)(ServiceModeExitCode.gracefulShutdown);
+    await flushAndExit(ServiceModeExitCode.gracefulShutdown);
   }
 
   @visibleForTesting

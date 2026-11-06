@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/di/infrastructure_socket_server_module.dart';
 import 'package:backup_database/core/di/sgbd_registration.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
+import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
@@ -170,6 +173,24 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   getIt.registerLazySingleton<ITemporaryBackupCleanupService>(
     () => TemporaryBackupCleanupService(
       backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+      temporaryRoots: () async => (await getIt<IScheduleRepository>().getAll())
+          .getOrThrow()
+          .map((schedule) => schedule.backupFolder)
+          .toList(),
+      isBackupActive: () => getIt<ISchedulerService>().isExecutingBackup,
+      protectedRoots: () async {
+        final destinations =
+            (await getIt<IBackupDestinationRepository>().getAll()).getOrThrow();
+        return destinations
+            .where((destination) => destination.type == DestinationType.local)
+            .map(
+              (destination) =>
+                  (jsonDecode(destination.config)
+                          as Map<String, dynamic>)['path']
+                      as String,
+            )
+            .toList();
+      },
     ),
   );
   getIt.registerLazySingleton<TemporaryBackupCleanupScheduler>(

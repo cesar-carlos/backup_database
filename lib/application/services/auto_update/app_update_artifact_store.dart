@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:backup_database/application/services/auto_update/app_update_diagnostics_store.dart';
 import 'package:backup_database/application/services/auto_update/app_update_install_context_store.dart';
 import 'package:backup_database/application/services/auto_update/app_update_types.dart';
+import 'package:backup_database/core/utils/file_hash_utils.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:dio/dio.dart';
 import 'package:path/path.dart' as p;
@@ -45,25 +46,32 @@ class AppUpdateArtifactStore {
     );
 
     final targetFile = File(p.join(updatesDir.path, release.installerFileName));
-    if (await targetFile.exists()) {
-      await targetFile.delete();
+    final partialFile = File('${targetFile.path}.part');
+    try {
+      await runWithRetry<void>(
+        label: 'download do instalador',
+        action: () {
+          return dio.download(
+            release.downloadUrl,
+            partialFile.path,
+            options: Options(
+              responseType: ResponseType.bytes,
+              followRedirects: true,
+            ),
+          );
+        },
+      );
+
+      if (await partialFile.length() != release.fileSizeBytes ||
+          (await FileHashUtils.computeSha256(partialFile)).toLowerCase() !=
+              release.sha256.toLowerCase()) {
+        throw StateError('Instalador baixado com tamanho ou SHA-256 invalido');
+      }
+      if (await targetFile.exists()) await targetFile.delete();
+      return await partialFile.rename(targetFile.path);
+    } finally {
+      if (await partialFile.exists()) await partialFile.delete();
     }
-
-    await runWithRetry<void>(
-      label: 'download do instalador',
-      action: () {
-        return dio.download(
-          release.downloadUrl,
-          targetFile.path,
-          options: Options(
-            responseType: ResponseType.bytes,
-            followRedirects: true,
-          ),
-        );
-      },
-    );
-
-    return targetFile;
   }
 
   Future<void> ensureSufficientDiskSpace({

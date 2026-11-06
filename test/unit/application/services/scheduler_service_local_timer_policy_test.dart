@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
 import 'package:backup_database/application/services/scheduler_service.dart';
 import 'package:backup_database/core/constants/backup_constants.dart';
@@ -52,6 +54,23 @@ void main() {
   late _MockBackupHistoryRepository backupHistoryRepository;
   late _MockUserPreferencesRepository userPreferencesRepository;
   late SchedulerService service;
+  tearDown(() => service.stop());
+
+  testWidgets('stopped asynchronous start cannot create a late timer', (
+    tester,
+  ) async {
+    final preference = Completer<bool>();
+    when(() => userPreferencesRepository.getLocalScheduleTimerEnabled())
+        .thenAnswer((_) => preference.future);
+    final starting = service.start();
+    await tester.pump();
+    service.stop();
+    preference.complete(true);
+    await starting;
+    await tester.pump(const Duration(minutes: 2));
+    verifyNever(() => scheduleRepository.getEnabledDueForExecution(any()));
+    expect(service.isRunning, isFalse);
+  });
 
   setUp(() {
     scheduleRepository = _MockScheduleRepository();
@@ -99,4 +118,21 @@ void main() {
       verifyNever(() => scheduleRepository.getEnabledDueForExecution(any()));
     },
   );
+
+  testWidgets('stop and restart before jitter leaves only one periodic timer', (
+    tester,
+  ) async {
+    when(() => userPreferencesRepository.getLocalScheduleTimerEnabled())
+        .thenAnswer((_) async => true);
+    await service.start();
+    service.stop();
+    await service.start();
+    await tester.pump(const Duration(seconds: 30));
+    verify(() => scheduleRepository.getEnabledDueForExecution(any())).called(1);
+    await tester.pump(const Duration(minutes: 1));
+    verify(() => scheduleRepository.getEnabledDueForExecution(any())).called(1);
+    service.stop();
+    await tester.pump(const Duration(minutes: 2));
+    verifyNever(() => scheduleRepository.getEnabledDueForExecution(any()));
+  });
 }

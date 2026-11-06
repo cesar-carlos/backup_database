@@ -4,6 +4,21 @@ Esta pasta concentra o empacotamento Windows do Backup Database. O fluxo
 principal hoje e `python installer\build_installer.py`; o restante da pasta
 existe para suportar esse caminho ou a manutencao do `setup.iss`.
 
+O upgrade utiliza `rollback_update.ps1` e `rollback_core.ps1` para guardar a
+versao instalada antes da copia e recupera-la se houver falha. O protocolo,
+o espaco necessario e a recuperacao de instalacoes interrompidas estao em
+[Auto update](../docs/install/auto_update_setup.md); os cenarios de regressao
+estao no [guia de testes](../docs/install/testing_auto_update.md).
+
+A instalacao avulsa do servico (pela UI, UAC ou `install_service.ps1`)
+recusa substituir um registro existente, preservando sua conta e configuracao.
+Para atualizar a aplicacao, utilize o instalador completo. Contas customizadas
+exigem senha; credenciais incompletas nao usam LocalSystem como fallback.
+Falhas nas configuracoes de conta, inicio automatico e recuperacao sao fatais.
+O script elevado remove uma instalacao parcial apenas quando ele proprio
+confirmou a criacao do servico; um timeout no processo chamador nao autoriza
+remover um registro cuja origem nao foi confirmada.
+
 ## Fluxo oficial
 
 Execute na raiz do projeto:
@@ -48,13 +63,28 @@ inspecao de `VersionInfo` via PowerShell).
 - `build_installer.py`: pipeline local de build do instalador
 - `update_version.py`: sincroniza versao entre `pubspec.yaml`, `setup.iss` e `.env`
 - `check_dependencies.ps1`: utilitario opcional distribuido com o app para validar CLIs dos bancos suportados
-- `install_service.ps1`: instala o app como Windows Service via NSSM
+- `install_service.ps1`: instala o app como Windows Service via WinSW
 - `uninstall_service.ps1`: remove o Windows Service
 - `capture_update_context.ps1`: captura contexto operacional antes do update silencioso
 - `restore_update_state.ps1`: restaura UI ou Windows Service depois do update
 - `merge_env.ps1`: mescla `.env.example` com a configuracao persistida da maquina
+- `migrate_startup_entries.ps1`: remove entradas legadas nos perfis de usuario
+  para evitar aberturas duplicadas no Terminal Server
 - `encoding_utils.ps1`: helper UTF-8 sem BOM usado pelos scripts PowerShell
 - `TROUBLESHOOTING_SERVICE.md`: diagnostico operacional do modo servico
+
+## Atualizacao e preservacao de estado
+
+O wizard nao interrompe o servico ao abrir. A parada ocorre em
+`PrepareToInstall`, com destino definido e confirmacao do usuario. Se STOPPED
+nao for confirmado, a instalacao nao copia arquivos. O contexto captura se o
+servico estava rodando antes da parada; update iniciado pela UI reinicia esse
+servico sem reinstalar nem alterar a conta.
+
+A documentacao e empacotada preservando a arvore `docs/`; o atalho aponta para
+`docs/install/installation_guide.md`, mantendo links relativos operacionais.
+Detalhes do protocolo estao em [auto update](../docs/install/auto_update_setup.md)
+e a matriz de homologacao em [testes](../docs/install/testing_auto_update.md).
 
 ## Padrao de linguagem
 
@@ -93,7 +123,7 @@ Estes caminhos sao artefatos locais, nao documentacao nem codigo-fonte:
 `build_installer.py` recria dependencias locais quando necessario:
 
 - `installer\dependencies\vc_redist.x64.exe`
-- `installer\dependencies\nssm-2.24\win64\nssm.exe`
+- `installer\dependencies\winsw-2.12.0\BackupDatabaseService.exe`
 
 Se voce precisar compilar o `setup.iss` manualmente, execute antes o
 `build_installer.py` ou providencie esses arquivos por conta propria.
@@ -122,7 +152,7 @@ O `setup.iss` empacota:
 - `.env.example` em `C:\ProgramData\BackupDatabase\config`
 - guias operacionais basicos em `{app}\docs` (inclui `TROUBLESHOOTING_SERVICE.md`)
 - `check_dependencies.ps1`
-- `nssm.exe` e scripts de servico em `{app}\tools`
+- `BackupDatabaseService.exe` (WinSW) e scripts de servico em `{app}\tools`
 
 SO minimo: Windows 8 / Server 2012+ x64 (`MinVersion=6.2`). Auto-update
 silencioso desabilitado em Server 2012 / 2012 R2.
@@ -152,7 +182,7 @@ restaurada por `UsePreviousTasks`). Sem `/MODE=`, o setup le
 
 ## Servico Windows
 
-O servico continua baseado em NSSM e inicia o app com:
+O servico usa WinSW e inicia o app com:
 
 ```text
 --mode=server --minimized --run-as-service
@@ -163,11 +193,11 @@ Referencias operacionais:
 - troubleshooting: `installer\TROUBLESHOOTING_SERVICE.md`
 - comportamento do update: `docs\install\auto_update_setup.md`
 
-Importante: update silencioso do servico so e restaurado automaticamente
-quando a conta do Windows Service e `LocalSystem`. Conta customizada: o
-`restore_update_state.ps1` sai com codigo 2 **sem** `nssm remove`/`install`.
-Origem `ui`: o restore so relanca a UI, sem startar o servico.
-
+Servicos NSSM existentes sao migrados sem delete/create e sem alterar a conta
+ou senha. A configuracao XML, os limites de conversao, a recuperacao e a matriz
+de homologacao estao em [migracao WinSW](../docs/install/winsw_migration.md).
+Contas customizadas podem atualizar silenciosamente sob WinSW quando o token
+do processo possui permissoes administrativas; caso contrario, use Setup elevado.
 Assinatura Authenticode: procedimento em `docs\install\release_guide.md`;
 `build_installer.py` nao chama `signtool`.
 

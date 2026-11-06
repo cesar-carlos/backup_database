@@ -174,6 +174,8 @@ class AutoUpdateService {
   bool _isInitialized = false;
   String? _feedUrl;
   BeforeInstallHook? beforeInstallHook;
+  BeforeInstallHook? installFailureHook;
+  Future<void>? _pendingInstallRecovery;
   InstallReadinessCheck? installReadinessCheck;
   UpdateInstallContextProvider? installContextProvider;
   AppUpdateSnapshot _snapshot = const AppUpdateSnapshot(
@@ -389,7 +391,7 @@ class AutoUpdateService {
   void startPeriodicChecks({
     Duration interval = const Duration(seconds: defaultCheckIntervalSeconds),
   }) {
-    if (!isInitialized) {
+    if (_disposed || !isInitialized) {
       LoggerService.info(
         'AutoUpdateService: verificacoes periodicas ignoradas '
         '(servico indisponivel)',
@@ -449,6 +451,8 @@ class AutoUpdateService {
   }
 
   Future<void> checkNow({required AppUpdateSource source}) async {
+    if (_disposed) return;
+    if (_pendingInstallRecovery != null) return _pendingInstallRecovery;
     if (_activeCheck != null) {
       LoggerService.info(
         'AutoUpdateService: verificacao ja em andamento, aguardando resultado',
@@ -479,9 +483,12 @@ class AutoUpdateService {
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     _periodicTimer?.cancel();
     await _snapshotController.close();
   }
+
+  bool _disposed = false;
 
   /// Fachada `@visibleForTesting` que delega para [AppcastParser.parse].
   /// Mantida aqui para preservar os ~10 testes existentes em
@@ -548,6 +555,7 @@ class AutoUpdateService {
     String? targetVersion;
     var handoffExitInvoked = false;
     var installerSpawnConfirmed = false;
+    Future<void>? preparation;
     int? installerBytes;
     AppUpdateInstallContext? installContext;
 
@@ -747,10 +755,12 @@ class AutoUpdateService {
         );
       }
 
+      if (_disposed) return;
       if (beforeInstallHook != null) {
         final hookTimeout = _beforeInstallHookTimeout;
         try {
-          await beforeInstallHook!.call().timeout(
+          preparation = Future<void>.sync(beforeInstallHook!);
+          await preparation.timeout(
             hookTimeout,
             onTimeout: () {
               throw BeforeInstallHookTimeoutException(hookTimeout);
@@ -782,6 +792,7 @@ class AutoUpdateService {
 
       await transitionStage(AppUpdateStage.launchingInstaller);
 
+      if (_disposed) return;
       final spawnHandle = await _launchInstaller(
         installer,
         mode: installContext.appMode,
@@ -847,7 +858,9 @@ class AutoUpdateService {
       // para impedir NSSM AppExit Default Restart durante a janela do setup.
       // Em modo UI nao ha NSSM envolvido, `success (0)` basta.
       final exitCode = installContext.origin == AppUpdateLaunchOrigin.service
-          ? ServiceModeExitCode.handoffForInstaller
+          ? ServiceModeExitCode.forWrapper(
+              ServiceModeExitCode.handoffForInstaller,
+            )
           : UiBootstrapExitCode.success;
       _exitProcess(exitCode);
     } on AppUpdateBlockedException catch (e) {
@@ -939,6 +952,27 @@ class AutoUpdateService {
       );
     } finally {
       if (!handoffExitInvoked) {
+        if (preparation != null && !installerSpawnConfirmed) {
+          // A timed-out Future keeps running. Recover only after preparation
+          // settles, so late cleanup cannot undo restored services.
+          final recoveryHook = installFailureHook;
+          final recovery = preparation.then<void>(
+            (_) async {
+              if (!_disposed) await recoveryHook?.call();
+            },
+            onError: (Object _, StackTrace _) async {
+              if (!_disposed) await recoveryHook?.call();
+            },
+          );
+          _pendingInstallRecovery = recovery.whenComplete(() {
+            _pendingInstallRecovery = null;
+          });
+          try {
+            await _pendingInstallRecovery!.timeout(_beforeInstallHookTimeout);
+          } on Object catch (e, s) {
+            LoggerService.warning('Falha ao restaurar após instalação', e, s);
+          }
+        }
         await lockHandle.release();
       }
     }

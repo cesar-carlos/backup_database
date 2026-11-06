@@ -234,6 +234,45 @@ void main() {
   });
 
   group('SchedulerService concurrency and cancellation', () {
+    test(
+      'shutdown rejects new local and remote executions before lookup',
+      () async {
+        service.suspendExecutions();
+        for (final origin in ExecutionOrigin.values) {
+          expect(
+            (await service.executeNow(
+              scheduleId,
+              executionOrigin: origin,
+            )).isError(),
+            isTrue,
+          );
+        }
+        verifyNever(() => scheduleRepository.getById(any()));
+      },
+    );
+
+    test('shutdown also rejects a lookup already in flight', () async {
+      final pending = Completer<rd.Result<Schedule>>();
+      when(() => scheduleRepository.getById(scheduleId))
+          .thenAnswer((_) => pending.future);
+      final execution = service.executeNow(scheduleId);
+      service.suspendExecutions();
+      pending.complete(rd.Success(buildSchedule()));
+      expect((await execution).isError(), isTrue);
+      verifyZeroInteractions(backupOrchestratorService);
+    });
+
+    test('ordinary pause and install recovery allow manual lookup', () async {
+      when(() => scheduleRepository.getById(scheduleId)).thenAnswer(
+        (_) async => const rd.Failure(ValidationFailure(message: 'not found')),
+      );
+      service.stop();
+      await service.executeNow(scheduleId);
+      service.suspendExecutions();
+      service.resumeExecutions();
+      await service.executeNow(scheduleId);
+      verify(() => scheduleRepository.getById(scheduleId)).called(2);
+    });
     test('isExecutingBackup is false when idle', () {
       expect(service.isExecutingBackup, isFalse);
     });

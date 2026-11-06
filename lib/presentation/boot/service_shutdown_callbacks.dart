@@ -29,7 +29,11 @@ class ServiceShutdownCallbacks {
   final ServiceBootstrapLog log;
 
   void register(ServiceShutdownHandler handler) {
-    handler.registerCallback(_handleShutdown);
+    handler.registerCallback(
+      _handleShutdown,
+      onStart: () => schedulerServiceRef()?.suspendExecutions(),
+      onComplete: _tryComplete,
+    );
   }
 
   Future<void> _handleShutdown(Duration timeout) async {
@@ -72,8 +76,6 @@ class ServiceShutdownCallbacks {
 
     LoggerService.info('Shutdown callback: servicos parados');
     await log.append('shutdown callback: completed');
-
-    _tryComplete();
   }
 
   void _stopIfRegistered<T extends Object>(

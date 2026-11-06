@@ -14,6 +14,9 @@ contrato do produto. Contrato vivo de servidor/protocolo:
 | Entender a arquitetura atual | `onboarding/architecture_overview.md` |
 | Protocolo socket e modo servidor | `onboarding/execucao_remota.md` |
 | Navegar pelas decisoes arquiteturais | `adr/README.md` |
+| Operar bandeja, retencao e transferencias | [Operacao do servidor](operations/server_and_transfers.md) |
+| Configurar o auto update | [Auto update](install/auto_update_setup.md) |
+| Gerar e publicar instalador | [Release](install/release_guide.md) |
 
 ## Mapa das pastas
 
@@ -36,8 +39,11 @@ contrato do produto. Contrato vivo de servidor/protocolo:
   planos citados por ADRs sao stubs; o texto completo esta em
   `notes/archive/`.
 
-## Observacao sobre `docs/install/`
+## Fontes de verdade
 
-`install/path_setup.md` e `install/requirements.md` sao atalhos para
-preservar links relativos do guia de instalacao. A fonte de verdade e
-`docs/path_setup.md` e `docs/requirements.md`.
+Requisitos e PATH ficam somente em `requirements.md` e `path_setup.md`.
+O build do instalador e descrito em [installer/README.md](../installer/README.md);
+publicacao e assinatura ficam no guia de release. Os atalhos redundantes
+`installer/QUICK_START.md`, `install/requirements.md` e `install/path_setup.md`
+foram removidos. Os stubs de historico citados por ADRs permanecem para
+preservar essas referencias.

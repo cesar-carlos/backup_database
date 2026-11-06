@@ -22,6 +22,10 @@ abstract class ISchedulerService {
 
   void stop();
 
+  /// Blocks all new executions without cancelling backups already running.
+  void suspendExecutions();
+  void resumeExecutions();
+
   bool get isRunning;
 
   Future<bool> waitForRunningBackups({

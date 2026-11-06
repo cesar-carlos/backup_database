@@ -53,7 +53,11 @@ class FtpConnectionTester {
 
       if (config.remotePath.isNotEmpty && config.remotePath != '/') {
         await _uploader.createRemoteDirectories(ftp, config.remotePath);
-        await ftp.changeDirectory(config.remotePath);
+        if (!await ftp.changeDirectory(config.remotePath)) {
+          throw Exception(
+            'Sem permissão para acessar diretório FTP configurado',
+          );
+        }
       }
 
       final testFileName =

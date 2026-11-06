@@ -136,7 +136,7 @@ Depois da publicacao:
 
 Se precisar retirar uma release do auto update sem apagar a release do GitHub:
 
-1. Edite [scripts/appcast_policy.json](/D:/Developer/Flutter/backup_database/scripts/appcast_policy.json)
+1. Edite [scripts/appcast_policy.json](../../scripts/appcast_policy.json)
 2. Adicione a versao em `blocked_versions`
 3. Faca push na `main`
 4. O workflow `update-appcast` sera reexecutado e removera a versao do feed
