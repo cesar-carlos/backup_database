@@ -178,7 +178,7 @@ Prefira sempre o fluxo oficial via `sync_appcast_from_releases.py`.
 - O updater usa o hash `sha256` do feed para validar o instalador antes da troca.
 - A configuracao ativa da maquina instalada fica em `C:\ProgramData\BackupDatabase\config\.env`.
 - Alterar `.env` dentro da pasta do aplicativo nao muda o runtime da maquina instalada.
-- Auto update silencioso em modo servico so e suportado quando o Windows Service esta em `LocalSystem` (ou aliases `System` / `NT AUTHORITY\SYSTEM`).
-- Restore apos update: conta customizada nao recria o NSSM; origem UI nao starta o servico.
+- Auto update silencioso em modo servico WinSW exige token administrativo; contas customizadas sao preservadas. No NSSM legado, permanece a restricao a LocalSystem e aliases.
+- Restore apos update preserva o registro e as credenciais do servico; origem UI reinicia somente um servico que estava rodando. Consulte [migracao WinSW](winsw_migration.md).
 - Assinatura Authenticode e opcional e fica fora do `build_installer.py` (secao 3b).
 - Antes de abrir o PR, confirme a versao real em `pubspec.yaml` e reaproveite esse mesmo valor em branch, tag e nome do instalador.
