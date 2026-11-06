@@ -5,6 +5,32 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.4</title>
+      <pubDate>Fri, 06 Nov 2026 18:34:10 +0000</pubDate>
+      <description>## Correções e melhorias
+
+- Migração do serviço Windows de NSSM para WinSW 2.12.0, preservando o registro, a conta e as credenciais já instaladas.
+- Recuperação de falhas durante atualização, cópia de arquivos e inicialização, com rollback da versão anterior e restauração do serviço.
+- Validação da conta, do executável e dos snapshots antes da recuperação; configurações incompatíveis bloqueiam a migração sem descarte silencioso.
+- Correções de instância única no Terminal Server e de abertura automática, fechamento, minimização e restauração pela bandeja.
+- Encerramento mais confiável, com liberação dos recursos para permitir abrir novamente.
+- Correções na retenção de arquivos temporários, no envio FTP (retomada, cancelamento e timeouts) e no upload para Google Drive.
+- Documentação revisada e testes de regressão ampliados.
+
+## Instalação e auto update
+
+O instalador Windows x64 é único para os modos cliente e servidor. O arquivo `.sha256` permite verificar sua integridade. O appcast será atualizado para distribuir a versão 3.6.4.
+
+Configurações NSSM sem conversão segura bloqueiam a migração e acionam a recuperação. Consulte o guia de migração incluído na documentação.
+
+## Validação
+
+Build Windows release, compilação Inno Setup, 438 testes Dart e 3 testes Python aprovados. A migração real em VM com conta de domínio não foi executada nesta publicação.
+
+SHA-256 do instalador: `01a69c118c38da94a1c0a2d89ebc6e34849715d2ab053347a3e34bf579e65c13`.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.4/BackupDatabase-Setup-3.6.4.exe" sparkle:version="3.6.4" sparkle:os="windows" length="43744721" type="application/octet-stream" sha256="01a69c118c38da94a1c0a2d89ebc6e34849715d2ab053347a3e34bf579e65c13" />
+    </item>
+    <item>
       <title>Version 3.6.3</title>
       <pubDate>Thu, 15 Oct 2026 18:39:27 +0000</pubDate>
       <description>## Highlights
