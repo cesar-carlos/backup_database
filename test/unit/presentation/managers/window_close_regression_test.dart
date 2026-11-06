@@ -83,7 +83,7 @@ void main() {
   test(
     'failed tray stays unavailable after preferences are reapplied',
     () async {
-    manager.trayAvailable = false;
+      manager.trayAvailable = false;
       await manager.setMinimizeToTray(true);
       await manager.setCloseToTray(true);
       manager.onWindowMinimize();
