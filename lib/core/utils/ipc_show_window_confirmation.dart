@@ -1,22 +1,28 @@
+import 'dart:async';
+
 /// Records that a window became visible during the current SHOW_WINDOW
 /// attempt. The IPC handler only replies OK when this mark is set, because
 /// the show callback can return before any window exists.
 class IpcShowWindowConfirmation {
   IpcShowWindowConfirmation._();
 
-  static int _epoch = 0;
-  static int _shownEpoch = -1;
+  static final Object _attemptKey = Object();
 
-  static int beginAttempt() => ++_epoch;
+  static Future<bool> runAttempt(Future<Object?> Function() callback) async {
+    final attempt = _ShowAttempt();
+    return runZoned(() async {
+      final outcome = await callback();
+      return outcome != false && (outcome == true || attempt.shown);
+    }, zoneValues: {_attemptKey: attempt});
+  }
 
   static void markShown() {
-    _shownEpoch = _epoch;
+    (Zone.current[_attemptKey] as _ShowAttempt?)?.shown = true;
   }
 
-  static bool wasShown(int epoch) => _shownEpoch == epoch;
+  static void resetForTest() {}
+}
 
-  static void resetForTest() {
-    _epoch = 0;
-    _shownEpoch = -1;
-  }
+class _ShowAttempt {
+  bool shown = false;
 }

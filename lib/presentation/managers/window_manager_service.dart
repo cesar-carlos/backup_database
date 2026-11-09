@@ -26,6 +26,7 @@ class WindowManagerService with WindowListener {
   Future<void> _windowOperations = Future<void>.value();
   int _generation = 0;
   bool _isShuttingDown = false;
+  int _restoreRequests = 0;
 
   void beginShutdown() {
     _isShuttingDown = true;
@@ -186,21 +187,29 @@ class WindowManagerService with WindowListener {
     LoggerService.debug('Fechar para bandeja: $value');
   }
 
-  Future<void> show() => _enqueueWindowOperation(_show);
+  Future<void> show({Duration nativeTimeout = const Duration(seconds: 2)}) {
+    // Native restore/show can emit minimize notifications. Those events must
+    // not enqueue a hide that runs immediately after a successful restoration.
+    _restoreRequests++;
+    return _enqueueWindowOperation(() => _show(nativeTimeout))
+        .whenComplete(() => _restoreRequests--);
+  }
 
-  Future<void> _show() async {
+  Future<void> _show(Duration nativeTimeout) async {
     final generation = _generation;
     try {
       LoggerService.info('🪟 Tentando mostrar janela...');
 
       // Garantir que a janela apareça na taskbar
-      await windowManager.setSkipTaskbar(false);
+      await windowManager.setSkipTaskbar(false).timeout(nativeTimeout);
       await Future.delayed(const Duration(milliseconds: 100));
       if (_isShuttingDown || generation != _generation) return;
 
       // Verificar estado atual
-      final isMinimized = await windowManager.isMinimized();
-      final isVisible = await windowManager.isVisible();
+      final isMinimized = await windowManager.isMinimized().timeout(
+        nativeTimeout,
+      );
+      final isVisible = await windowManager.isVisible().timeout(nativeTimeout);
       if (_isShuttingDown || generation != _generation) return;
 
       LoggerService.info(
@@ -210,7 +219,7 @@ class WindowManagerService with WindowListener {
       // Se estiver minimizada, restaurar primeiro
       if (isMinimized) {
         LoggerService.info('🔄 Janela está minimizada, restaurando...');
-        await windowManager.restore();
+        await windowManager.restore().timeout(nativeTimeout);
         await Future.delayed(const Duration(milliseconds: 200));
         if (_isShuttingDown || generation != _generation) return;
       }
@@ -218,12 +227,14 @@ class WindowManagerService with WindowListener {
       // SEMPRE chamar show() mesmo que já esteja visível
       // Isso é crítico quando a janela foi ocultada com hide()
       LoggerService.info('👁️ Chamando show()...');
-      await windowManager.show();
+      await windowManager.show().timeout(nativeTimeout);
       await Future.delayed(const Duration(milliseconds: 200));
       if (_isShuttingDown || generation != _generation) return;
 
       // Verificar se realmente está visível agora
-      final isVisibleAfterShow = await windowManager.isVisible();
+      final isVisibleAfterShow = await windowManager.isVisible().timeout(
+        nativeTimeout,
+      );
       if (_isShuttingDown || generation != _generation) return;
       LoggerService.info('📊 Visível após show(): $isVisibleAfterShow');
 
@@ -232,23 +243,27 @@ class WindowManagerService with WindowListener {
         LoggerService.warning(
           '⚠️ Janela ainda não está visível após show(), tentando restaurar...',
         );
-        await windowManager.restore();
+        await windowManager.restore().timeout(nativeTimeout);
         await Future.delayed(const Duration(milliseconds: 200));
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.show();
+        await windowManager.show().timeout(nativeTimeout);
         await Future.delayed(const Duration(milliseconds: 200));
         if (_isShuttingDown || generation != _generation) return;
       }
 
       // Focar a janela
       LoggerService.info('🎯 Focando janela...');
-      await windowManager.focus();
+      await windowManager.focus().timeout(nativeTimeout);
       await Future.delayed(const Duration(milliseconds: 100));
       if (_isShuttingDown || generation != _generation) return;
 
       // Verificação final
-      final finalIsVisible = await windowManager.isVisible();
-      final finalIsMinimized = await windowManager.isMinimized();
+      final finalIsVisible = await windowManager.isVisible().timeout(
+        nativeTimeout,
+      );
+      final finalIsMinimized = await windowManager.isMinimized().timeout(
+        nativeTimeout,
+      );
       if (_isShuttingDown || generation != _generation) return;
       LoggerService.info(
         '✅ Janela exibida! Visível: $finalIsVisible, Minimizada: $finalIsMinimized',
@@ -259,29 +274,29 @@ class WindowManagerService with WindowListener {
           '❌ CRÍTICO: Janela ainda não está visível após todas as tentativas!',
         );
         // Última tentativa
-        await windowManager.restore();
+        await windowManager.restore().timeout(nativeTimeout);
         await Future.delayed(const Duration(milliseconds: 300));
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.show();
+        await windowManager.show().timeout(nativeTimeout);
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.focus();
+        await windowManager.focus().timeout(nativeTimeout);
       }
-      await _markIpcShowIfWindowIsVisible(generation);
+      await _markIpcShowIfWindowIsVisible(generation, nativeTimeout);
     } on Object catch (e, stackTrace) {
       if (_isShuttingDown || generation != _generation) return;
       LoggerService.error('❌ Erro ao mostrar janela', e, stackTrace);
       // Tentar método alternativo
       try {
         LoggerService.info('🔄 Tentando método alternativo...');
-        await windowManager.setSkipTaskbar(false);
+        await windowManager.setSkipTaskbar(false).timeout(nativeTimeout);
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.restore();
+        await windowManager.restore().timeout(nativeTimeout);
         await Future.delayed(const Duration(milliseconds: 200));
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.show();
+        await windowManager.show().timeout(nativeTimeout);
         if (_isShuttingDown || generation != _generation) return;
-        await windowManager.focus();
-        await _markIpcShowIfWindowIsVisible(generation);
+        await windowManager.focus().timeout(nativeTimeout);
+        await _markIpcShowIfWindowIsVisible(generation, nativeTimeout);
       } on Object catch (e2) {
         LoggerService.error('❌ Erro crítico ao mostrar janela', e2);
         rethrow;
@@ -289,10 +304,15 @@ class WindowManagerService with WindowListener {
     }
   }
 
-  Future<void> _markIpcShowIfWindowIsVisible(int generation) async {
+  Future<void> _markIpcShowIfWindowIsVisible(
+    int generation,
+    Duration nativeTimeout,
+  ) async {
     if (_isShuttingDown || generation != _generation) return;
-    final isVisible = await windowManager.isVisible();
-    final isMinimized = await windowManager.isMinimized();
+    final isVisible = await windowManager.isVisible().timeout(nativeTimeout);
+    final isMinimized = await windowManager.isMinimized().timeout(
+      nativeTimeout,
+    );
     if (_isShuttingDown || generation != _generation) return;
     if (isVisible && !isMinimized) {
       IpcShowWindowConfirmation.markShown();
@@ -338,7 +358,7 @@ class WindowManagerService with WindowListener {
   // WindowListener callbacks
   @override
   void onWindowMinimize() {
-    if (_minimizeToTray && trayAvailable) {
+    if (_minimizeToTray && trayAvailable && _restoreRequests == 0) {
       unawaited(
         _hideToTray().catchError((e) {
           LoggerService.error('Erro ao ocultar janela ao minimizar', e);

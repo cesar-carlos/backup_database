@@ -508,11 +508,11 @@ class AppBootstrap {
         return;
       }
 
+      _dependencies.runtime.runApp(const StartupLoadingApp());
       await _dependencies.uiServices.initializeUiServices(
         launchConfig: launchConfig,
         bootstrapConfig: bootstrapConfig,
       );
-      _dependencies.runtime.runApp(const StartupLoadingApp());
       await _dependencies.uiServices.initializeApp(
         appMode: bootstrapConfig.appMode,
       );

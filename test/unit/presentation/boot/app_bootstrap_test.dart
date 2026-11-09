@@ -58,6 +58,10 @@ void main() {
 
       expect(events, contains('binding'));
       expect(events, isNot(contains('service_init')));
+      expect(
+        events.indexOf('loading_app'),
+        lessThan(events.indexOf('ui_services')),
+      );
     });
 
     test('treats ipc server startup failure as fatal', () async {
@@ -234,7 +238,7 @@ void main() {
           ]),
         );
         expect(events, isNot(contains('app_init:server')));
-        expect(events, isNot(contains('loading_app')));
+        expect(events, contains('loading_app'));
         expect(events, isNot(contains('run_app')));
       },
     );
@@ -260,8 +264,8 @@ void main() {
           'di',
           'ipc',
           'launch_config',
-          'ui_services',
           'loading_app',
+          'ui_services',
           'app_init:server',
           'scheduler_policy:failOpen',
           'scheduler_start',

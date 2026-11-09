@@ -17,6 +17,33 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
+  test(
+    'minimize emitted by native show does not hide restored window',
+    () async {
+      var visible = false;
+      var emitMinimize = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'show') {
+          visible = true;
+          if (emitMinimize) manager.onWindowMinimize();
+        }
+        if (call.method == 'hide') visible = false;
+        if (call.method == 'isVisible') return visible;
+        if (call.method.startsWith('is')) return false;
+        return null;
+      });
+      await manager.initialize(center: false);
+      await manager.setMinimizeToTray(true);
+      emitMinimize = true;
+      await manager.show();
+      await manager.setTitle('Queue barrier');
+      expect(visible, isTrue);
+      manager.onWindowMinimize();
+      await manager.setTitle('Queue barrier');
+      expect(visible, isFalse, reason: 'Real minimize must still hide to tray');
+    },
+  );
+
   test('concurrent initialization registers exactly one listener', () async {
     final entered = Completer<void>();
     final release = Completer<void>();

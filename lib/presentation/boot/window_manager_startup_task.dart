@@ -22,6 +22,7 @@ class WindowManagerStartupTask {
     required this.logWarning,
     this.initializationTimeout = const Duration(seconds: 15),
     this.cancelInitialization,
+    this.appearanceTimeout = const Duration(seconds: 3),
   });
 
   final bool Function() isWindowManagementEnabled;
@@ -34,6 +35,7 @@ class WindowManagerStartupTask {
   final BootstrapLogWithError logWarning;
   final Duration initializationTimeout;
   final void Function()? cancelInitialization;
+  final Duration appearanceTimeout;
 
   Future<void> start() async {
     if (!isWindowManagementEnabled()) {
@@ -41,6 +43,12 @@ class WindowManagerStartupTask {
         'Window manager omitido (compatibilidade): '
         '${windowManagementDisabledLabel()}',
       );
+      if (isWindowsPlatform()) {
+        throw StateError(
+          'A janela não pode ser inicializada: '
+          '${windowManagementDisabledLabel()}',
+        );
+      }
       return;
     }
 
@@ -59,11 +67,13 @@ class WindowManagerStartupTask {
     );
     try {
       if (isWindowsPlatform()) {
-        final prefs = await loadWindowsBackdropPreferences();
+        final prefs = await loadWindowsBackdropPreferences().timeout(
+          appearanceTimeout,
+        );
         await applyWindowsBackdrop(
           micaEnabled: prefs.micaEnabled,
           isDark: prefs.isDark,
-        );
+        ).timeout(appearanceTimeout);
       }
       logInfo('Window manager pronto');
     } on Object catch (e, stackTrace) {
