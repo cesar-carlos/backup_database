@@ -5,6 +5,31 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.5</title>
+      <pubDate>Mon, 09 Nov 2026 13:30:39 +0000</pubDate>
+      <description>## Correções
+
+- Preserva a barra de título e os controles nativos da janela, removendo a configuração de transparência conflitante.
+- Corrige concorrência na inicialização, restauração, minimização, bandeja e encerramento.
+- Recupera a janela quando a bandeja falha e impede operações tardias sobre recursos descartados.
+- Corrige concorrência na aplicação de temas, Mica e preferências do sistema.
+- Preserva preferências em falhas de leitura, compatibilidade e migração do início automático.
+- Aguarda alterações de preferências antes de fechar o banco e bloqueia novas etapas após timeout.
+- Mostra falhas de rollback do início automático e permite tentar restaurar novamente.
+
+Inclui testes de regressão dos fluxos de janela, preferências, rollback e encerramento.
+
+## Validação
+
+- Suíte completa de testes, cobertura e widgets aprovada no GitHub para as correções.
+- 45 testes locais de migração WinSW e rollback aprovados.
+- Instalador compilado pelo pipeline oficial, com versão 3.6.5 e ícones verificados.
+- Checksum SHA-256 distribuído junto ao instalador.
+
+O instalador atende aos modos cliente e servidor. As chamadas nativas de falha e rollback foram validadas com simulações; a confirmação visual no Windows 10 afetado ainda está pendente. Operações já enviadas ao Windows ou ao armazenamento não podem ser canceladas retroativamente.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.5/BackupDatabase-Setup-3.6.5.exe" sparkle:version="3.6.5" sparkle:os="windows" length="43747378" type="application/octet-stream" sha256="eecfe4d1ed5f6ebd4146fbfed3dd584b2c2b1db9c90a5b09a53ba9a1c2a294df" />
+    </item>
+    <item>
       <title>Version 3.6.4</title>
       <pubDate>Fri, 06 Nov 2026 18:34:10 +0000</pubDate>
       <description>## Correções e melhorias
