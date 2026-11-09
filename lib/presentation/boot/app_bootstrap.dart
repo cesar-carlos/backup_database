@@ -661,12 +661,7 @@ class AppBootstrap {
 
     await _buildTrayManagerStartupTask(
       features: features,
-      onUnavailable: () async {
-        windowManager.trayAvailable = false;
-        await windowManager.setMinimizeToTray(false);
-        await windowManager.setCloseToTray(false);
-        if (launchConfig.startMinimized) await windowManager.show();
-      },
+      onUnavailable: windowManager.handleTrayUnavailable,
     ).start();
   }
 
@@ -687,6 +682,7 @@ class AppBootstrap {
         );
       },
       applyWindowsBackdrop: WindowsNativeChromeBootstrap.setBackdrop,
+      cancelInitialization: windowManager.beginShutdown,
       loadWindowsBackdropPreferences: () async {
         final prefsRepo = service_locator.getIt<IUserPreferencesRepository>();
         final micaEnabled = await prefsRepo.getUseWindowsMicaBackdrop();

@@ -22,6 +22,7 @@ import 'package:backup_database/presentation/providers/theme_provider.dart';
 import 'package:backup_database/presentation/widgets/settings/general_settings_tab.dart';
 import 'package:backup_database/presentation/widgets/settings/machine_storage_settings_section.dart';
 import 'package:backup_database/presentation/widgets/settings/service_settings_tab.dart';
+import 'package:backup_database/presentation/widgets/settings/system/system_startup_section.dart';
 import 'package:backup_database/presentation/widgets/settings/system_settings_tab.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,6 +32,26 @@ import 'package:result_dart/result_dart.dart' show unit;
 
 import '../../../helpers/stub_temp_directory_service.dart';
 import '../../../support/feature_availability_test_support.dart';
+
+class _RecoverySettings extends SystemSettingsProvider {
+  _RecoverySettings()
+    : super(
+        machineSettingsRepository: _FakeMachineSettingsRepository(),
+        userPreferencesRepository: _FakeUserPreferencesRepository(),
+        windowsMachineStartupService: _FakeWindowsMachineStartupService(),
+      );
+
+  bool pending = true;
+  int retries = 0;
+  @override
+  bool get hasStartupRecoveryError => pending;
+  @override
+  Future<void> retryStartupRecovery() async {
+    retries++;
+    pending = false;
+    notifyListeners();
+  }
+}
 
 class _FakeUserPreferencesRepository implements IUserPreferencesRepository {
   @override
@@ -343,6 +364,38 @@ Future<void> _pumpSettingsHarness(
 }
 
 void main() {
+  testWidgets('startup rollback warning offers a working retry action', (
+    tester,
+  ) async {
+    final settings = _RecoverySettings();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<SystemSettingsProvider>.value(
+        value: settings,
+        child: FluentApp(
+          home: ScaffoldPage(
+            content: Consumer<SystemSettingsProvider>(
+              builder: (context, provider, child) => SystemStartupSection(
+                systemSettings: provider,
+                features: FeatureAvailabilityService(
+                  kTestFeatureAvailabilityAllEnabled,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final retry = find.textContaining(
+      RegExp(r'^(Tentar restaurar|Retry restoration)$'),
+    );
+    expect(retry, findsOneWidget);
+    await tester.tap(retry);
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(settings.retries, 1);
+    expect(retry, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    settings.dispose();
+  });
   setUp(() async {
     setAppMode(AppMode.client);
     await _registerSettingsDependencies();

@@ -6,6 +6,7 @@ import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/core/utils/pending_preference_operations.dart';
 import 'package:backup_database/domain/repositories/i_machine_settings_repository.dart';
 import 'package:backup_database/domain/repositories/i_user_preferences_repository.dart';
 import 'package:backup_database/domain/services/i_windows_machine_startup_service.dart';
@@ -40,28 +41,94 @@ class SystemSettingsProvider extends ChangeNotifier {
   bool _startMinimized = false;
   bool _startWithWindows = false;
   bool _isInitialized = false;
+  bool _disposed = false;
+  Future<void>? _initialization;
+  Future<void> _operations = Future<void>.value();
+  PreferenceOperation? _activeOperation;
+  bool get _canFinish => _activeOperation?.isValid ?? false;
+  ({bool enabled, bool minimized})? _pendingStartupRestore;
+  bool get hasStartupRecoveryError => _pendingStartupRestore != null;
+
+  Future<bool> _restoreStartupIfNeeded() async {
+    final previous = _pendingStartupRestore;
+    if (previous == null) return true;
+    if (!_canFinish) return false;
+    final restored = await _updateStartWithWindows(
+      previous.enabled,
+      startMinimizedOverride: previous.minimized,
+    );
+    if (!_canFinish) return false;
+    if (restored.ok) _pendingStartupRestore = null;
+    _notifyIfActive();
+    return restored.ok;
+  }
+
+  Future<void> retryStartupRecovery() => _enqueue(() async {
+    await _restoreStartupIfNeeded();
+  });
+
+  bool get _inactive => _disposed || _windowManager.isShuttingDown;
+
+  Future<void> _enqueue(Future<void> Function() action) {
+    final operation = _operations.then((_) async {
+      if (!_inactive) {
+        await PendingPreferenceOperations.run((operation) async {
+          _activeOperation = operation;
+          try {
+            await action();
+          } finally {
+            _activeOperation = null;
+          }
+        });
+      }
+    });
+    _operations = operation.catchError((Object _) {});
+    return operation;
+  }
+
+  void _notifyIfActive() {
+    if (!_inactive && _canFinish) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   bool get minimizeToTray => _minimizeToTray;
   bool get closeToTray => _closeToTray;
   bool get startMinimized => _startMinimized;
   bool get startWithWindows => _startWithWindows;
 
-  Future<void> initialize() async {
+  Future<void> initialize() {
+    if (_inactive || _isInitialized) return Future<void>.value();
+    return _initialization ??= _enqueue(_initialize)
+        .whenComplete(() => _initialization = null);
+  }
+
+  Future<void> _initialize() async {
     if (_isInitialized) {
       return;
     }
 
     try {
       await _userPreferences.ensureTrayDefaults();
+      if (_inactive || !_canFinish) return;
 
-      _minimizeToTray = await _userPreferences.getMinimizeToTray();
-      _closeToTray = await _userPreferences.getCloseToTray();
-      _startMinimized = await _machineSettings.getStartMinimized();
-      _startWithWindows = await _machineSettings.getStartWithWindows();
-
-      if (_startWithWindows) {
-        await _reconcileStartupPreferenceWithSystem();
-      }
+      final minimize = await _userPreferences.getMinimizeToTray();
+      if (_inactive || !_canFinish) return;
+      final close = await _userPreferences.getCloseToTray();
+      if (_inactive || !_canFinish) return;
+      final startMinimized = await _machineSettings.getStartMinimized();
+      if (_inactive || !_canFinish) return;
+      final startWithWindows = await _machineSettings.getStartWithWindows();
+      if (_inactive || !_canFinish) return;
+      _minimizeToTray = minimize;
+      _closeToTray = close;
+      _startMinimized = startMinimized;
+      _startWithWindows = startWithWindows;
+      if (_inactive || !_canFinish) return;
 
       if (Platform.isWindows) {
         final features = service_locator.getIt<FeatureAvailabilityService>();
@@ -74,24 +141,32 @@ class SystemSettingsProvider extends ChangeNotifier {
         }
       }
 
-      _isInitialized = true;
+      if (_startWithWindows) {
+        await _reconcileStartupPreferenceWithSystem();
+      }
+      if (_inactive || !_canFinish) return;
 
       await _windowManager.setMinimizeToTray(_minimizeToTray);
+      if (_inactive || !_canFinish) return;
       await _windowManager.setCloseToTray(_closeToTray);
+      if (_inactive || !_canFinish) return;
+      _isInitialized = true;
 
       LoggerService.info(
         'Configurações aplicadas - Minimizar para bandeja: $_minimizeToTray, Fechar para bandeja: $_closeToTray',
       );
 
-      notifyListeners();
+      _notifyIfActive();
       LoggerService.info('Configurações do sistema carregadas');
     } on Object catch (e) {
       LoggerService.error('Erro ao carregar configurações do sistema', e);
-      _isInitialized = true;
     }
   }
 
-  Future<void> setMinimizeToTray(bool value) async {
+  Future<void> setMinimizeToTray(bool value) =>
+      _enqueue(() => _setMinimizeToTray(value));
+
+  Future<void> _setMinimizeToTray(bool value) async {
     if (Platform.isWindows) {
       final features = service_locator.getIt<FeatureAvailabilityService>();
       if (!features.isTrayEnabled) {
@@ -99,19 +174,21 @@ class SystemSettingsProvider extends ChangeNotifier {
         return;
       }
     }
-    _minimizeToTray = value;
-    await _windowManager.setMinimizeToTray(value);
-    notifyListeners();
-    LoggerService.debug('Minimizar para bandeja alterado: $value');
-
     try {
       await _userPreferences.setMinimizeToTray(value);
+      if (_inactive || !_canFinish) return;
+      _minimizeToTray = value;
+      await _windowManager.setMinimizeToTray(value);
+      _notifyIfActive();
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração minimizeToTray', e);
     }
   }
 
-  Future<void> setCloseToTray(bool value) async {
+  Future<void> setCloseToTray(bool value) =>
+      _enqueue(() => _setCloseToTray(value));
+
+  Future<void> _setCloseToTray(bool value) async {
     if (Platform.isWindows) {
       final features = service_locator.getIt<FeatureAvailabilityService>();
       if (!features.isTrayEnabled) {
@@ -119,19 +196,24 @@ class SystemSettingsProvider extends ChangeNotifier {
         return;
       }
     }
-    _closeToTray = value;
-    await _windowManager.setCloseToTray(value);
-    notifyListeners();
-    LoggerService.debug('Fechar para bandeja alterado: $value');
-
     try {
       await _userPreferences.setCloseToTray(value);
+      if (_inactive || !_canFinish) return;
+      _closeToTray = value;
+      await _windowManager.setCloseToTray(value);
+      _notifyIfActive();
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração closeToTray', e);
     }
   }
 
-  Future<void> setStartMinimized(bool value) async {
+  Future<void> setStartMinimized(bool value) =>
+      _enqueue(() => _setStartMinimized(value));
+
+  Future<void> _setStartMinimized(bool value) async {
+    if (!_isInitialized) await _initialize();
+    if (_inactive || !_isInitialized) return;
+    if (!await _restoreStartupIfNeeded() || !_canFinish) return;
     try {
       if (_startWithWindows) {
         final outcome = await _updateStartWithWindows(
@@ -139,21 +221,37 @@ class SystemSettingsProvider extends ChangeNotifier {
           startMinimizedOverride: value,
         );
         if (!outcome.ok) {
-          notifyListeners();
+          _notifyIfActive();
           return;
         }
       }
 
+      try {
+        if (!_canFinish) return;
+        await _machineSettings.setStartMinimized(value);
+      } on Object {
+        if (_startWithWindows && _canFinish) {
+          _pendingStartupRestore = (enabled: true, minimized: _startMinimized);
+          await _restoreStartupIfNeeded();
+        }
+        rethrow;
+      }
+      if (_inactive || !_canFinish) return;
       _startMinimized = value;
-      notifyListeners();
+      _notifyIfActive();
       LoggerService.debug('Iniciar minimizado alterado: $value');
-      await _machineSettings.setStartMinimized(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startMinimized', e);
     }
   }
 
-  Future<void> setStartWithWindows(bool value) async {
+  Future<void> setStartWithWindows(bool value) =>
+      _enqueue(() => _setStartWithWindows(value));
+
+  Future<void> _setStartWithWindows(bool value) async {
+    if (!_isInitialized) await _initialize();
+    if (_inactive || !_isInitialized) return;
+    if (!await _restoreStartupIfNeeded() || !_canFinish) return;
     if (Platform.isWindows) {
       final features = service_locator.getIt<FeatureAvailabilityService>();
       if (!features.isStartupAtLogonTaskEnabled) {
@@ -169,14 +267,27 @@ class SystemSettingsProvider extends ChangeNotifier {
         startMinimizedOverride: _startMinimized,
       );
       if (!outcome.ok) {
-        notifyListeners();
+        _notifyIfActive();
         return;
       }
 
+      try {
+        if (!_canFinish) return;
+        await _machineSettings.setStartWithWindows(value);
+      } on Object {
+        if (_canFinish) {
+          _pendingStartupRestore = (
+            enabled: _startWithWindows,
+            minimized: _startMinimized,
+          );
+          await _restoreStartupIfNeeded();
+        }
+        rethrow;
+      }
+      if (_inactive || !_canFinish) return;
       _startWithWindows = value;
-      notifyListeners();
+      _notifyIfActive();
       LoggerService.debug('Iniciar com Windows alterado: $value');
-      await _machineSettings.setStartWithWindows(value);
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configuração startWithWindows', e);
     }
@@ -210,12 +321,25 @@ class SystemSettingsProvider extends ChangeNotifier {
           : '';
       final installScheduledTask = appMode != AppMode.server;
 
+      if (!_canFinish) {
+        return const WindowsMachineStartupOutcome(
+          ok: false,
+          diagnostics: 'Operation expired',
+        );
+      }
+
       final outcome = await _windowsMachineStartup.apply(
         enabled: enable,
         installScheduledTask: installScheduledTask,
         executablePath: executablePath,
         taskArguments: taskArguments,
       );
+      if (!_canFinish) {
+        return const WindowsMachineStartupOutcome(
+          ok: false,
+          diagnostics: 'Operation expired',
+        );
+      }
 
       if (outcome.ok) {
         if (enable) {
@@ -246,6 +370,7 @@ class SystemSettingsProvider extends ChangeNotifier {
   Future<void> _reconcileStartupPreferenceWithSystem() async {
     final installScheduledTask = _appModeProvider() != AppMode.server;
     final inspection = await _windowsMachineStartup.inspect();
+    if (_inactive || !_canFinish) return;
     if (!inspection.ok) {
       if (inspection.diagnostics.isNotEmpty) {
         LoggerService.warning(
@@ -276,6 +401,7 @@ class SystemSettingsProvider extends ChangeNotifier {
         true,
         startMinimizedOverride: _startMinimized,
       );
+      if (_inactive || !_canFinish) return;
       if (outcome.ok) {
         LoggerService.info('[startup_migration] completed_ok');
         migrationApplied = true;
@@ -284,6 +410,9 @@ class SystemSettingsProvider extends ChangeNotifier {
           '[startup_migration] apply_failed diagnostics=${outcome.diagnostics}',
         );
       }
+      // A failed repair is not evidence that the user disabled startup.
+      // Preserve the preference so migration can be retried on the next boot.
+      if (!outcome.ok) return;
     }
 
     if (installScheduledTask &&
@@ -310,12 +439,29 @@ class SystemSettingsProvider extends ChangeNotifier {
     await initialize();
   }
 
-  Future<void> saveSettings() async {
+  Future<void> saveSettings() => _enqueue(_saveSettings);
+
+  Future<void> _saveSettings() async {
     try {
-      await _userPreferences.setMinimizeToTray(_minimizeToTray);
-      await _userPreferences.setCloseToTray(_closeToTray);
+      if (!_isInitialized) await _initialize();
+      if (_inactive || !_isInitialized) return;
+      if (!await _restoreStartupIfNeeded() || !_canFinish) return;
+      final features = Platform.isWindows
+          ? service_locator.getIt<FeatureAvailabilityService>()
+          : null;
+      // Disabled UI values are effective fallbacks, not user preferences.
+      if (features == null || features.isTrayEnabled) {
+        await _userPreferences.setMinimizeToTray(_minimizeToTray);
+        if (!_canFinish) return;
+        await _userPreferences.setCloseToTray(_closeToTray);
+      }
+      if (!_canFinish) return;
       await _machineSettings.setStartMinimized(_startMinimized);
-      await _machineSettings.setStartWithWindows(_startWithWindows);
+      if (!_canFinish) return;
+      if (features == null || features.isStartupAtLogonTaskEnabled) {
+        await _machineSettings.setStartWithWindows(_startWithWindows);
+      }
+      if (!_canFinish) return;
       LoggerService.info('Configurações salvas com sucesso');
     } on Object catch (e) {
       LoggerService.error('Erro ao salvar configurações', e);

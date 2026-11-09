@@ -27,7 +27,17 @@ class AppExitCoordinator {
   Future<void>? _shutdown;
   bool get isExiting => _shutdown != null;
 
-  Future<void> requestExit() => _shutdown ??= Future<void>.sync(() async {
+  Future<void> requestExit() {
+    final pending = _shutdown;
+    if (pending != null) return pending;
+    // Publish before callbacks: onStart/cleanup can synchronously request exit.
+    final completion = Completer<void>();
+    _shutdown = completion.future;
+    completion.complete(_performExit());
+    return completion.future;
+  }
+
+  Future<void> _performExit() async {
     try {
       onStart();
       await cleanup().timeout(timeout);
@@ -41,5 +51,5 @@ class AppExitCoordinator {
       // Even a failed cleanup must not leave a hidden process holding the lock.
       exitProcess(0);
     }
-  });
+  }
 }

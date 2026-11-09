@@ -49,7 +49,10 @@ class TrayManagerService with TrayListener {
       });
 
   Future<void> _initialize({Function(TrayMenuAction)? onMenuAction}) async {
-    if (_isInitialized) return;
+    if (_isInitialized) {
+      if (onMenuAction != null) _onMenuAction = onMenuAction;
+      return;
+    }
 
     _onMenuAction = onMenuAction;
     trayManager.addListener(this);
@@ -228,17 +231,22 @@ class TrayManagerService with TrayListener {
     }
   }
 
-  Future<void> setSchedulerPaused(bool paused) async {
+  Future<void> setSchedulerPaused(bool paused) => _enqueueLifecycle(() async {
+    if (!_isInitialized) return;
     _isSchedulerPaused = paused;
     await _updateTooltip();
-  }
+  });
 
   Future<void> _updateTooltip() async {
     final status = _isSchedulerPaused ? 'Pausado' : 'Ativo';
     await trayManager.setToolTip('Backup Database - $status');
   }
 
-  Future<void> setBackupRunning(bool running, {String? databaseName}) async {
+  Future<void> setBackupRunning(
+    bool running, {
+    String? databaseName,
+  }) => _enqueueLifecycle(() async {
+    if (!_isInitialized) return;
     if (running) {
       await trayManager.setToolTip(
         'Backup Database - Executando backup${databaseName != null ? ': $databaseName' : ''}',
@@ -246,7 +254,7 @@ class TrayManagerService with TrayListener {
     } else {
       await _updateTooltip();
     }
-  }
+  });
 
   @override
   void onTrayIconMouseDown() {}
@@ -315,6 +323,7 @@ class TrayManagerService with TrayListener {
 
   Future<void> _dispose() async {
     _isInitialized = false;
+    _isSchedulerPaused = false;
     _onMenuAction = null;
     trayManager.removeListener(this);
     try {

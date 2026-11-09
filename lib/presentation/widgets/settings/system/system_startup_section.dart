@@ -41,6 +41,36 @@ class SystemStartupSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (systemSettings.hasStartupRecoveryError) ...[
+            InfoBar(
+              severity: InfoBarSeverity.error,
+              title: Text(
+                appLocaleString(
+                  context,
+                  'Não foi possível restaurar o início automático.',
+                  'Could not restore automatic startup.',
+                ),
+              ),
+              content: Text(
+                appLocaleString(
+                  context,
+                  'A configuração do Windows pode diferir da preferência salva. Tente restaurar antes de alterar novamente.',
+                  'Windows may differ from the saved preference. Retry restoration before making another change.',
+                ),
+              ),
+              action: Button(
+                onPressed: systemSettings.retryStartupRecovery,
+                child: Text(
+                  appLocaleString(
+                    context,
+                    'Tentar restaurar',
+                    'Retry restoration',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
           SettingsToggleRow(
             title: appLocaleString(
               context,

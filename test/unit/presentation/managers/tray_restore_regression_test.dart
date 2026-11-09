@@ -7,6 +7,73 @@ import 'package:tray_manager/tray_manager.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'tooltip updates finish before destroy and stop after disposal',
+    () async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const channel = MethodChannel('tray_manager');
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      final calls = <String>[];
+      var updating = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (updating && call.method == 'setToolTip') {
+          entered.complete();
+          await release.future;
+        }
+        calls.add(call.method);
+        return null;
+      });
+      final tray = TrayManagerService();
+      try {
+        await tray.initialize();
+        calls.clear();
+        updating = true;
+        final update = tray.setBackupRunning(true);
+        await entered.future;
+        final disposing = tray.dispose();
+        final lateUpdate = tray.setSchedulerPaused(true);
+        await Future<void>.delayed(Duration.zero);
+        expect(calls, isEmpty);
+        release.complete();
+        await Future.wait([update, disposing, lateUpdate]);
+        await tray.setBackupRunning(false);
+        expect(calls, ['setToolTip', 'destroy']);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await tray.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
+
+  test('reinitialization replaces callback without recreating icon', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const channel = MethodChannel('tray_manager');
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+    final tray = TrayManagerService();
+    final oldActions = <TrayMenuAction>[];
+    final newActions = <TrayMenuAction>[];
+    try {
+      await tray.initialize(onMenuAction: oldActions.add);
+      calls.clear();
+      await tray.initialize(onMenuAction: newActions.add);
+      tray.onTrayIconMouseUp();
+      expect(oldActions, isEmpty);
+      expect(newActions, [TrayMenuAction.show]);
+      expect(calls, isEmpty);
+    } finally {
+      await tray.dispose();
+      messenger.setMockMethodCallHandler(channel, null);
+    }
+  });
   test('mouse click and menu opening each dispatch one restore', () async {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;

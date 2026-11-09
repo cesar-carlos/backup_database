@@ -18,6 +18,7 @@ class WindowManagerService with WindowListener {
   VoidCallback? _onFocus;
 
   bool _isInitialized = false;
+  Future<void>? _initialization;
   bool _minimizeToTray = false;
   bool _closeToTray = false;
   bool trayAvailable = true;
@@ -34,6 +35,8 @@ class WindowManagerService with WindowListener {
   Future<void> _enqueueWindowOperation(Future<void> Function() action) {
     final generation = _generation;
     final operation = _windowOperations.then((_) async {
+      final initializing = _initialization;
+      if (initializing != null) await initializing;
       if (!_isShuttingDown && generation == _generation) await action();
     });
     // A failed native operation must not poison subsequent requests.
@@ -42,6 +45,14 @@ class WindowManagerService with WindowListener {
   }
 
   bool get isInitialized => _isInitialized;
+  bool get isShuttingDown => _isShuttingDown;
+
+  Future<void> handleTrayUnavailable() async {
+    trayAvailable = false;
+    // The user may have hidden the window while the tray was initializing,
+    // even when the original launch was not minimized.
+    if (_isInitialized) await show();
+  }
 
   Future<void> initialize({
     ui.Size size = AppBreakpoints.initialWindow,
@@ -49,61 +60,95 @@ class WindowManagerService with WindowListener {
     bool center = true,
     String title = 'Backup Database',
     bool startMinimized = false,
-  }) async {
-    if (_isInitialized) return;
-    _isShuttingDown = false;
-
-    await windowManager.ensureInitialized();
-
-    final windowOptions = WindowOptions(
+  }) {
+    if (_isInitialized) return Future<void>.value();
+    return _initialization ??= _initialize(
       size: size,
       minimumSize: minimumSize,
       center: center,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: startMinimized, // Ocultar da taskbar se iniciar minimizado
-      titleBarStyle: TitleBarStyle.normal,
       title: title,
-    );
+      startMinimized: startMinimized,
+    ).whenComplete(() => _initialization = null);
+  }
 
-    // The plugin callback is void and does not await async work.
-    await windowManager.waitUntilReadyToShow(windowOptions);
-    // O X decide no WM_CLOSE. preventClose tem de valer antes do show.
-    await windowManager.setPreventClose(true);
-    windowManager.addListener(this);
-    if (startMinimized) {
-      await windowManager.hide();
-      LoggerService.info('Aplicativo iniciado minimizado (oculto)');
-    } else {
-      await windowManager.show();
-      await windowManager.focus();
-    }
-
-    // Garantir que a janela permaneça oculta se startMinimized for true
-    if (startMinimized) {
-      // Aguardar um pouco para garantir que a janela foi processada
-      await Future.delayed(const Duration(milliseconds: 200));
-      final isVisible = await windowManager.isVisible();
-      if (isVisible) {
-        LoggerService.warning(
-          'Janela ainda visível após hide(), tentando ocultar novamente...',
-        );
-        await windowManager.hide();
-        await windowManager.setSkipTaskbar(true);
+  Future<void> _initialize({
+    required ui.Size size,
+    required ui.Size minimumSize,
+    required bool center,
+    required String title,
+    required bool startMinimized,
+  }) async {
+    _isShuttingDown = false;
+    final generation = _generation;
+    Future<T> checked<T>(Future<T> operation) async {
+      final result = await operation;
+      if (_isShuttingDown || generation != _generation) {
+        throw StateError('Inicialização da janela cancelada');
       }
-      LoggerService.info('Aplicativo iniciado minimizado - janela oculta');
-    } else {
-      // Garantir que skipTaskbar seja false quando não iniciar minimizado
-      await windowManager.setSkipTaskbar(false);
+      return result;
     }
 
-    await windowManager.setMinimumSize(minimumSize);
-    _isInitialized = true;
+    try {
+      await checked(windowManager.ensureInitialized());
+      // waitUntilReadyToShow can restore an existing minimized window itself.
+      // Intercept X before any plugin operation capable of exposing the window.
+      await checked(windowManager.setPreventClose(true));
 
-    LoggerService.info(
-      'WindowManager inicializado - Tamanho mínimo: '
-      '${minimumSize.width}x${minimumSize.height}, '
-      'MinimizeToTray: $_minimizeToTray, CloseToTray: $_closeToTray',
-    );
+      final windowOptions = WindowOptions(
+        size: size,
+        minimumSize: minimumSize,
+        center: center,
+        // Keep the native frame composition. A transparent background invokes
+        // SetWindowCompositionAttribute on Windows and can hide the native
+        // caption on Windows 10. Backdrop effects are managed separately by
+        // WindowsNativeChromeBootstrap.
+        skipTaskbar: startMinimized, // Ocultar da taskbar se iniciar minimizado
+        titleBarStyle: TitleBarStyle.normal,
+        windowButtonVisibility: true,
+        title: title,
+      );
+
+      // The plugin callback is void and does not await async work.
+      await checked(windowManager.waitUntilReadyToShow(windowOptions));
+      windowManager.addListener(this);
+      if (startMinimized) {
+        await checked(windowManager.hide());
+        LoggerService.info('Aplicativo iniciado minimizado (oculto)');
+      } else {
+        await checked(windowManager.show());
+        await checked(windowManager.focus());
+      }
+
+      // Garantir que a janela permaneça oculta se startMinimized for true
+      if (startMinimized) {
+        // Aguardar um pouco para garantir que a janela foi processada
+        await checked(Future<void>.delayed(const Duration(milliseconds: 200)));
+        final isVisible = await checked(windowManager.isVisible());
+        if (isVisible) {
+          LoggerService.warning(
+            'Janela ainda visível após hide(), tentando ocultar novamente...',
+          );
+          await checked(windowManager.hide());
+          await checked(windowManager.setSkipTaskbar(true));
+        }
+        LoggerService.info('Aplicativo iniciado minimizado - janela oculta');
+      } else {
+        // Garantir que skipTaskbar seja false quando não iniciar minimizado
+        await checked(windowManager.setSkipTaskbar(false));
+      }
+
+      await checked(windowManager.setMinimumSize(minimumSize));
+      _isInitialized = true;
+
+      LoggerService.info(
+        'WindowManager inicializado - Tamanho mínimo: '
+        '${minimumSize.width}x${minimumSize.height}, '
+        'MinimizeToTray: $_minimizeToTray, CloseToTray: $_closeToTray',
+      );
+    } on Object {
+      windowManager.removeListener(this);
+      rethrow;
+    }
   }
 
   void prepareTrayCloseBehavior({
@@ -144,17 +189,19 @@ class WindowManagerService with WindowListener {
   Future<void> show() => _enqueueWindowOperation(_show);
 
   Future<void> _show() async {
+    final generation = _generation;
     try {
       LoggerService.info('🪟 Tentando mostrar janela...');
 
       // Garantir que a janela apareça na taskbar
       await windowManager.setSkipTaskbar(false);
       await Future.delayed(const Duration(milliseconds: 100));
-      if (_isShuttingDown) return;
+      if (_isShuttingDown || generation != _generation) return;
 
       // Verificar estado atual
       final isMinimized = await windowManager.isMinimized();
       final isVisible = await windowManager.isVisible();
+      if (_isShuttingDown || generation != _generation) return;
 
       LoggerService.info(
         '📊 Estado antes de mostrar - Minimizada: $isMinimized, Visível: $isVisible',
@@ -165,7 +212,7 @@ class WindowManagerService with WindowListener {
         LoggerService.info('🔄 Janela está minimizada, restaurando...');
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
-        if (_isShuttingDown) return;
+        if (_isShuttingDown || generation != _generation) return;
       }
 
       // SEMPRE chamar show() mesmo que já esteja visível
@@ -173,10 +220,11 @@ class WindowManagerService with WindowListener {
       LoggerService.info('👁️ Chamando show()...');
       await windowManager.show();
       await Future.delayed(const Duration(milliseconds: 200));
-      if (_isShuttingDown) return;
+      if (_isShuttingDown || generation != _generation) return;
 
       // Verificar se realmente está visível agora
       final isVisibleAfterShow = await windowManager.isVisible();
+      if (_isShuttingDown || generation != _generation) return;
       LoggerService.info('📊 Visível após show(): $isVisibleAfterShow');
 
       if (!isVisibleAfterShow) {
@@ -186,21 +234,22 @@ class WindowManagerService with WindowListener {
         );
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
-        if (_isShuttingDown) return;
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.show();
         await Future.delayed(const Duration(milliseconds: 200));
-        if (_isShuttingDown) return;
+        if (_isShuttingDown || generation != _generation) return;
       }
 
       // Focar a janela
       LoggerService.info('🎯 Focando janela...');
       await windowManager.focus();
       await Future.delayed(const Duration(milliseconds: 100));
-      if (_isShuttingDown) return;
+      if (_isShuttingDown || generation != _generation) return;
 
       // Verificação final
       final finalIsVisible = await windowManager.isVisible();
       final finalIsMinimized = await windowManager.isMinimized();
+      if (_isShuttingDown || generation != _generation) return;
       LoggerService.info(
         '✅ Janela exibida! Visível: $finalIsVisible, Minimizada: $finalIsMinimized',
       );
@@ -212,24 +261,27 @@ class WindowManagerService with WindowListener {
         // Última tentativa
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 300));
-        if (_isShuttingDown) return;
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.show();
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.focus();
       }
-      await _markIpcShowIfWindowIsVisible();
+      await _markIpcShowIfWindowIsVisible(generation);
     } on Object catch (e, stackTrace) {
-      if (_isShuttingDown) return;
+      if (_isShuttingDown || generation != _generation) return;
       LoggerService.error('❌ Erro ao mostrar janela', e, stackTrace);
       // Tentar método alternativo
       try {
         LoggerService.info('🔄 Tentando método alternativo...');
         await windowManager.setSkipTaskbar(false);
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.restore();
         await Future.delayed(const Duration(milliseconds: 200));
-        if (_isShuttingDown) return;
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.show();
+        if (_isShuttingDown || generation != _generation) return;
         await windowManager.focus();
-        await _markIpcShowIfWindowIsVisible();
+        await _markIpcShowIfWindowIsVisible(generation);
       } on Object catch (e2) {
         LoggerService.error('❌ Erro crítico ao mostrar janela', e2);
         rethrow;
@@ -237,10 +289,11 @@ class WindowManagerService with WindowListener {
     }
   }
 
-  Future<void> _markIpcShowIfWindowIsVisible() async {
-    if (_isShuttingDown) return;
+  Future<void> _markIpcShowIfWindowIsVisible(int generation) async {
+    if (_isShuttingDown || generation != _generation) return;
     final isVisible = await windowManager.isVisible();
     final isMinimized = await windowManager.isMinimized();
+    if (_isShuttingDown || generation != _generation) return;
     if (isVisible && !isMinimized) {
       IpcShowWindowConfirmation.markShown();
       return;
@@ -252,25 +305,23 @@ class WindowManagerService with WindowListener {
 
   Future<void> hide() => _enqueueWindowOperation(windowManager.hide);
 
-  Future<void> minimize() async {
-    await windowManager.minimize();
-  }
+  Future<void> minimize() => _enqueueWindowOperation(windowManager.minimize);
 
-  Future<void> maximize() async {
-    if (await windowManager.isMaximized()) {
+  Future<void> maximize() => _enqueueWindowOperation(() async {
+    final generation = _generation;
+    final maximized = await windowManager.isMaximized();
+    if (_isShuttingDown || generation != _generation) return;
+    if (maximized) {
       await windowManager.unmaximize();
     } else {
       await windowManager.maximize();
     }
-  }
+  });
 
-  Future<void> close() async {
-    await windowManager.close();
-  }
+  Future<void> close() => _enqueueWindowOperation(windowManager.close);
 
-  Future<void> setTitle(String title) async {
-    await windowManager.setTitle(title);
-  }
+  Future<void> setTitle(String title) =>
+      _enqueueWindowOperation(() => windowManager.setTitle(title));
 
   Future<bool> isVisible() async {
     return windowManager.isVisible();
@@ -299,7 +350,7 @@ class WindowManagerService with WindowListener {
 
   @override
   Future<void> onWindowClose() async {
-    if (_handlingClose || WindowCloseGuard.isBlocked) return;
+    if (_isShuttingDown || _handlingClose || WindowCloseGuard.isBlocked) return;
     _handlingClose = true;
     try {
       await _handleWindowClose();
@@ -309,7 +360,11 @@ class WindowManagerService with WindowListener {
   }
 
   Future<void> _hideToTray() => _enqueueWindowOperation(() async {
+    // Availability can change while a restoration ahead of us is running.
+    if (!trayAvailable) return;
+    final generation = _generation;
     await windowManager.hide();
+    if (_isShuttingDown || generation != _generation) return;
     await windowManager.setSkipTaskbar(true);
   });
 

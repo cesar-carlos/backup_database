@@ -68,6 +68,77 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
+  test('tray failure restores a window hidden after normal startup', () async {
+    await manager.initialize(center: false);
+    await manager.setCloseToTray(true);
+    await manager.onWindowClose();
+    expect(visible, isFalse);
+    await manager.handleTrayUnavailable();
+    expect(visible, isTrue);
+    expect(skipTaskbar, isFalse);
+    expect(manager.trayAvailable, isFalse);
+  });
+
+  test('queued hide is ignored after tray becomes unavailable', () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'show') {
+        entered.complete();
+        await release.future;
+      }
+      return respond(call);
+    });
+    await manager.setCloseToTray(true);
+    final showing = manager.show();
+    await entered.future;
+    final closing = manager.onWindowClose();
+    await manager.handleTrayUnavailable();
+    release.complete();
+    await Future.wait([showing, closing]);
+    expect(calls, isNot(contains('hide')));
+    expect(visible, isTrue);
+  });
+
+  test('dispose cancels an in-flight restore before native show', () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'setSkipTaskbar') {
+        entered.complete();
+        await release.future;
+      }
+      return respond(call);
+    });
+    final show = manager.show();
+    await entered.future;
+    manager.dispose();
+    release.complete();
+    await show;
+    expect(calls, isNot(contains('show')));
+    expect(calls, isNot(contains('focus')));
+  });
+
+  test('concurrent maximize toggles are serialized', () async {
+    var maximized = false;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'isMaximized') return maximized;
+      if (call.method == 'maximize') maximized = true;
+      if (call.method == 'unmaximize') maximized = false;
+      return respond(call);
+    });
+    await Future.wait([manager.maximize(), manager.maximize()]);
+    expect(calls, ['maximize', 'unmaximize']);
+    expect(maximized, isFalse);
+  });
+
+  test('minimize and maximize do not run during shutdown', () async {
+    manager.beginShutdown();
+    await Future.wait([manager.minimize(), manager.maximize()]);
+    expect(calls, isEmpty);
+    await manager.initialize(center: false);
+  });
+
   test(
     'restore requested during hide finishes visible and on taskbar',
     () async {

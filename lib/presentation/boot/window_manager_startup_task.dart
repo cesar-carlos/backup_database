@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 
 typedef WindowsBackdropApplier = Future<void> Function({
@@ -19,6 +21,7 @@ class WindowManagerStartupTask {
     required this.logInfo,
     required this.logWarning,
     this.initializationTimeout = const Duration(seconds: 15),
+    this.cancelInitialization,
   });
 
   final bool Function() isWindowManagementEnabled;
@@ -30,6 +33,7 @@ class WindowManagerStartupTask {
   final BootstrapLog logInfo;
   final BootstrapLogWithError logWarning;
   final Duration initializationTimeout;
+  final void Function()? cancelInitialization;
 
   Future<void> start() async {
     if (!isWindowManagementEnabled()) {
@@ -42,7 +46,17 @@ class WindowManagerStartupTask {
 
     // A failed native window is fatal. Continuing would leave an invisible
     // process holding the instance lock until manually killed.
-    await initializeWindow().timeout(initializationTimeout);
+    await initializeWindow().timeout(
+      initializationTimeout,
+      onTimeout: () {
+        // Future.timeout alone does not stop a late native completion.
+        cancelInitialization?.call();
+        throw TimeoutException(
+          'Window initialization timed out',
+          initializationTimeout,
+        );
+      },
+    );
     try {
       if (isWindowsPlatform()) {
         final prefs = await loadWindowsBackdropPreferences();

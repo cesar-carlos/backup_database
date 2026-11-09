@@ -19,6 +19,7 @@ WindowManagerStartupTask _buildTask({
   bool throwOnInit = false,
   Future<void> Function()? initializeWindow,
   Duration initializationTimeout = const Duration(seconds: 15),
+  void Function()? cancelInitialization,
   bool throwOnBackdrop = false,
   ({bool micaEnabled, bool isDark}) prefs = (micaEnabled: true, isDark: false),
   BootstrapLog? logInfo,
@@ -28,6 +29,7 @@ WindowManagerStartupTask _buildTask({
     isWindowManagementEnabled: () => isEnabled,
     windowManagementDisabledLabel: () => 'unsupported_runtime',
     initializationTimeout: initializationTimeout,
+    cancelInitialization: cancelInitialization,
     initializeWindow:
         initializeWindow ??
         () async {
@@ -98,14 +100,20 @@ void main() {
 
     test('times out an unresponsive native window', () async {
       final pending = Completer<void>();
+      final events = <String>[];
       final task = _buildTask(
         isEnabled: true,
-        events: [],
+        events: events,
+        isWindows: true,
         initializeWindow: () => pending.future,
+        cancelInitialization: () => events.add('cancel'),
         initializationTimeout: const Duration(milliseconds: 10),
       );
       await expectLater(task.start(), throwsA(isA<TimeoutException>()));
+      expect(events, ['cancel']);
       pending.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(events, ['cancel']);
     });
 
     test('backdrop failure leaves functional window available', () async {

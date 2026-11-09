@@ -2,6 +2,7 @@ import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
     as service_locator;
+import 'package:backup_database/core/utils/pending_preference_operations.dart';
 import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
 import 'package:backup_database/domain/services/i_execution_queue_housekeeping_scheduler.dart';
@@ -101,6 +102,11 @@ class AppCleanup {
         );
       }
     });
+    // Drain before closing storage. Unlike Future.timeout on a cleanup step,
+    // this also invalidates late continuations when the deadline expires.
+    if (!await PendingPreferenceOperations.drain(timeout: stepTimeout)) {
+      LoggerService.warning('Timeout ao concluir alterações de preferências');
+    }
     await step('fechar banco de dados', () async {
       if (service_locator.getIt.isRegistered<IAppDatabaseLifecycle>()) {
         await service_locator.getIt<IAppDatabaseLifecycle>().close();

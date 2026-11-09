@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/core/di/service_locator.dart';
+import 'package:backup_database/core/utils/pending_preference_operations.dart';
 import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/domain/services/i_backup_cancellation_service.dart';
 import 'package:backup_database/domain/services/i_execution_queue_housekeeping_scheduler.dart';
@@ -128,6 +129,38 @@ void main() {
     await Future.wait([first, second]);
     expect(events.where((e) => e == 'database').length, 1);
     expect(events.where((e) => e == 'lock').length, 1);
+  });
+
+  test('database waits for an active preference change', () async {
+    final release = Completer<void>();
+    final changing = PendingPreferenceOperations.run((operation) async {
+      await release.future;
+      expect(operation.isValid, isTrue);
+      events.add('preference_saved');
+    });
+    final cleanup = AppCleanup.cleanup();
+    await Future<void>.delayed(Duration.zero);
+    expect(events, isNot(contains('database')));
+    release.complete();
+    await Future.wait([changing, cleanup]);
+    expect(
+      events.indexOf('preference_saved'),
+      lessThan(events.indexOf('database')),
+    );
+  });
+
+  test('timeout invalidates late writes before database close', () async {
+    final release = Completer<void>();
+    final changing = PendingPreferenceOperations.run((operation) async {
+      await release.future;
+      if (operation.isValid) events.add('late_write');
+    });
+    await AppCleanup.cleanup(stepTimeout: const Duration(milliseconds: 10));
+    expect(events, contains('database'));
+    expect(events, contains('lock'));
+    release.complete();
+    await changing;
+    expect(events, isNot(contains('late_write')));
   });
 
   test(

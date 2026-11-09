@@ -8,48 +8,43 @@ class WindowsNativeChromeBootstrap {
 
   static bool _pluginInitialized = false;
   static bool _lastMicaEnabled = false;
+  static Future<void> _operations = Future<void>.value();
+
+  static Future<void> _enqueue(Future<void> Function() action) {
+    if (!Platform.isWindows) return Future<void>.value();
+    final operation = _operations.then((_) => action());
+    return _operations = operation.catchError((Object e, StackTrace s) {
+      LoggerService.warning(
+        'Windows native chrome: failed to apply backdrop',
+        e,
+        s,
+      );
+    });
+  }
 
   static Future<void> setBackdrop({
     required bool micaEnabled,
     required bool isDark,
-  }) async {
-    if (!Platform.isWindows) {
-      return;
+  }) => _enqueue(() async {
+    if (!_pluginInitialized) {
+      await Window.initialize();
+      _pluginInitialized = true;
     }
-    try {
-      if (!_pluginInitialized) {
-        await Window.initialize();
-        _pluginInitialized = true;
-      }
-      _lastMicaEnabled = micaEnabled;
-      await Window.setEffect(
-        effect: micaEnabled ? WindowEffect.mica : WindowEffect.disabled,
-        dark: isDark,
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        'Windows native chrome (flutter_acrylic): failed to apply backdrop',
-        e,
-        s,
-      );
-    }
-  }
+    await Window.setEffect(
+      effect: micaEnabled ? WindowEffect.mica : WindowEffect.disabled,
+      dark: isDark,
+    );
+    _lastMicaEnabled = micaEnabled;
+  });
 
-  static Future<void> syncMicaDarkAppearanceIfActive(bool isDark) async {
-    if (!Platform.isWindows || !_pluginInitialized || !_lastMicaEnabled) {
-      return;
-    }
-    try {
-      await Window.setEffect(
-        effect: WindowEffect.mica,
-        dark: isDark,
-      );
-    } on Object catch (e, s) {
-      LoggerService.warning(
-        'Windows native chrome: failed to sync Mica dark flag',
-        e,
-        s,
-      );
-    }
-  }
+  static Future<void> syncMicaDarkAppearanceIfActive(bool isDark) =>
+      _enqueue(() async {
+        if (!_pluginInitialized || !_lastMicaEnabled) {
+          return;
+        }
+        await Window.setEffect(
+          effect: WindowEffect.mica,
+          dark: isDark,
+        );
+      });
 }

@@ -4,6 +4,38 @@ import 'package:backup_database/presentation/boot/app_exit_coordinator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final reenterFromStart in [true, false]) {
+    test(
+      'reentrant exit from ${reenterFromStart ? 'onStart' : 'cleanup'} is shared',
+      () async {
+        var starts = 0;
+        var cleanups = 0;
+        var exits = 0;
+        Future<void>? nested;
+        late AppExitCoordinator coordinator;
+        coordinator = AppExitCoordinator(
+          onStart: () {
+            starts++;
+            expect(coordinator.isExiting, isTrue);
+            if (reenterFromStart && starts == 1) {
+              nested = coordinator.requestExit();
+            }
+          },
+          cleanup: () async {
+            cleanups++;
+            if (!reenterFromStart && cleanups == 1) {
+              nested = coordinator.requestExit();
+            }
+          },
+          exitProcess: (_) => exits++,
+        );
+        final exit = coordinator.requestExit();
+        expect(identical(exit, nested), isTrue);
+        await exit;
+        expect([starts, cleanups, exits], [1, 1, 1]);
+      },
+    );
+  }
   test('X and tray requests share one cleanup and one exit', () async {
     final done = Completer<void>();
     final events = <String>[];
