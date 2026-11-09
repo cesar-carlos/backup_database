@@ -40,17 +40,7 @@ class GoogleDriveAuthClient {
     try {
       final authResult = await _authService.signInSilently();
       if (authResult.isError()) {
-        LoggerService.debug('signInSilently falhou, tentando signIn');
-        final newAuthResult = await _authService.signIn();
-        if (newAuthResult.isError()) {
-          return rd.Failure(newAuthResult.exceptionOrNull()!);
-        }
-        final token = newAuthResult.getOrNull()!.accessToken;
-        _cachedClientData = GoogleDriveClientSession(
-          client: AuthenticatedHttpClient(token),
-          accessToken: token,
-        );
-        return rd.Success(_cachedClientData!);
+        return rd.Failure(authResult.exceptionOrNull()!);
       }
 
       final token = authResult.getOrNull()!.accessToken;
@@ -90,18 +80,11 @@ class GoogleDriveAuthClient {
           LoggerService.warning('Erro 401 detectado, tentando renovar token');
           _cachedClientData = null;
 
-          final refreshResult = await _authService.signInSilently();
+          final refreshResult = await _authService.signInSilently(
+            forceRefresh: true,
+          );
           if (refreshResult.isError()) {
-            LoggerService.debug(
-              'signInSilently falhou após 401, tentando signIn',
-            );
-            final newAuthResult = await _authService.signIn();
-            if (newAuthResult.isError()) {
-              throw GoogleDriveFailure(
-                message: 'Sessão expirada. Faça login novamente.',
-                originalError: e,
-              );
-            }
+            throw refreshResult.exceptionOrNull()!;
           } else {
             LoggerService.info('Token renovado com sucesso após erro 401');
           }
