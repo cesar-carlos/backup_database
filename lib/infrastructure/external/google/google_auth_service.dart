@@ -8,7 +8,6 @@ import 'package:backup_database/domain/services/i_secure_credential_service.dart
 import 'package:http/http.dart' as http;
 import 'package:oauth2_client/access_token_response.dart';
 import 'package:oauth2_client/google_oauth2_client.dart';
-import 'package:oauth2_client/oauth2_helper.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -44,7 +43,45 @@ class GoogleAuthResult {
 }
 
 class GoogleAuthService {
-  GoogleAuthService(this._secureCredentialService);
+  GoogleAuthService(
+    this._secureCredentialService, {
+    this.httpClient,
+    this.requestTimeout = const Duration(seconds: 30),
+    this.authorize,
+  });
+
+  final http.Client? httpClient;
+  final Duration requestTimeout;
+  final Future<AccessTokenResponse?> Function()? authorize;
+  bool _loginPending = false;
+  Future<rd.Result<GoogleAuthResult>>? _refreshInFlight;
+  Future<void> _storageTail = Future<void>.value();
+  int _generation = 0;
+
+  Future<T> _withStorage<T>(Future<T> Function() action) {
+    final result = _storageTail.then((_) => action());
+    _storageTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  void _checkGeneration(int generation) {
+    if (generation != _generation) {
+      throw StateError('A sessão Google mudou durante a operação.');
+    }
+  }
+
+  void _invalidate() {
+    _generation++;
+    _loginPending = false;
+    _refreshInFlight = null;
+    _cachedAccessToken = null;
+    _cachedRefreshToken = null;
+    _cachedEmail = null;
+    _tokenExpiration = null;
+  }
 
   static const _tokenKey = 'google_oauth_token';
 
@@ -52,7 +89,6 @@ class GoogleAuthService {
   String? _clientSecret;
 
   GoogleOAuth2Client? _client;
-  OAuth2Helper? _helper;
   final ISecureCredentialService _secureCredentialService;
 
   String? _cachedAccessToken;
@@ -66,6 +102,9 @@ class GoogleAuthService {
     required String clientId,
     String? clientSecret,
   }) async {
+    _invalidate();
+    _isInitialized = false;
+    final generation = _generation;
     _clientId = clientId;
     _clientSecret = clientSecret;
 
@@ -74,20 +113,19 @@ class GoogleAuthService {
       customUriScheme: 'http://localhost:${AppConstants.oauthLoopbackPort}',
     );
 
-    _helper = OAuth2Helper(
-      _client!,
-      clientId: _clientId!,
-      clientSecret: _clientSecret,
-      scopes: AppConstants.googleDriveScopes,
-    );
-
-    await _loadStoredCredentials();
+    await _withStorage(() => _loadStoredCredentials(generation));
+    _checkGeneration(generation);
     _isInitialized = true;
 
     LoggerService.info('GoogleAuthService inicializado');
   }
 
   Future<rd.Result<GoogleAuthResult>> signIn() async {
+    if (_loginPending) {
+      return const rd.Failure(
+        GoogleDriveFailure(message: 'Login Google em andamento.'),
+      );
+    }
     if (!_isInitialized) {
       return const rd.Failure(
         GoogleDriveFailure(
@@ -98,13 +136,16 @@ class GoogleAuthService {
       );
     }
 
+    final generation = ++_generation;
+    _loginPending = true;
+    _refreshInFlight = null;
     try {
       LoggerService.info(
         'Iniciando autenticação Google OAuth2 (navegador externo)',
       );
 
       // Usar fluxo manual com navegador externo para evitar problemas com webview
-      final tokenResponse = await _getTokenWithExternalBrowser();
+      final tokenResponse = await (authorize ?? _getTokenWithExternalBrowser)();
 
       if (tokenResponse == null || tokenResponse.accessToken == null) {
         return const rd.Failure(
@@ -114,18 +155,25 @@ class GoogleAuthService {
         );
       }
 
-      _cachedAccessToken = tokenResponse.accessToken;
-      _cachedRefreshToken = tokenResponse.refreshToken;
-      _tokenExpiration = tokenResponse.expirationDate;
-
       final emailResult = await _fetchUserEmail(tokenResponse.accessToken!);
       if (emailResult.isError()) {
         return rd.Failure(emailResult.exceptionOrNull()!);
       }
 
-      _cachedEmail = emailResult.getOrNull();
-
-      await _saveCredentials(tokenResponse, _cachedEmail!);
+      _checkGeneration(generation);
+      final email = emailResult.getOrThrow();
+      if (tokenResponse.refreshToken?.isNotEmpty != true) {
+        throw StateError(
+          'Google não retornou autorização offline. '
+          'Autorize novamente o acesso.',
+        );
+      }
+      await _saveCredentials(tokenResponse, email, generation);
+      _checkGeneration(generation);
+      _cachedAccessToken = tokenResponse.accessToken;
+      _cachedRefreshToken = tokenResponse.refreshToken;
+      _tokenExpiration = tokenResponse.expirationDate;
+      _cachedEmail = email;
 
       LoggerService.info('Autenticação Google concluída: $_cachedEmail');
 
@@ -142,6 +190,8 @@ class GoogleAuthService {
       return rd.Failure(
         GoogleDriveFailure(message: _parseAuthError(e), originalError: e),
       );
+    } finally {
+      if (generation == _generation) _loginPending = false;
     }
   }
 
@@ -164,6 +214,7 @@ class GoogleAuthService {
         clientId: _clientId!,
         redirectUri: AppConstants.oauthRedirectUri,
         scopes: AppConstants.googleDriveScopes,
+        customParams: {'access_type': 'offline', 'prompt': 'consent'},
       );
 
       LoggerService.debug('Abrindo navegador para autenticação');
@@ -217,7 +268,7 @@ class GoogleAuthService {
 
   Future<AccessTokenResponse?> _exchangeCodeForToken(String code) async {
     try {
-      final response = await http.post(
+      final response = await (httpClient?.post ?? http.post)(
         Uri.parse('https://oauth2.googleapis.com/token'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
@@ -227,18 +278,15 @@ class GoogleAuthService {
           'redirect_uri': AppConstants.oauthRedirectUri,
           'grant_type': 'authorization_code',
         },
-      );
+      ).timeout(requestTimeout);
 
       if (response.statusCode != 200) {
-        LoggerService.error('Erro ao trocar código: ${response.body}');
         throw Exception(
           'Falha ao trocar código por token: ${response.statusCode}',
         );
       }
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      return AccessTokenResponse.fromMap(data);
+      return AccessTokenResponse.fromHttpResponse(response);
     } on Object catch (e) {
       LoggerService.error('Erro ao trocar código por token', e);
       rethrow;
@@ -286,7 +334,14 @@ class GoogleAuthService {
     }
   }
 
-  Future<rd.Result<GoogleAuthResult>> signInSilently() async {
+  Future<rd.Result<GoogleAuthResult>> signInSilently({
+    bool forceRefresh = false,
+  }) async {
+    if (_loginPending) {
+      return const rd.Failure(
+        GoogleDriveFailure(message: 'Login Google em andamento.'),
+      );
+    }
     if (!_isInitialized) {
       return const rd.Failure(
         GoogleDriveFailure(message: 'GoogleAuthService não inicializado.'),
@@ -295,12 +350,13 @@ class GoogleAuthService {
 
     try {
       if (_cachedAccessToken != null && _cachedEmail != null) {
-        if (_isTokenExpired()) {
+        if (forceRefresh || _isTokenExpired()) {
           LoggerService.debug('Token expirado, tentando refresh');
-          final refreshResult = await _refreshToken();
-          if (refreshResult.isError()) {
-            return refreshResult;
-          }
+          final generation = _generation;
+          return await (_refreshInFlight ??= _refreshToken(generation)
+              .whenComplete(() {
+                if (generation == _generation) _refreshInFlight = null;
+              }));
         }
 
         return rd.Success(
@@ -327,8 +383,8 @@ class GoogleAuthService {
     }
   }
 
-  Future<rd.Result<GoogleAuthResult>> _refreshToken() async {
-    if (_cachedRefreshToken == null || _helper == null) {
+  Future<rd.Result<GoogleAuthResult>> _refreshToken(int generation) async {
+    if (_cachedRefreshToken == null || _cachedRefreshToken!.isEmpty) {
       return const rd.Failure(
         GoogleDriveFailure(message: 'Não há refresh token disponível.'),
       );
@@ -337,20 +393,51 @@ class GoogleAuthService {
     try {
       LoggerService.debug('Executando refresh do token');
 
-      final tokenResponse = await _helper!.getToken();
+      // The browser flow stores credentials in our secure store, not in
+      // OAuth2Helper's independent token storage. Refresh that exact credential.
+      final response = await (httpClient?.post ?? http.post)(
+        Uri.parse('https://oauth2.googleapis.com/token'),
+        body: {
+          'grant_type': 'refresh_token',
+          'refresh_token': _cachedRefreshToken!,
+          'client_id': _clientId!,
+          if (_clientSecret?.isNotEmpty ?? false)
+            'client_secret': _clientSecret!,
+        },
+      ).timeout(requestTimeout);
+      _checkGeneration(generation);
+      if (response.statusCode != 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return rd.Failure(
+          GoogleDriveFailure(
+            message: data['error'] == 'invalid_grant'
+                ? 'Autorização Google revogada ou expirada. Faça login novamente.'
+                : 'Não foi possível renovar o acesso ao Google '
+                      '(HTTP ${response.statusCode}). Tente novamente.',
+          ),
+        );
+      }
+      final tokenResponse = AccessTokenResponse.fromHttpResponse(response);
 
-      if (tokenResponse.accessToken == null) {
-        await _clearStoredCredentials();
+      if (tokenResponse.accessToken?.isNotEmpty != true ||
+          tokenResponse.expirationDate == null ||
+          !tokenResponse.expirationDate!.isAfter(DateTime.now())) {
         return const rd.Failure(
-          GoogleDriveFailure(message: 'Sessão expirada. Faça login novamente.'),
+          GoogleDriveFailure(
+            message:
+                'Resposta inválida ao renovar acesso Google. Tente novamente.',
+          ),
         );
       }
 
+      if (tokenResponse.refreshToken?.isNotEmpty != true) {
+        tokenResponse.refreshToken = _cachedRefreshToken;
+      }
+      await _saveCredentials(tokenResponse, _cachedEmail!, generation);
+      _checkGeneration(generation);
       _cachedAccessToken = tokenResponse.accessToken;
-      _cachedRefreshToken = tokenResponse.refreshToken ?? _cachedRefreshToken;
+      _cachedRefreshToken = tokenResponse.refreshToken;
       _tokenExpiration = tokenResponse.expirationDate;
-
-      await _saveCredentials(tokenResponse, _cachedEmail!);
 
       LoggerService.info('Token Google atualizado com sucesso');
 
@@ -364,10 +451,9 @@ class GoogleAuthService {
       );
     } on Object catch (e) {
       LoggerService.error('Erro ao atualizar token', e);
-      await _clearStoredCredentials();
       return rd.Failure(
         GoogleDriveFailure(
-          message: 'Falha ao atualizar sessão. Faça login novamente.',
+          message: 'Falha ao renovar o acesso ao Google. Tente novamente.',
           originalError: e,
         ),
       );
@@ -375,20 +461,8 @@ class GoogleAuthService {
   }
 
   Future<void> signOut() async {
-    try {
-      if (_helper != null) {
-        await _helper!.removeAllTokens();
-      }
-    } on Object catch (e) {
-      LoggerService.warning('Erro ao revogar tokens: $e');
-    }
-
-    await _clearStoredCredentials();
-
-    _cachedAccessToken = null;
-    _cachedRefreshToken = null;
-    _cachedEmail = null;
-    _tokenExpiration = null;
+    _invalidate();
+    await _withStorage(_clearStoredCredentials);
 
     LoggerService.info('Desconectado do Google');
   }
@@ -400,7 +474,7 @@ class GoogleAuthService {
   String? get accessToken => _cachedAccessToken;
 
   bool _isTokenExpired() {
-    if (_tokenExpiration == null) return false;
+    if (_tokenExpiration == null) return true;
     return DateTime.now().isAfter(
       _tokenExpiration!.subtract(const Duration(minutes: 5)),
     );
@@ -408,10 +482,10 @@ class GoogleAuthService {
 
   Future<rd.Result<String>> _fetchUserEmail(String accessToken) async {
     try {
-      final response = await http.get(
+      final response = await (httpClient?.get ?? http.get)(
         Uri.parse('https://www.googleapis.com/oauth2/v2/userinfo'),
         headers: {'Authorization': 'Bearer $accessToken'},
-      );
+      ).timeout(requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -444,12 +518,15 @@ class GoogleAuthService {
   Future<void> _saveCredentials(
     AccessTokenResponse tokenResponse,
     String email,
-  ) async {
+    int generation,
+  ) => _withStorage(() async {
+    _checkGeneration(generation);
     final credentials = {
       'accessToken': tokenResponse.accessToken,
       'refreshToken': tokenResponse.refreshToken,
       'expirationDate': tokenResponse.expirationDate?.toIso8601String(),
       'email': email,
+      'clientId': _clientId,
     };
 
     final result = await _secureCredentialService.storeToken(
@@ -464,23 +541,28 @@ class GoogleAuthService {
     }
 
     LoggerService.debug('Credenciais Google salvas');
-  }
+  });
 
-  Future<void> _loadStoredCredentials() async {
+  Future<void> _loadStoredCredentials(int generation) async {
     final result = await _secureCredentialService.getToken(key: _tokenKey);
+    _checkGeneration(generation);
 
     if (result.isError()) {
       return;
     }
 
     final credentials = result.getOrElse((_) => <String, dynamic>{});
+    if (credentials['clientId'] != null &&
+        credentials['clientId'] != _clientId) {
+      return;
+    }
 
     _cachedAccessToken = credentials['accessToken'] as String?;
     _cachedRefreshToken = credentials['refreshToken'] as String?;
     _cachedEmail = credentials['email'] as String?;
 
     if (credentials['expirationDate'] != null) {
-      _tokenExpiration = DateTime.parse(
+      _tokenExpiration = DateTime.tryParse(
         credentials['expirationDate'] as String,
       );
     }
@@ -489,7 +571,12 @@ class GoogleAuthService {
   }
 
   Future<void> _clearStoredCredentials() async {
-    await _secureCredentialService.deleteToken(key: _tokenKey);
+    final result = await _secureCredentialService.deleteToken(key: _tokenKey);
+    if (result.isError()) {
+      throw StateError(
+        'Falha ao remover credenciais Google salvas. Tente novamente.',
+      );
+    }
     LoggerService.debug('Credenciais Google removidas');
   }
 
@@ -525,6 +612,7 @@ class GoogleAuthService {
     String email, {
     String? refreshToken,
   }) {
+    _invalidate();
     _cachedAccessToken = accessToken;
     _cachedEmail = email;
     _cachedRefreshToken = refreshToken;
