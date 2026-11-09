@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
@@ -98,6 +100,46 @@ void main() {
 
   group('IpcService SHOW_WINDOW', () {
     setUp(IpcShowWindowConfirmation.resetForTest);
+
+    test(
+      'concurrent requests cannot borrow another request confirmation',
+      () async {
+        final ipc = _pairedService();
+        final firstEntered = Completer<void>();
+        final secondEntered = Completer<void>();
+        final finishFirst = Completer<void>();
+        final finishSecond = Completer<void>();
+        var count = 0;
+        await ipc.startServer(
+          role: SingleInstanceConfig.ipcInstanceRoleUi,
+          onShowWindow: () async {
+            if (++count == 1) {
+              firstEntered.complete();
+              await finishFirst.future;
+              IpcShowWindowConfirmation.markShown();
+            } else {
+              secondEntered.complete();
+              await finishSecond.future;
+            }
+            return null;
+          },
+        );
+        try {
+          final first = ipc.notifyExistingInstance();
+          await firstEntered.future;
+          final second = ipc.notifyExistingInstance();
+          await secondEntered.future;
+          finishFirst.complete();
+          expect(await first, SingleInstanceShowWindowStatus.shown);
+          finishSecond.complete();
+          expect(await second, SingleInstanceShowWindowStatus.unavailable);
+        } finally {
+          if (!finishFirst.isCompleted) finishFirst.complete();
+          if (!finishSecond.isCompleted) finishSecond.complete();
+          await ipc.stop();
+        }
+      },
+    );
 
     test('waits for slow native restoration before acknowledging', () async {
       final ipc = _pairedService();

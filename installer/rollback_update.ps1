@@ -26,7 +26,7 @@ try {
     $pending = $false
     if (Test-Path -LiteralPath $pendingPath) {
         $state = (Get-Content -LiteralPath $pendingPath -Raw | ConvertFrom-Json).state
-        $pending = $state -in @('installing','restoring','restore-failed')
+        $pending = $state -in @('installing','restoring','restore-failed','restart-pending')
     }
     Invoke-RollbackTransaction -Action $Action -AppDirectory $AppDirectory -MachineRoot $MachineRoot -RestartService $RestartService.IsPresent -ProtectSnapshot {
         param($path)

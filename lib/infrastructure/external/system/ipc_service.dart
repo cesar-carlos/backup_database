@@ -144,14 +144,8 @@ class IpcService implements IIpcService {
       return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
     }
 
-    final epoch = IpcShowWindowConfirmation.beginAttempt();
     try {
-      final outcome = await callback();
-      if (outcome == false) {
-        return SingleInstanceConfig.ipcShowWindowUnavailableMessage;
-      }
-      final shown =
-          outcome == true || IpcShowWindowConfirmation.wasShown(epoch);
+      final shown = await IpcShowWindowConfirmation.runAttempt(callback);
       if (shown) {
         return SingleInstanceConfig.ipcOkAckMessage;
       }

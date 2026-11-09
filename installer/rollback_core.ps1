@@ -43,6 +43,7 @@ function Assert-RollbackPath([string]$Path) {
 }
 
 function Get-RollbackInventory([string]$Root) {
+    $Root = Assert-RollbackPath $Root
     $result = @()
     if (-not (Test-Path -LiteralPath $Root)) { return $result }
     # Walk one level at a time so no junction is traversed before validation.
@@ -111,6 +112,15 @@ function Write-RollbackJournal([string]$Path, $Journal) {
     else { [IO.File]::Move($temp, $Path) }
 }
 
+function Complete-RollbackRecovery($Journal, [string]$JournalPath, [scriptblock]$StartService) {
+    # The restart-pending checkpoint is already durable. Retrying this phase
+    # must never replace data the recovered service may have written.
+    if ($Journal.restart -and $Journal.service.exists) { & $StartService }
+    $Journal.state = 'restored'
+    $Journal.error = $null
+    Write-RollbackJournal $JournalPath $Journal
+}
+
 function Invoke-RollbackTransaction {
     param([string]$Action, [string]$AppDirectory, [string]$MachineRoot,
         [bool]$RestartService = $false,
@@ -133,10 +143,14 @@ function Invoke-RollbackTransaction {
         if ($journal.id -notmatch '^[a-fA-F0-9]{32}$') { throw 'Invalid rollback transaction ID' }
     }
     if ($Action -eq 'Prepare') {
-        if ($journal -and $journal.state -notin @('committed', 'restored', 'prepared')) { throw 'Pending rollback must be recovered before install' }
-        if (-not (Test-Path -LiteralPath (Join-Path $app 'backup_database.exe'))) { return }
+        if ($journal -and $journal.state -notin @('committed', 'restored', 'prepared', 'preparing')) { throw 'Pending rollback must be recovered before install' }
+        # Preparing/prepared never authorize changes to installation files.
+        # Rebuild an interrupted snapshot, retaining the original restart intent.
+        if ($journal -and $journal.state -in @('preparing', 'prepared')) {
+            $RestartService = $RestartService -or $journal.restart
+        }
         if (Test-Path -LiteralPath $transaction) {
-            # Never recursively delete an unknown or incomplete transaction.
+            # Never recursively delete an unknown transaction.
             if (-not $journal) { throw 'Incomplete snapshot; inspect rollback directory before retrying' }
             $null = Get-RollbackInventory $transaction
             $checked = Assert-RollbackPath $transaction
@@ -169,11 +183,25 @@ function Invoke-RollbackTransaction {
         Write-RollbackJournal $journalPath $journal
         return
     }
-    if (-not $journal) { return }
+    if (-not $journal) {
+        # A new installation also gets a snapshot (possibly of absent paths).
+        # Missing metadata must never silently authorize copying or committing.
+        if ($Action -eq 'RecoverPending' -and -not (Test-Path -LiteralPath $transaction)) { return }
+        throw 'Missing rollback journal; recovery or preparation required'
+    }
     if ($Action -eq 'Arm') {
         if ($journal.state -ne 'prepared') { throw 'Snapshot is not ready' }
         & $StopProcesses
+        if (@($journal.groups).Count -ne $targets.Count) { throw 'Incomplete snapshot manifest' }
+        $names = @{}
         foreach ($group in $journal.groups) {
+            if (-not $targets.Contains($group.name) -or $names.ContainsKey($group.name)) { throw 'Invalid snapshot group' }
+            $names[$group.name] = $true
+            $target = Assert-RollbackPath $targets[$group.name]
+            if ((Test-Path -LiteralPath $target -PathType Container) -ne $group.exists -or
+                ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $target -PathType Container))) {
+                throw 'Installation directory changed before install'
+            }
             if ($group.exists) {
                 $snapshotPath = Assert-RollbackPath (Join-Path $transaction $group.name)
                 if (-not (Test-Path -LiteralPath $snapshotPath -PathType Container)) { throw 'Missing snapshot directory' }
@@ -192,17 +220,25 @@ function Invoke-RollbackTransaction {
         return
     }
     if ($Action -eq 'Commit') {
-        if ($journal.state -notin @('installing', 'prepared')) { throw 'Cannot commit failed transaction' }
+        if ($journal.state -eq 'committed') { return }
+        if ($journal.state -ne 'installing') { throw 'Cannot commit unarmed or failed transaction' }
         $journal.state = 'committed'
         Write-RollbackJournal $journalPath $journal
         return
     }
     if ($Action -notin @('Restore', 'RecoverPending')) { throw 'Unknown rollback action' }
-    if ($journal.state -notin @('committed', 'restored', 'prepared', 'preparing', 'installing', 'restoring', 'restore-failed')) { throw 'Invalid transaction state' }
-    if ($journal.state -in @('committed', 'restored', 'prepared', 'preparing')) {
-        if ($journal.state -eq 'preparing') { throw 'Snapshot incomplete; installation remains blocked' }
+    if ($journal.state -eq 'restart-pending') {
+        & $ValidateService $journal.service $transaction
+        Complete-RollbackRecovery $journal $journalPath $StartService
         return
     }
+    if ($journal.state -notin @('committed', 'restored', 'prepared', 'preparing', 'installing', 'restoring', 'restore-failed')) { throw 'Invalid transaction state' }
+    if ($journal.state -in @('committed', 'restored', 'prepared', 'preparing')) {
+        # No files were replaced before Arm durably recorded 'installing'.
+        # Prepare can safely rebuild a snapshot interrupted by a disk/process failure.
+        return
+    }
+    $restartCheckpointWritten = $false
     try {
         # Refuse a foreign/changed registration before stopping it or replacing
         # application, database and credential files. Recheck at restore too.
@@ -214,13 +250,32 @@ function Invoke-RollbackTransaction {
         foreach ($group in $journal.groups) {
             if (-not $targets.Contains($group.name) -or $names.ContainsKey($group.name)) { throw 'Invalid snapshot group' }
             $names[$group.name] = $true
+            # Validate every destination before replacing the first group.
+            $target = Assert-RollbackPath $targets[$group.name]
+            if ((Test-Path -LiteralPath $target) -and -not (Test-Path -LiteralPath $target -PathType Container)) {
+                throw 'Rollback destination is not a directory'
+            }
+            $null = Get-RollbackInventory $target
             if ($group.exists) {
                 $snapshotPath = Assert-RollbackPath (Join-Path $transaction $group.name)
                 if (-not (Test-Path -LiteralPath $snapshotPath -PathType Container)) { throw 'Missing snapshot directory' }
                 Assert-RollbackInventory $snapshotPath $group.inventory
+                # Invalid ACL metadata must fail before any directory swap.
+                $aclCheck = [Security.AccessControl.DirectorySecurity]::new()
+                $aclCheck.SetSecurityDescriptorSddlForm($group.acl)
+                foreach ($entry in $group.inventory) {
+                    $aclCheck.SetSecurityDescriptorSddlForm($entry.acl)
+                }
             }
         }
         Assert-RollbackInventory (Join-Path $transaction 'root-files') $journal.rootFiles
+        $null = @(Get-RollbackRootFiles $machine)
+        foreach ($entry in $journal.rootFiles) {
+            $destination = Assert-RollbackPath (Join-Path $machine $entry.path)
+            if (Test-Path -LiteralPath $destination -PathType Container) { throw 'Metadata destination is a directory' }
+            $aclCheck = [Security.AccessControl.FileSecurity]::new()
+            $aclCheck.SetSecurityDescriptorSddlForm($entry.acl)
+        }
         $journal.state = 'restoring'
         Write-RollbackJournal $journalPath $journal
         foreach ($group in $journal.groups) {
@@ -267,12 +322,15 @@ function Invoke-RollbackTransaction {
             if ((Get-RollbackHash $destination) -ne $entry.hash) { throw 'Restored metadata integrity mismatch' }
         }
         & $RestoreService $journal.service $transaction
-        if ($journal.restart -and $journal.service.exists) { & $StartService }
-        $journal.state = 'restored'
+        $journal.state = 'restart-pending'
         $journal.error = $null
         Write-RollbackJournal $journalPath $journal
+        $restartCheckpointWritten = $true
+        Complete-RollbackRecovery $journal $journalPath $StartService
     } catch {
-        $journal.state = 'restore-failed'
+        # Never replace live data again once starting the recovered service
+        # became possible. Keep this checkpoint even if final persistence fails.
+        $journal.state = if ($restartCheckpointWritten) { 'restart-pending' } else { 'restore-failed' }
         $journal.error = $_.Exception.Message
         Write-RollbackJournal $journalPath $journal
         throw

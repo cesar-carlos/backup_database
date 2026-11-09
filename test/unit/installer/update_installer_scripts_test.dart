@@ -12,6 +12,42 @@ Future<SetupIssParser> _loadSetupIssParser() async {
 
 void main() {
   test(
+    'installer aborts on configuration and startup operation failures',
+    () async {
+      final iss = await _loadSetupIssParser();
+      for (final message in [
+        'merge_env.ps1 failed, exit=',
+        'Failed to launch merge_env.ps1 from installer',
+        'Failed to launch service disable operation',
+        'Failed to disable server service for client mode',
+      ]) {
+        expect(
+          iss.routineContains('CurStepChanged', "RaiseException('$message"),
+          isTrue,
+        );
+      }
+      expect(
+        iss.routineContains(
+          'ConfigureClientStartupTask',
+          'DeleteClientStartupTask();',
+        ),
+        isFalse,
+      );
+      for (final message in [
+        'Failed to launch client startup task creation',
+        'Failed to create client startup scheduled task, exit=',
+      ]) {
+        expect(
+          iss.routineContains(
+            'ConfigureClientStartupTask',
+            "RaiseException('$message",
+          ),
+          isTrue,
+        );
+      }
+    },
+  );
+  test(
     'installer only stops at commit and refuses failed service stop',
     () async {
       final iss = await _loadSetupIssParser();

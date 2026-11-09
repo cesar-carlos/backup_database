@@ -68,6 +68,46 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
   });
 
+  test(
+    'timed out native restore does not block subsequent tray opening',
+    () async {
+      final stuck = Completer<Object?>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'setSkipTaskbar') return stuck.future;
+        return respond(call);
+      });
+      await expectLater(
+        manager.show(nativeTimeout: const Duration(milliseconds: 10)),
+        throwsA(isA<TimeoutException>()),
+      );
+      messenger.setMockMethodCallHandler(channel, respond);
+      await manager.show();
+      expect(visible, isTrue);
+      expect(skipTaskbar, isFalse);
+      stuck.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(visible, isTrue);
+    },
+  );
+
+  test(
+    'concurrent IPC restorations each receive their own confirmation',
+    () async {
+      final results = await Future.wait([
+        IpcShowWindowConfirmation.runAttempt(() async {
+          await manager.show();
+          return null;
+        }),
+        IpcShowWindowConfirmation.runAttempt(() async {
+          await manager.show();
+          return null;
+        }),
+      ]);
+      expect(results, [true, true]);
+      expect(visible, isTrue);
+    },
+  );
+
   test('tray failure restores a window hidden after normal startup', () async {
     await manager.initialize(center: false);
     await manager.setCloseToTray(true);

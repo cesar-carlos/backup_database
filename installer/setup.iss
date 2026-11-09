@@ -1,5 +1,5 @@
 #define MyAppName "Backup Database"
-#define MyAppVersion "3.6.5"
+#define MyAppVersion "3.6.6"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"
@@ -847,10 +847,10 @@ begin
           );
       end
       else
-        Log('Warning: merge_env.ps1 failed, exit=' + IntToStr(MergeExitCode));
+        RaiseException('merge_env.ps1 failed, exit=' + IntToStr(MergeExitCode));
     end
     else
-      Log('Warning: failed to launch merge_env.ps1 from installer');
+      RaiseException('Failed to launch merge_env.ps1 from installer');
 
     if SelectedMode = '' then
       SelectedMode := ResolveSelectedMode();
@@ -893,14 +893,19 @@ begin
             ExpandConstant('{app}\tools\BackupDatabaseService.exe'));
       end
       else if IsServiceInstalled('BackupDatabaseService') then
-        Exec(
+      begin
+        if not Exec(
           'sc.exe',
           'config BackupDatabaseService start= disabled',
           '',
           SW_HIDE,
           ewWaitUntilTerminated,
           RestoreExitCode
-        );
+        ) then
+          RaiseException('Failed to launch service disable operation');
+        if RestoreExitCode <> 0 then
+          RaiseException('Failed to disable server service for client mode');
+      end;
     end;
 
     if (SelectedMode = 'server') and WizardIsTaskSelected('openfirewall') then
@@ -1059,15 +1064,16 @@ var
   ResultCode: Integer;
   TaskRun: String;
 begin
-  DeleteClientStartupTask();
+  // /F replaces the task; deleting first loses the old task if creation fails.
   // §audit-2026-05-28: passar --mode=client explicitamente. Antes a task
   // dependia 100% de {app}\.install_mode para resolver o modo; se o
   // arquivo sumisse/corrompesse o resolver caia em "server" (default),
   // abrindo o socket server em uma maquina instalada como cliente.
   TaskRun := '"\"' + AppExePath + '\" --mode=client --minimized --launch-origin=windows-startup"';
-  Exec('schtasks.exe', '/Create /TN "\BackupDatabase\MachineStartup" /SC ONLOGON /TR ' + TaskRun + ' /F /RL LIMITED', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if not Exec('schtasks.exe', '/Create /TN "\BackupDatabase\MachineStartup" /SC ONLOGON /TR ' + TaskRun + ' /F /RL LIMITED', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Failed to launch client startup task creation');
   if ResultCode <> 0 then
-    Log('Warning: failed to create client startup scheduled task, exit=' + IntToStr(ResultCode));
+    RaiseException('Failed to create client startup scheduled task, exit=' + IntToStr(ResultCode));
 end;
 
 procedure InstallAndStartServiceFromInstaller(const AppExePath, AppDirectory, WrapperPath: String);
