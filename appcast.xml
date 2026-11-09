@@ -5,6 +5,22 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.7</title>
+      <pubDate>Mon, 09 Nov 2026 14:48:50 +0000</pubDate>
+      <description>Corrige a autenticação do Google Drive para manter os backups funcionando após a expiração do token de acesso.
+
+- Solicita autorização offline e renova o token usando as credenciais persistidas.
+- Preserva credenciais após falhas temporárias de rede, respostas inválidas e reinicialização do aplicativo.
+- Impede que operações atrasadas restaurem uma sessão desconectada ou sobrescrevam outra conta.
+- Persiste tokens rotacionados e informa falhas na exclusão das credenciais.
+- Corrige a renovação após HTTP 401 e evita abrir o navegador durante backups automáticos.
+
+Validação: 44 testes de regressão passaram e análise estática sem problemas. Autenticação com uma conta Google real e instalação em máquina de produção não foram executadas nesta validação.
+
+Após atualizar, pode ser necessário conectar o Google Drive uma vez para conceder acesso offline, caso o login anterior não tenha fornecido um refresh token.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.7/BackupDatabase-Setup-3.6.7.exe" sparkle:version="3.6.7" sparkle:os="windows" length="43749429" type="application/octet-stream" sha256="b5d5ac148e4ac8edcce4ed6d09ac818aea74aecc49f099c7868ffa2d358a05e0" />
+    </item>
+    <item>
       <title>Version 3.6.6</title>
       <pubDate>Mon, 09 Nov 2026 14:15:20 +0000</pubDate>
       <description>Correções de abertura da janela e recuperação de instalações interrompidas.
