@@ -5,6 +5,25 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.6</title>
+      <pubDate>Mon, 09 Nov 2026 14:15:20 +0000</pubDate>
+      <description>Correções de abertura da janela e recuperação de instalações interrompidas.
+
+- Corrige eventos de minimizar durante a restauração que podiam ocultar novamente a janela.
+- Isola a confirmação de cada pedido de abertura por IPC e limita a espera por chamadas nativas sem resposta.
+- Prepara a tela de carregamento mais cedo e evita bloqueio por preferências de aparência.
+- Interrompe o boot quando o Windows não disponibiliza gerenciamento de janela, evitando manter uma instância invisível.
+- Valida snapshots, permissões e destinos antes do rollback; bloqueia atualização sem registro válido de recuperação.
+- Permite refazer snapshots interrompidos e protege instalações novas ou sem o executável anterior.
+- Preserva dados gravados pelo serviço recuperado quando ocorre falha na confirmação final do rollback.
+- Trata falhas na configuração do ambiente e da inicialização como erros de instalação.
+
+Inclui testes de regressão para concorrência, timeouts e falhas parciais. Os cenários nativos são simulados nos testes; a validação visual e de recuperação com serviço real em VM continua pendente. Operações nativas já enviadas ao Windows não são canceladas pelo timeout.
+
+O instalador atende aos modos cliente e servidor. O arquivo `.sha256` acompanha o instalador para verificação de integridade.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.6/BackupDatabase-Setup-3.6.6.exe" sparkle:version="3.6.6" sparkle:os="windows" length="43750750" type="application/octet-stream" sha256="5b963a7070172022f390e9383f10f99349b663b69aeb81a0b2ca57d9dfa0df05" />
+    </item>
+    <item>
       <title>Version 3.6.5</title>
       <pubDate>Mon, 09 Nov 2026 13:30:39 +0000</pubDate>
       <description>## Correções
