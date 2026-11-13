@@ -1,9 +1,7 @@
 name: Build Installer (Verification)
 
-# Dispara em duas situacoes:
-# - workflow_dispatch: validacao manual antes de publicar uma release
-# - tag push v*.*.*: confirma que o tag aponta para uma arvore que
-#   compila o instalador limpo end-to-end (gate antes do release fisico)
+# Validacao manual antes de publicar. O artefato validado e promovido para a
+# release sem recompilar a mesma arvore ao criar a tag.
 #
 # Esse workflow NAO publica release. Apenas executa
 # `python installer/build_installer.py` e sobe o `.exe` + `.sha256`
@@ -16,9 +14,10 @@ on:
       ref:
         description: "Branch ou tag para validar (default: ref do dispatch)"
         required: false
-  push:
-    tags:
-      - "v*.*.*"
+
+concurrency:
+  group: installer-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-installer:
@@ -37,6 +36,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.50.0"
           cache: true
 
       - name: Setup Python
@@ -77,7 +77,7 @@ jobs:
 
       - name: Test service migration and rollback on Windows
         shell: pwsh
-        run: flutter test test/unit/installer/winsw_migration_test.dart test/unit/installer/rollback_update_test.dart
+        run: flutter test test/unit/installer/winsw_migration_test.dart test/unit/installer/rollback_update_test.dart test/unit/infrastructure/repositories/administrative_database_test.dart
 
       - name: Run build_installer.py end-to-end
         shell: pwsh
@@ -110,3 +110,4 @@ jobs:
             ${{ steps.locate.outputs.sidecar_path }}
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0

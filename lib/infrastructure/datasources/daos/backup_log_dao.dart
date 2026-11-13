@@ -9,6 +9,48 @@ class BackupLogDao extends DatabaseAccessor<AppDatabase>
     with _$BackupLogDaoMixin {
   BackupLogDao(super.db);
 
+  Future<List<BackupLogsTableData>> getFiltered({
+    int? limit,
+    int? offset,
+    String? level,
+    String? category,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchQuery,
+  }) {
+    final query = select(backupLogsTable);
+    if (level != null) query.where((t) => t.level.equals(level));
+    if (category != null) query.where((t) => t.category.equals(category));
+    if (startDate != null) {
+      query.where((t) => t.createdAt.isBiggerOrEqualValue(startDate));
+    }
+    if (endDate != null) {
+      query.where((t) => t.createdAt.isSmallerOrEqualValue(endDate));
+    }
+    final search = searchQuery?.trim().toLowerCase() ?? '';
+    if (search.isNotEmpty) {
+      Expression<bool> containsLiteral(Expression<String> column) =>
+          FunctionCallExpression<int>('instr', [
+            column.lower(),
+            Variable(search),
+          ]).isBiggerThanValue(0);
+      query.where(
+        (t) =>
+            containsLiteral(t.message) |
+            containsLiteral(t.details) |
+            containsLiteral(t.backupHistoryId),
+      );
+    }
+    query.orderBy([
+      (t) => OrderingTerm.desc(t.createdAt),
+      (t) => OrderingTerm.asc(t.id),
+    ]);
+    if (limit != null || offset != null) {
+      query.limit(limit ?? -1, offset: offset);
+    }
+    return query.get();
+  }
+
   Future<List<BackupLogsTableData>> getAll({int? limit, int? offset}) {
     final query = select(backupLogsTable)
       ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]);

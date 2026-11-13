@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/infrastructure/datasources/daos/daos.dart';
+import 'package:backup_database/infrastructure/datasources/local/shared_database_setup.dart';
 import 'package:backup_database/infrastructure/datasources/local/tables/tables.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -61,6 +63,7 @@ part 'database.g.dart';
   ],
 )
 class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
+  final bool _maintainSchema = !ExecutionOwnership.administrativeUi;
   AppDatabase({String databaseName = 'backup_database'})
     : super(_openConnection(databaseName));
 
@@ -76,9 +79,19 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
+        if (!_maintainSchema) {
+          throw StateError(
+            'Inicie o serviço para preparar o banco de dados antes de abrir a interface administrativa.',
+          );
+        }
         await m.createAll();
       },
       onUpgrade: (Migrator m, int from, int to) async {
+        if (!_maintainSchema) {
+          throw StateError(
+            'Atualize e inicie o serviço antes de abrir esta versão da interface.',
+          );
+        }
         await _ensureSybaseConfigsTableExists(m);
 
         if (from < 2) {
@@ -1115,6 +1128,7 @@ class AppDatabase extends _$AppDatabase implements IAppDatabaseLifecycle {
       },
       beforeOpen: (details) async {
         await customStatement('PRAGMA foreign_keys = ON');
+        if (!_maintainSchema) return;
 
         // P1.1: Verifica e recria tabelas de configuração via schema Drift
         // Se as tabelas foram dropadas (pelo reset v2.2.3), reseta
@@ -2222,6 +2236,15 @@ LazyDatabase _openConnection([String databaseName = 'backup_database']) {
     final dbFolder = await resolveMachineDataDirectory();
     await dbFolder.create(recursive: true);
     final file = File(p.join(dbFolder.path, '$databaseName.db'));
-    return NativeDatabase.createInBackground(file);
+    final ownsDatabase = !ExecutionOwnership.administrativeUi;
+    return NativeDatabase.createInBackground(
+      file,
+      setup: (database) {
+        configureSharedDatabase(
+          database,
+          synchronizeWindowsPermissions: ownsDatabase,
+        );
+      },
+    );
   });
 }

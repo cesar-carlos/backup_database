@@ -3,6 +3,15 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 abstract class IBackupLogRepository {
   Future<rd.Result<List<BackupLog>>> getAll({int? limit, int? offset});
+  Future<rd.Result<List<BackupLog>>> getFiltered({
+    int? limit,
+    int? offset,
+    LogLevel? level,
+    LogCategory? category,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchQuery,
+  });
   Future<rd.Result<BackupLog>> create(BackupLog log);
 
   Future<rd.Result<BackupLog>> createIdempotent({

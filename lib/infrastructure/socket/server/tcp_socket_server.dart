@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/constants/socket_config.dart';
 import 'package:backup_database/core/di/service_locator.dart' as di;
 import 'package:backup_database/core/logging/logging.dart';
@@ -142,6 +143,9 @@ class TcpSocketServer implements SocketServerService {
 
   @override
   Future<void> start({int port = 9527}) async {
+    if (ExecutionOwnership.administrativeUi) {
+      throw StateError('O servidor é controlado pelo serviço do Windows.');
+    }
     if (_isRunning) {
       LoggerService.debug('Socket Server already running');
       return;

@@ -1,3 +1,4 @@
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
 import 'package:backup_database/presentation/boot/socket_server_bootstrap.dart';
@@ -24,6 +25,7 @@ class SocketServerStartupTask {
   final BootstrapLogWithError logError;
 
   Future<void> start(BootstrapConfig config) async {
+    if (ExecutionOwnership.administrativeUi) return;
     try {
       await SocketServerBootstrap.start(
         initializeExecutionQueue: initializeExecutionQueue,

@@ -1,4 +1,5 @@
 import 'package:backup_database/core/config/app_mode.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 
 /// Centralizes runtime behavior gates for server vs client mode.
@@ -7,9 +8,11 @@ abstract final class AppModePolicy {
 
   static bool get isServer => currentAppMode == AppMode.server;
 
-  static bool get shouldStartSocketServer => isServer;
+  static bool get shouldStartSocketServer =>
+      isServer && !ExecutionOwnership.administrativeUi;
 
-  static bool get shouldStartLocalSchedulerInUi => !isClient;
+  static bool get shouldStartLocalSchedulerInUi =>
+      !isClient && !ExecutionOwnership.administrativeUi;
 
   static bool get shouldAutoConnectSavedServers => isClient;
 

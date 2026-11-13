@@ -165,14 +165,28 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
           updatedRows = await _database.backupHistoryDao.updateHistoryIfRunning(
             companion,
           );
-          if (updatedRows == 0) return;
+          if (updatedRows == 0) {
+            // A geração pode já ter terminado antes de upload/staging falhar.
+            // Preserve o diagnóstico sem reabrir ou sobrescrever estado terminal.
+            final current = await _database.backupHistoryDao.getById(
+              history.id,
+            );
+            if (current == null || logLevel != LogLevel.error) return;
+          }
           final logCompanion = _backupLogRepository.buildIdempotentLogCompanion(
             backupHistoryId: history.id,
             step: logStep,
             level: logLevel,
             category: LogCategory.execution,
             message: logMessage,
-            details: logDetails,
+            details: [
+              'Agendamento: ${history.databaseName}',
+              'Execução: ${history.id}',
+              'Etapa: $logStep',
+              if (history.runId != null) 'runId=${history.runId}',
+              ?logDetails,
+              if (updatedRows == 0) 'Falha posterior ao encerramento do histórico; estado preservado.',
+            ].join('\n'),
           );
           await _database.backupLogDao.insertOrReplaceLog(logCompanion);
         });
@@ -180,7 +194,8 @@ class BackupHistoryRepository implements IBackupHistoryRepository {
           throw ValidationFailure(
             message:
                 'Histórico não estava em execução (status running); '
-                'não foi possível aplicar log: $logStep',
+                'estado preservado. Diagnóstico de erro registrado quando '
+                'o histórico existe: $logStep',
           );
         }
         return history;

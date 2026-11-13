@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
 import 'package:backup_database/domain/repositories/i_schedule_repository.dart';
@@ -155,8 +156,10 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
       }
       progressProvider.updateProgressWithStep(
         step: BackupStep.executingBackup,
-        message: 'Executando backup do banco de dados...',
-        progress: 0.2,
+        message: ExecutionOwnership.administrativeUi
+            ? 'Aguardando a execução no serviço do Windows...'
+            : 'Executando backup do banco de dados...',
+        progress: ExecutionOwnership.administrativeUi ? null : 0.2,
       );
     }
 

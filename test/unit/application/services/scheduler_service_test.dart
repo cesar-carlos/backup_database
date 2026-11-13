@@ -309,6 +309,40 @@ void main() {
     });
 
     test(
+      'scoped cancellation refuses a stale run for the same schedule',
+      () async {
+        final pending = Completer<rd.Result<BackupHistory>>();
+        when(() => scheduleRepository.getById(scheduleId))
+            .thenAnswer((_) async => rd.Success(buildSchedule()));
+        when(
+          () => backupOrchestratorService.executeBackup(
+            schedule: any(named: 'schedule'),
+            outputDirectory: any(named: 'outputDirectory'),
+          ),
+        ).thenAnswer((_) => pending.future);
+        final running = service.executeNow(scheduleId, runId: 'new-run');
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(
+          (await service.cancelRun(scheduleId, 'old-run')).isError(),
+          isTrue,
+        );
+        expect(service.isExecutingBackup, isTrue);
+        expect(
+          (await service.cancelRun(scheduleId, 'new-run')).isSuccess(),
+          isTrue,
+        );
+        pending.complete(
+          const rd.Failure(DatabaseFailure(message: 'cancelled')),
+        );
+        await running;
+        expect(
+          (await service.cancelRun(scheduleId, 'new-run')).isError(),
+          isTrue,
+        );
+      },
+    );
+
+    test(
       'cancelExecution marks running schedule and execution ends as cancelled',
       () async {
         final schedule = buildSchedule();
@@ -493,6 +527,7 @@ void main() {
             logStep: LogStepConstants.backupDirectoryUploadNotSupported,
             logLevel: LogLevel.error,
             logMessage: any(named: 'logMessage'),
+            logDetails: any(named: 'logDetails'),
           ),
         ).thenAnswer((_) async => rd.Success(history));
         when(() => progressNotifier.failBackup(any())).thenReturn(null);
@@ -873,6 +908,7 @@ void main() {
             logStep: any(named: 'logStep'),
             logLevel: LogLevel.error,
             logMessage: any(named: 'logMessage'),
+            logDetails: any(named: 'logDetails'),
           ),
         ).thenAnswer((_) async => rd.Success(history));
         when(

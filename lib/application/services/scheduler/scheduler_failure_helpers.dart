@@ -4,6 +4,7 @@ import 'package:backup_database/application/services/scheduler/scheduler_executi
 import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
@@ -149,6 +150,7 @@ class SchedulerFailureHelpers {
           logStep: logStep,
           logLevel: LogLevel.error,
           logMessage: errorMessage,
+          logDetails: failureDiagnostics(failure),
         );
     updateResult.fold(
       (_) {},

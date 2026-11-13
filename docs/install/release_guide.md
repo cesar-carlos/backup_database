@@ -26,6 +26,37 @@ Esse script sincroniza:
 
 ## 3. Gerar build e instalador
 
+### Validacao local antes do push
+
+Com Flutter/Dart, Python Launcher (`py -3`) e Inno Setup no Windows:
+
+```powershell
+pwsh -File scripts/release_preflight.ps1 -Mode Quick
+pwsh -File scripts/release_preflight.ps1 -Mode Full
+# Opcional: em checkout limpo/commitado, com .env igual ao .env.example:
+pwsh -File scripts/release_preflight.ps1 -Mode Installer
+```
+
+`Quick` verifica formato, encoding, icones, tokens, analise e regressoes Windows.
+`Full` roda todas as suites unitarias e de widgets, alem do Widgetbook.
+`Installer` inclui Full e compila o instalador local, gravando um
+`.validation.json` com commit, arvore Git, tamanho e SHA-256. O script para na
+primeira falha. Isso antecipa erros sem esperar um ciclo de Actions.
+
+Como alternativa ao build local, dispare **Build Installer (Verification)** para
+o commit/branch desejado. Baixe e publique exatamente o artefato aprovado. Antes
+de promover um build da branch, compare sua arvore Git com a da tag apos o merge.
+Criar a tag nao dispara outro build: a mesma arvore ja foi compilada e validada.
+Se alterar fontes apos a validacao, gere e valide um novo artefato.
+
+No CI, testes unitarios rodam em tres grupos paralelos. A cobertura e coletada
+nos pushes de main/develop e disparos manuais, sem atrasar cada revisao de PR.
+Testes Windows de migracao, rollback e acesso ao banco permanecem no build.
+Novos pushes cancelam validacoes antigas da mesma branch. O appcast e serializado
+para evitar que duas execucoes disputem o push do feed.
+
+### Build direto
+
 ```powershell
 python installer\build_installer.py
 ```

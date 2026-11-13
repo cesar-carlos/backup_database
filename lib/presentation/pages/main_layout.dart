@@ -12,6 +12,7 @@ import 'package:backup_database/application/providers/server_credential_provider
 import 'package:backup_database/application/providers/sql_server_config_provider.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/app_mode_policy.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/constants/route_names.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
@@ -299,6 +300,26 @@ class _MainLayoutState extends State<MainLayout> {
             child: Column(
               children: [
                 _buildAppBar(),
+                if (ExecutionOwnership.administrativeUi)
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: InfoBar(
+                      title: Text(
+                        appLocaleString(
+                          context,
+                          'Interface administrativa',
+                          'Administrative interface',
+                        ),
+                      ),
+                      content: Text(
+                        appLocaleString(
+                          context,
+                          'Os backups são executados pelo serviço do Windows. Fechar esta janela não interrompe o serviço.',
+                          'Backups run in the Windows service. Closing this window does not stop the service.',
+                        ),
+                      ),
+                    ),
+                  ),
                 Expanded(child: widget.child),
               ],
             ),

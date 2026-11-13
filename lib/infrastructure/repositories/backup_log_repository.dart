@@ -11,6 +11,28 @@ class BackupLogRepository implements IBackupLogRepository {
   final AppDatabase _database;
 
   @override
+  Future<rd.Result<List<BackupLog>>> getFiltered({
+    int? limit,
+    int? offset,
+    LogLevel? level,
+    LogCategory? category,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? searchQuery,
+  }) => RepositoryGuard.run(
+    errorMessage: 'Erro ao filtrar logs',
+    action: () async => (await _database.backupLogDao.getFiltered(
+      limit: limit,
+      offset: offset,
+      level: level?.name,
+      category: category?.name,
+      startDate: startDate,
+      endDate: endDate,
+      searchQuery: searchQuery,
+    )).map(_toEntity).toList(),
+  );
+
+  @override
   Future<rd.Result<List<BackupLog>>> getAll({int? limit, int? offset}) {
     return RepositoryGuard.run(
       errorMessage: 'Erro ao buscar logs',

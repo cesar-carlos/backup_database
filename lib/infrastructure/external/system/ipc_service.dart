@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
 import 'package:backup_database/domain/services/i_ipc_service.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/admin_scheduler_endpoint.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/ipc_channel.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/ipc_schedule_delegator.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/ipc_transport_factory.dart';
@@ -17,6 +20,12 @@ class IpcService implements IIpcService {
     : _transport = transport ?? IpcTransportFactory.create();
 
   final IIpcTransport _transport;
+
+  /// Only the executor installs this handler. Administrative UI pipes expose
+  /// window activation only; commands always target the machine-global pipe.
+  final _admin = AdminSchedulerEndpoint();
+  ISchedulerService? get scheduler => _admin.scheduler;
+  set scheduler(ISchedulerService? value) => _admin.scheduler = value;
   Future<Object?> Function()? _onShowWindow;
   RunScheduleIpcHandler? _onRunSchedule;
   String _role = SingleInstanceConfig.ipcInstanceRoleUi;
@@ -36,6 +45,7 @@ class IpcService implements IIpcService {
       return true;
     }
 
+    _admin.newGeneration();
     _role = IpcV1Codec.normalizeRole(role);
     _onShowWindow = onShowWindow;
     _onRunSchedule = onRunSchedule;
@@ -80,6 +90,13 @@ class IpcService implements IIpcService {
   }
 
   Future<String?> _dispatch(String message) async {
+    if (message.startsWith('BD_ADMIN_V1|')) {
+      final parts = message.split('|');
+      if (parts.length != 3) {
+        return jsonEncode({'ok': false, 'error': 'Comando inválido'});
+      }
+      return jsonEncode(await _admin.dispatch(parts[1], parts[2]));
+    }
     if (message == SingleInstanceConfig.ipcShowWindowMessage) {
       LoggerService.infoWithContext(
         'event=ipc_show_window_received ownerRole=$_role',
@@ -132,6 +149,34 @@ class IpcService implements IIpcService {
 
   Future<IIpcChannel?> _connect({required Duration timeout}) {
     return _transport.connect(timeout: timeout);
+  }
+
+  Future<Map<String, dynamic>> schedulerRequest(
+    String command, [
+    String scheduleId = '',
+  ]) async {
+    final channel = await _connect(
+      timeout: SingleInstanceConfig.ipcConnectTimeout,
+    );
+    if (channel == null) {
+      throw StateError('Serviço indisponível. Verifique se está iniciado.');
+    }
+    try {
+      await channel.writeLine('BD_ADMIN_V1|$command|$scheduleId');
+      final response = await channel.readLine(
+        timeout: command == 'execute'
+            ? SingleInstanceConfig.scheduledDelegationTimeout
+            : SingleInstanceConfig.ipcConnectTimeout,
+      );
+      if (response == null) {
+        throw StateError(
+          'Sem resposta do serviço. A operação pode continuar no servidor; consulte os logs antes de tentar novamente.',
+        );
+      }
+      return jsonDecode(response) as Map<String, dynamic>;
+    } finally {
+      await channel.close();
+    }
   }
 
   Future<String> _replyShowWindow() async {
@@ -310,6 +355,8 @@ class IpcService implements IIpcService {
 
   @override
   Future<void> stop() async {
+    scheduler = null;
+    _onRunSchedule = null;
     try {
       await _transport.stopServer();
       LoggerService.info('IPC Server parado');

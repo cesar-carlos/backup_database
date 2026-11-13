@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('UI and Windows service instance contract', () {
-    test('should use the same global mutex for UI and service', () {
+    test('standalone UI and service compete for the global executor', () {
       expect(
         SingleInstanceConfig.uiMutexName,
         equals(SingleInstanceConfig.instanceMutexName),
@@ -28,11 +28,11 @@ void main() {
       },
     );
 
-    test('should advertise that UI and service do not coexist', () {
-      expect(SingleInstanceConfig.coexistsWithUi, isFalse);
+    test('should advertise administrative UI coexistence', () {
+      expect(SingleInstanceConfig.coexistsWithUi, isTrue);
       expect(
         SingleInstanceConfig.coexistenceLogToken,
-        equals('coexists_with_ui=false'),
+        equals('coexists_with_ui=true'),
       );
       expect(
         SingleInstanceConfig.lockScopeLogToken,

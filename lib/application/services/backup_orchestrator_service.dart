@@ -1,8 +1,10 @@
 import 'package:backup_database/application/services/strategies/strategies.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/constants/backup_constants.dart';
 import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -122,13 +124,24 @@ class BackupOrchestratorService {
     bool notifyOnComplete = true,
   }) async {
     LoggerService.info('Iniciando backup para schedule: ${schedule.name}');
+    if (ExecutionOwnership.administrativeUi) {
+      return const rd.Failure(
+        BackupFailure(
+          message:
+              'A interface administrativa não pode executar backups locais.',
+        ),
+      );
+    }
 
     if (outputDirectory.isEmpty) {
       final errorMessage =
           'Caminho de saída do backup está vazio para o agendamento: '
           '${schedule.name}';
       LoggerService.error(errorMessage);
-      return rd.Failure(ValidationFailure(message: errorMessage));
+      return _preparationFailure(
+        schedule,
+        ValidationFailure(message: errorMessage),
+      );
     }
 
     final backupType =
@@ -148,7 +161,7 @@ class BackupOrchestratorService {
     if (validationResult.isError()) {
       final failure = validationResult.exceptionOrNull()!;
       LoggerService.error('Directory validation failed', failure);
-      return rd.Failure(failure);
+      return _preparationFailure(schedule, failure);
     }
 
     // Validate minimum free disk space. Quando conseguimos estimar o
@@ -158,7 +171,7 @@ class BackupOrchestratorService {
     if (spaceResult.isError()) {
       final failure = spaceResult.exceptionOrNull()!;
       LoggerService.error('Free space check failed', failure);
-      return rd.Failure(failure);
+      return _preparationFailure(schedule, failure);
     }
     final spaceInfo = spaceResult.getOrNull()!;
     final requiredBytes = await _estimateRequiredSpaceBytes(schedule);
@@ -168,7 +181,10 @@ class BackupOrchestratorService {
           'Disponível: ${ByteFormat.format(spaceInfo.freeBytes)}, '
           'Necessário (estimado): ${ByteFormat.format(requiredBytes)}';
       LoggerService.error(errorMessage);
-      return rd.Failure(ValidationFailure(message: errorMessage));
+      return _preparationFailure(
+        schedule,
+        ValidationFailure(message: errorMessage),
+      );
     }
 
     LoggerService.info(
@@ -190,7 +206,7 @@ class BackupOrchestratorService {
 
     final createResult = await _backupHistoryRepository.create(history);
     if (createResult.isError()) {
-      return rd.Failure(createResult.exceptionOrNull()!);
+      return _preparationFailure(schedule, createResult.exceptionOrNull()!);
     }
     history = createResult.getOrNull()!;
 
@@ -483,7 +499,8 @@ class BackupOrchestratorService {
             history: history,
             logStep: LogStepConstants.backupError,
             logLevel: LogLevel.error,
-            logMessage: 'Erro no backup: $e',
+            logMessage: 'Erro no backup: $friendlyMessage',
+            logDetails: failureDiagnostics(e),
           );
       updateResult.fold(
         (_) {},
@@ -503,6 +520,33 @@ class BackupOrchestratorService {
         ),
       );
     }
+  }
+
+  Future<rd.Result<BackupHistory>> _preparationFailure(
+    Schedule schedule,
+    Object failure,
+  ) async {
+    final message =
+        'Falha na preparação do backup ${schedule.name}: '
+        '${failureUserMessage(failure)}';
+    final result = await _backupLogRepository.create(
+      BackupLog(
+        level: LogLevel.error,
+        category: LogCategory.execution,
+        message: redactFailureDetails(message),
+        details:
+            'Agendamento: ${schedule.id}\n'
+            'Etapa: preparação\n'
+            '${failureDiagnostics(failure)}',
+      ),
+    );
+    result.fold(
+      (_) {},
+      (error) => LoggerService.warning(
+        'Falha ao persistir diagnóstico de preparação: $error',
+      ),
+    );
+    return rd.Failure(_asFailure(failure));
   }
 
   Future<void> _log(
@@ -731,6 +775,7 @@ class BackupOrchestratorService {
           logStep: logStep,
           logLevel: LogLevel.error,
           logMessage: errorMessage,
+          logDetails: failureDiagnostics(failure),
         );
     updateResult.fold(
       (_) {},

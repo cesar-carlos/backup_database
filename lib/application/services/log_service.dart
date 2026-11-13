@@ -7,7 +7,6 @@ import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' as p;
 import 'package:result_dart/result_dart.dart' as rd;
 
 enum ExportFormat { txt, json, csv }
@@ -54,26 +53,27 @@ class LogService {
     DateTime? endDate,
     String? searchQuery,
   }) async {
-    if (level != null) {
-      return _logRepository.getByLevel(level);
-    }
+    final hasFilters =
+        level != null ||
+        category != null ||
+        startDate != null ||
+        endDate != null ||
+        (searchQuery != null && searchQuery.trim().isNotEmpty);
+    if (!hasFilters) return _logRepository.getAll(limit: limit, offset: offset);
 
-    if (category != null) {
-      return _logRepository.getByCategory(category);
-    }
-
-    if (startDate != null && endDate != null) {
-      return _logRepository.getByDateRange(startDate, endDate);
-    }
-
-    if (searchQuery != null && searchQuery.isNotEmpty) {
-      return _logRepository.search(searchQuery);
-    }
-
-    return _logRepository.getAll(limit: limit, offset: offset);
+    return _logRepository.getFiltered(
+      limit: limit,
+      offset: offset,
+      level: level,
+      category: category,
+      startDate: startDate,
+      endDate: endDate,
+      searchQuery: searchQuery,
+    );
   }
 
   Future<rd.Result<String>> exportLogs({
+    // Caminho completo devolvido pelo diálogo Salvar, incluindo o nome.
     required String outputPath,
     ExportFormat format = ExportFormat.txt,
     DateTime? startDate,
@@ -97,29 +97,21 @@ class LogService {
       }
 
       String content;
-      String extension;
 
       switch (format) {
         case ExportFormat.txt:
           content = _formatLogsAsTxt(logs);
-          extension = 'txt';
         case ExportFormat.json:
           content = _formatLogsAsJson(logs);
-          extension = 'json';
         case ExportFormat.csv:
           content = _formatLogsAsCsv(logs);
-          extension = 'csv';
       }
 
-      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final fileName = 'backup_logs_$timestamp.$extension';
-      final filePath = p.join(outputPath, fileName);
-
-      final file = File(filePath);
+      final file = File(outputPath);
       await file.writeAsString(content);
 
-      LoggerService.info('Logs exportados: $filePath');
-      return rd.Success(filePath);
+      LoggerService.info('Logs exportados: $outputPath');
+      return rd.Success(outputPath);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao exportar logs', e, stackTrace);
       return rd.Failure(

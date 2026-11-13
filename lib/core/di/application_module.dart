@@ -2,12 +2,13 @@ import 'dart:io';
 
 import 'package:backup_database/application/services/initial_setup_service.dart';
 import 'package:backup_database/application/services/service_health_checker.dart';
+import 'package:backup_database/application/services/service_scheduler_proxy.dart';
 import 'package:backup_database/application/services/services.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/domain/repositories/repositories.dart';
 import 'package:backup_database/domain/services/services.dart';
 import 'package:backup_database/domain/use_cases/use_cases.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
-import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:get_it/get_it.dart';
 
 /// Sets up application layer dependencies.
@@ -67,23 +68,25 @@ Future<void> setupApplicationModule(GetIt getIt) async {
   );
 
   getIt.registerLazySingleton<ISchedulerService>(
-    () => SchedulerService(
-      scheduleRepository: getIt<IScheduleRepository>(),
-      destinationRepository: getIt<IBackupDestinationRepository>(),
-      backupHistoryRepository: getIt<IBackupHistoryRepository>(),
-      backupOrchestratorService: getIt<BackupOrchestratorService>(),
-      destinationOrchestrator: getIt<IDestinationOrchestrator>(),
-      cleanupService: getIt<IBackupCleanupService>(),
-      notificationService: getIt<INotificationService>(),
-      scheduleCalculator: getIt<IScheduleCalculator>(),
-      storageChecker: getIt<IStorageChecker>(),
-      progressNotifier: getIt<IBackupProgressNotifier>(),
-      licensePolicyService: getIt<ILicensePolicyService>(),
-      transferStagingService: getIt<ITransferStagingService>(),
-      metricsCollector: getIt<IMetricsCollector>(),
-      cancellationService: getIt<IBackupCancellationService>(),
-      userPreferencesRepository: getIt<IUserPreferencesRepository>(),
-    ),
+    () => ExecutionOwnership.administrativeUi
+        ? ServiceSchedulerProxy(IpcService().schedulerRequest)
+        : SchedulerService(
+            scheduleRepository: getIt<IScheduleRepository>(),
+            destinationRepository: getIt<IBackupDestinationRepository>(),
+            backupHistoryRepository: getIt<IBackupHistoryRepository>(),
+            backupOrchestratorService: getIt<BackupOrchestratorService>(),
+            destinationOrchestrator: getIt<IDestinationOrchestrator>(),
+            cleanupService: getIt<IBackupCleanupService>(),
+            notificationService: getIt<INotificationService>(),
+            scheduleCalculator: getIt<IScheduleCalculator>(),
+            storageChecker: getIt<IStorageChecker>(),
+            progressNotifier: getIt<IBackupProgressNotifier>(),
+            licensePolicyService: getIt<ILicensePolicyService>(),
+            transferStagingService: getIt<ITransferStagingService>(),
+            metricsCollector: getIt<IMetricsCollector>(),
+            cancellationService: getIt<IBackupCancellationService>(),
+            userPreferencesRepository: getIt<IUserPreferencesRepository>(),
+          ),
   );
 
   getIt.registerLazySingleton<IMetricsAnalysisService>(

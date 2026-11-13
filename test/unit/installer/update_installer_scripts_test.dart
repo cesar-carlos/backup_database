@@ -748,7 +748,13 @@ void main() {
       ).readAsString();
 
       expect(workflow, contains('windows-smoke'));
-      expect(workflow, contains('flutter build windows --release'));
+      expect(
+        workflow,
+        contains("Invoke-Checked flutter @('build', 'windows', '--release')"),
+      );
+      expect(workflow, contains(r'if ($LASTEXITCODE -ne 0)'));
+      expect(workflow, contains('throw "Integration command failed:'));
+      expect(workflow, contains('throw "Windows smoke test failed"'));
       expect(
         workflow,
         contains('test/scripts/windows_winsw_smoke.ps1'),

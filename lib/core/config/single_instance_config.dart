@@ -93,13 +93,18 @@ class SingleInstanceConfig {
   static const String uiMutexName = instanceMutexName;
   static const String serviceMutexName = instanceMutexName;
 
-  /// UI and Windows service compete for [instanceMutexName]. They do not
-  /// run at the same time on one machine.
-  static const bool coexistsWithUi = false;
+  /// A standalone UI owns the executor lock. With a service installed, an
+  /// administrative UI owns only a session-scoped lock and never executes.
+  static const bool coexistsWithUi = true;
+
+  static String administrativeMutex(int sessionId) =>
+      '${instanceMutexName}_Admin_$sessionId';
+  static String administrativePipe(int sessionId) =>
+      '${ipcPipeName}_Admin_$sessionId';
 
   static const String lockScopeMachineGlobal = 'machine_global';
 
-  static const String coexistenceLogToken = 'coexists_with_ui=false';
+  static const String coexistenceLogToken = 'coexists_with_ui=true';
 
   static const String lockScopeLogToken = 'lock_scope=$lockScopeMachineGlobal';
 
