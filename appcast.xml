@@ -5,6 +5,32 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.8</title>
+      <pubDate>Fri, 13 Nov 2026 19:54:07 +0000</pubDate>
+      <description>A versão 3.6.8 permite abrir a interface administrativa enquanto o serviço Windows executa os backups, mantendo um executor global e uma janela por sessão do Terminal Server.
+
+Correções:
+- Comandos identificados pela geração do serviço, com proteção contra repetição após perda de resposta e cancelamento da execução exata.
+- Mutex do executor mantido até a saída do processo; interface sem execução local de backups quando o serviço está indisponível.
+- Banco compartilhado em WAL, espera limitada por bloqueios e preservação das permissões existentes nos arquivos auxiliares. Falhas no ajuste de permissões não impedem os backups.
+- Logs com a causa original da falha e identificação da execução; entrega da notificação distinguida do resultado do backup.
+- Exportação para o arquivo escolhido e filtros paginados em SQL, com busca literal por caracteres como % e _.
+
+Publicação e validação:
+- Testes unitários divididos em três grupos paralelos; cobertura coletada fora dos PRs.
+- Remoção de suítes duplicadas e da recompilação automática ao criar a tag.
+- Preflight local para verificações, testes completos e geração do instalador com commit, árvore Git e SHA-256.
+- Atualização do appcast serializada para evitar disputa entre execuções.
+- Regressões de banco compartilhado e timeout verificadas em Windows e Linux; migração/rollback de serviço verificados no workflow Windows.
+
+Limites conhecidos:
+- Fechar a interface administrativa não interrompe o serviço. A interface ainda não espelha percentuais de progresso nem conexões TCP.
+- Atualizações são coordenadas pelo serviço ou pelo instalador manual.
+- Os recibos de comandos são mantidos em memória. Após resultado incerto e reinício do serviço/fechamento da interface, confira o histórico antes de solicitar nova execução.
+- Não houve validação em Terminal Server real.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.8/BackupDatabase-Setup-3.6.8.exe" sparkle:version="3.6.8" sparkle:os="windows" length="43924836" type="application/octet-stream" sha256="a0795e0645bbf6942738beb7590f6c4c28f107533759ee131b2a50694e021013" />
+    </item>
+    <item>
       <title>Version 3.6.7</title>
       <pubDate>Mon, 09 Nov 2026 14:48:50 +0000</pubDate>
       <description>Corrige a autenticação do Google Drive para manter os backups funcionando após a expiração do token de acesso.
