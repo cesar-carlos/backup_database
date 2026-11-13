@@ -13,8 +13,10 @@ class DropboxAuthClient {
   Dio? _cachedDio;
   String? _cachedAccessToken;
 
-  Future<rd.Result<DropboxAuthResult>> signInSilently() {
-    return _authService.signInSilently();
+  Future<rd.Result<DropboxAuthResult>> signInSilently({
+    bool forceRefresh = false,
+  }) {
+    return _authService.signInSilently(forceRefresh: forceRefresh);
   }
 
   void invalidateCache() {
@@ -26,14 +28,7 @@ class DropboxAuthClient {
     try {
       final authResult = await _authService.signInSilently();
       if (authResult.isError()) {
-        final newAuthResult = await _authService.signIn();
-        if (newAuthResult.isError()) {
-          return rd.Failure(newAuthResult.exceptionOrNull()!);
-        }
-        final token = newAuthResult.getOrNull()!.accessToken;
-        _cachedDio = _createDio(token);
-        _cachedAccessToken = token;
-        return rd.Success(_cachedDio!);
+        return rd.Failure(authResult.exceptionOrNull()!);
       }
 
       final token = authResult.getOrNull()!.accessToken;
@@ -81,13 +76,11 @@ class DropboxAuthClient {
         if (_isUnauthorizedError(e) && attempts < maxAttempts - 1) {
           invalidateCache();
 
-          final refreshResult = await _authService.signInSilently();
+          final refreshResult = await _authService.signInSilently(
+            forceRefresh: true,
+          );
           if (refreshResult.isError()) {
-            throw DropboxFailure(
-              message:
-                  'Sessão expirada. Faça login novamente nas configurações.',
-              originalError: e,
-            );
+            throw refreshResult.exceptionOrNull()!;
           }
 
           attempts++;

@@ -4,6 +4,7 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_config_store.dart';
 import 'package:dio/dio.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:url_launcher/url_launcher.dart';
@@ -40,7 +41,39 @@ class DropboxAuthResult {
 }
 
 class DropboxAuthService {
-  DropboxAuthService(this._secureCredentialService);
+  DropboxAuthService(
+    this._secureCredentialService, {
+    this.configurationStore,
+    this._dio,
+  });
+
+  final OAuthConfigStore? configurationStore;
+  Future<rd.Result<DropboxAuthResult>>? _silentInFlight;
+  Future<void> _storageTail = Future<void>.value();
+  int _generation = 0;
+  bool _loginPending = false;
+
+  Future<T> _withStorage<T>(Future<T> Function() action) {
+    final result = _storageTail.then((_) => action());
+    _storageTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  void _checkGeneration(int generation) {
+    if (generation != _generation) {
+      throw StateError('A sessão Dropbox mudou durante a operação.');
+    }
+  }
+
+  void _clearCache() {
+    _cachedAccessToken = null;
+    _cachedRefreshToken = null;
+    _cachedEmail = null;
+    _tokenExpiration = null;
+  }
 
   static const _tokenKey = 'dropbox_oauth_token';
 
@@ -61,22 +94,32 @@ class DropboxAuthService {
     required String clientId,
     String? clientSecret,
   }) async {
+    final generation = ++_generation;
+    _isInitialized = false;
+    _clearCache();
     _clientId = clientId;
     _clientSecret = clientSecret;
 
-    _dio = Dio(
+    _dio ??= Dio(
       BaseOptions(
         baseUrl: 'https://api.dropbox.com',
         connectTimeout: AppConstants.httpTimeout,
+        sendTimeout: AppConstants.httpTimeout,
         receiveTimeout: AppConstants.httpTimeout,
       ),
     );
 
-    await _loadStoredCredentials();
+    await _withStorage(() => _loadStoredCredentials(generation));
+    _checkGeneration(generation);
     _isInitialized = true;
   }
 
   Future<rd.Result<DropboxAuthResult>> signIn() async {
+    if (_loginPending) {
+      return const rd.Failure(
+        DropboxFailure(message: 'Login Dropbox em andamento.'),
+      );
+    }
     if (!_isInitialized) {
       return const rd.Failure(
         DropboxFailure(
@@ -87,8 +130,11 @@ class DropboxAuthService {
       );
     }
 
+    final generation = ++_generation;
+    _loginPending = true;
     try {
       final tokenResponse = await _getTokenWithExternalBrowser();
+      _checkGeneration(generation);
 
       if (tokenResponse == null || tokenResponse['access_token'] == null) {
         return const rd.Failure(
@@ -96,22 +142,32 @@ class DropboxAuthService {
         );
       }
 
+      if (tokenResponse['refresh_token'] is! String ||
+          (tokenResponse['refresh_token'] as String).isEmpty) {
+        return const rd.Failure(
+          DropboxFailure(
+            message: 'Dropbox não forneceu autorização offline. Conecte a conta novamente.',
+          ),
+        );
+      }
       _cachedAccessToken = tokenResponse['access_token'] as String;
       _cachedRefreshToken = tokenResponse['refresh_token'] as String?;
 
       final expiresIn = tokenResponse['expires_in'] as int?;
+      _tokenExpiration = null;
       if (expiresIn != null) {
         _tokenExpiration = DateTime.now().add(Duration(seconds: expiresIn));
       }
 
       final emailResult = await _fetchUserEmail(_cachedAccessToken!);
+      _checkGeneration(generation);
       if (emailResult.isError()) {
         return rd.Failure(emailResult.exceptionOrNull()!);
       }
 
       _cachedEmail = emailResult.getOrNull();
 
-      await _saveCredentials(tokenResponse, _cachedEmail!);
+      await _saveCredentials(tokenResponse, _cachedEmail!, generation);
 
       return rd.Success(
         DropboxAuthResult(
@@ -125,6 +181,8 @@ class DropboxAuthService {
       return rd.Failure(
         DropboxFailure(message: _parseAuthError(e), originalError: e),
       );
+    } finally {
+      _loginPending = false;
     }
   }
 
@@ -279,17 +337,52 @@ class DropboxAuthService {
     }
   }
 
-  Future<rd.Result<DropboxAuthResult>> signInSilently() async {
-    if (!_isInitialized) {
-      return const rd.Failure(
-        DropboxFailure(message: 'DropboxAuthService não inicializado.'),
+  Future<rd.Result<DropboxAuthResult>> signInSilently({
+    bool forceRefresh = false,
+  }) {
+    if (_loginPending) {
+      return Future.value(
+        const rd.Failure(
+          DropboxFailure(message: 'Login Dropbox em andamento.'),
+        ),
       );
     }
+    return _silentInFlight ??= _restoreSession(forceRefresh: forceRefresh)
+        .whenComplete(() => _silentInFlight = null);
+  }
 
+  Future<rd.Result<DropboxAuthResult>> _restoreSession({
+    required bool forceRefresh,
+  }) async {
     try {
+      if (configurationStore != null) {
+        final generation = _generation;
+        final config = await configurationStore!.read();
+        _checkGeneration(generation);
+        if (config == null) {
+          _clearCache();
+          _isInitialized = false;
+        } else if (!_isInitialized ||
+            _clientId != config['clientId'] ||
+            _clientSecret != config['clientSecret']) {
+          await initialize(
+            clientId: config['clientId'] as String,
+            clientSecret: config['clientSecret'] as String?,
+          );
+        } else {
+          await _withStorage(() => _loadStoredCredentials(generation));
+        }
+      }
+      if (!_isInitialized) {
+        return const rd.Failure(
+          DropboxFailure(
+            message: 'Configuração Dropbox indisponível no servidor. Configure a conexão Dropbox na interface.',
+          ),
+        );
+      }
       if (_cachedAccessToken != null && _cachedEmail != null) {
-        if (_isTokenExpired()) {
-          final refreshResult = await _refreshToken();
+        if (forceRefresh || _isTokenExpired()) {
+          final refreshResult = await _refreshToken(_generation);
           if (refreshResult.isError()) {
             return refreshResult;
           }
@@ -318,8 +411,14 @@ class DropboxAuthService {
     }
   }
 
-  Future<rd.Result<DropboxAuthResult>> _refreshToken() async {
-    if (_cachedRefreshToken == null) {
+  Future<rd.Result<DropboxAuthResult>> _refreshToken(int generation) async {
+    final previous = (
+      _cachedAccessToken,
+      _cachedRefreshToken,
+      _cachedEmail,
+      _tokenExpiration,
+    );
+    if (_cachedRefreshToken?.isNotEmpty != true) {
       return const rd.Failure(
         DropboxFailure(message: 'Não há refresh token disponível.'),
       );
@@ -339,24 +438,36 @@ class DropboxAuthService {
         ),
       );
 
+      _checkGeneration(generation);
+
       if (response.statusCode != 200) {
-        await _clearStoredCredentials();
         return const rd.Failure(
-          DropboxFailure(message: 'Sessão expirada. Faça login novamente.'),
+          DropboxFailure(
+            message:
+                'Não foi possível renovar a sessão Dropbox. Tente novamente.',
+          ),
         );
       }
 
       final data = response.data as Map<String, dynamic>;
+      if (data['access_token'] is! String ||
+          (data['access_token'] as String).isEmpty ||
+          data['expires_in'] is! int ||
+          (data['expires_in'] as int) <= 0) {
+        throw StateError('Resposta de renovação Dropbox inválida.');
+      }
       _cachedAccessToken = data['access_token'] as String;
-      _cachedRefreshToken =
-          data['refresh_token'] as String? ?? _cachedRefreshToken;
+      final rotatedRefreshToken = data['refresh_token'] as String?;
+      if (rotatedRefreshToken?.isNotEmpty ?? false) {
+        _cachedRefreshToken = rotatedRefreshToken;
+      }
 
       final expiresIn = data['expires_in'] as int?;
       if (expiresIn != null) {
         _tokenExpiration = DateTime.now().add(Duration(seconds: expiresIn));
       }
 
-      await _saveCredentials(data, _cachedEmail!);
+      await _saveCredentials(data, _cachedEmail!, generation);
 
       return rd.Success(
         DropboxAuthResult(
@@ -367,10 +478,15 @@ class DropboxAuthService {
         ),
       );
     } on Object catch (e) {
-      await _clearStoredCredentials();
+      if (generation == _generation) {
+        _cachedAccessToken = previous.$1;
+        _cachedRefreshToken = previous.$2;
+        _cachedEmail = previous.$3;
+        _tokenExpiration = previous.$4;
+      }
       return rd.Failure(
         DropboxFailure(
-          message: 'Falha ao atualizar sessão. Faça login novamente.',
+          message: 'Não foi possível renovar a sessão Dropbox. As credenciais foram preservadas; tente novamente. Se a autorização foi revogada, conecte a conta novamente.',
           originalError: e,
         ),
       );
@@ -378,12 +494,9 @@ class DropboxAuthService {
   }
 
   Future<void> signOut() async {
-    await _clearStoredCredentials();
-
-    _cachedAccessToken = null;
-    _cachedRefreshToken = null;
-    _cachedEmail = null;
-    _tokenExpiration = null;
+    ++_generation;
+    _clearCache();
+    await _withStorage(_clearStoredCredentials);
   }
 
   bool get isSignedIn => _cachedAccessToken != null && _cachedEmail != null;
@@ -393,7 +506,7 @@ class DropboxAuthService {
   String? get accessToken => _cachedAccessToken;
 
   bool _isTokenExpired() {
-    if (_tokenExpiration == null) return false;
+    if (_tokenExpiration == null) return true;
     return DateTime.now().isAfter(
       _tokenExpiration!.subtract(const Duration(minutes: 5)),
     );
@@ -435,10 +548,13 @@ class DropboxAuthService {
   Future<void> _saveCredentials(
     Map<String, dynamic> tokenResponse,
     String email,
-  ) async {
+    int generation,
+  ) => _withStorage(() async {
+    _checkGeneration(generation);
     final credentials = {
       'accessToken': tokenResponse['access_token'],
-      'refreshToken': tokenResponse['refresh_token'],
+      'refreshToken': _cachedRefreshToken,
+      'clientId': _clientId,
       'expirationDate': _tokenExpiration?.toIso8601String(),
       'email': email,
     };
@@ -447,36 +563,43 @@ class DropboxAuthService {
       key: _tokenKey,
       tokenData: credentials,
     );
+    _checkGeneration(generation);
 
     if (result.isError()) {
       final error = result.exceptionOrNull();
       LoggerService.error('Failed to save Dropbox credentials: $error');
       throw Exception('Falha ao salvar credenciais Dropbox');
     }
-  }
+  });
 
-  Future<void> _loadStoredCredentials() async {
-    final result = await _secureCredentialService.getToken(key: _tokenKey);
-
-    if (result.isError()) {
+  Future<void> _loadStoredCredentials(int generation) async {
+    final exists = (await _secureCredentialService.containsKey(key: _tokenKey))
+        .getOrThrow();
+    _checkGeneration(generation);
+    if (!exists) {
+      _clearCache();
       return;
     }
-
-    final credentials = result.getOrElse((_) => <String, dynamic>{});
+    final result = await _secureCredentialService.getToken(key: _tokenKey);
+    _checkGeneration(generation);
+    final credentials = result.getOrThrow();
+    if (credentials['clientId'] != null &&
+        credentials['clientId'] != _clientId) {
+      _clearCache();
+      return;
+    }
 
     _cachedAccessToken = credentials['accessToken'] as String?;
     _cachedRefreshToken = credentials['refreshToken'] as String?;
     _cachedEmail = credentials['email'] as String?;
 
-    if (credentials['expirationDate'] != null) {
-      _tokenExpiration = DateTime.parse(
-        credentials['expirationDate'] as String,
-      );
-    }
+    _tokenExpiration = DateTime.tryParse(
+      credentials['expirationDate'] as String? ?? '',
+    );
   }
 
   Future<void> _clearStoredCredentials() async {
-    await _secureCredentialService.deleteToken(key: _tokenKey);
+    (await _secureCredentialService.deleteToken(key: _tokenKey)).getOrThrow();
   }
 
   String _parseAuthError(dynamic e) {
