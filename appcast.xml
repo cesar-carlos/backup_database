@@ -5,6 +5,25 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.9</title>
+      <pubDate>Fri, 13 Nov 2026 20:52:00 +0000</pubDate>
+      <description>## Correções
+
+- O serviço do Windows continua opcional. A inicialização consulta diretamente o SCM: quando o serviço não está instalado, o aplicativo executa os backups e agendamentos enquanto estiver aberto.
+- A identificação do serviço não depende mais de sc.exe, PATH ou mensagens traduzidas do Windows.
+- Mantida a proteção por mutex global contra backups duplicados entre processos e usuários do Terminal Server. Erros inconclusivos na identificação não liberam um segundo executor.
+- Falhas de comunicação anteriores ao envio do comando agora informam que nenhum backup foi solicitado e permitem tentar novamente após o serviço voltar.
+- Tentativas cuja resposta foi perdida preservam a identificação original, evitando disparar outro backup na repetição.
+- Adicionados testes de regressão para ausência do serviço, falhas nativas, recuperação da conexão e proteção contra duplicação.
+- Corrigido o erro "GoogleAuthService não inicializado" no envio pelo serviço: restauração da configuração e dos tokens sem depender da interface, com renovação silenciosa e sincronização das alterações de sessão.
+- A configuração OAuth Google passa a utilizar o armazenamento seguro compartilhado da máquina. Ao abrir a interface no usuário que configurou o Google, a configuração antiga é migrada automaticamente; ela não precisa ser digitada novamente.
+
+## Instalação e atualização
+
+Baixe `BackupDatabase-Setup-3.6.9.exe` ou utilize a atualização automática. O arquivo `.sha256` permite conferir a integridade do instalador.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.9/BackupDatabase-Setup-3.6.9.exe" sparkle:version="3.6.9" sparkle:os="windows" length="43931204" type="application/octet-stream" sha256="e9f988e2f79d9b677b6b222f88dae83a054521c42ed93e1101e3c980e71d7376" />
+    </item>
+    <item>
       <title>Version 3.6.8</title>
       <pubDate>Fri, 13 Nov 2026 19:54:07 +0000</pubDate>
       <description>A versão 3.6.8 permite abrir a interface administrativa enquanto o serviço Windows executa os backups, mantendo um executor global e uma janela por sessão do Terminal Server.
