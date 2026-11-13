@@ -16,6 +16,7 @@ import 'package:backup_database/infrastructure/compression/backup_compression_or
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
+import 'package:backup_database/infrastructure/external/google/google_oauth_config_store.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -211,7 +212,12 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
   );
   getIt.registerLazySingleton<IFtpService>(FtpDestinationService.new);
   getIt.registerLazySingleton<GoogleAuthService>(
-    () => GoogleAuthService(getIt<ISecureCredentialService>()),
+    () => GoogleAuthService(
+      getIt<ISecureCredentialService>(),
+      configurationStore: GoogleOAuthConfigStore(
+        getIt<ISecureCredentialService>(),
+      ),
+    ),
   );
   getIt.registerLazySingleton<IGoogleDriveDestinationService>(
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),

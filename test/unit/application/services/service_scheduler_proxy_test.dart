@@ -5,6 +5,7 @@ import 'package:backup_database/application/services/service_scheduler_proxy.dar
 import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/admin_scheduler_endpoint.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/in_memory_ipc_transport.dart';
@@ -347,7 +348,7 @@ void main() {
     expect(await ui.isServiceIdle(), isFalse);
   });
 
-  test('timeout does not retry or claim success', () async {
+  test('handshake timeout reports no execution and does not retry', () async {
     var requests = 0;
     final proxy = ServiceSchedulerProxy((_, _) async {
       requests++;
@@ -357,9 +358,77 @@ void main() {
     expect(result.isError(), isTrue);
     expect(
       failureUserMessage(result.exceptionOrNull()),
-      contains('continuar'),
+      contains('Nenhum backup foi solicitado'),
     );
     expect(requests, 1);
+    expect(proxy.isExecutingBackup, isFalse);
+    expect(proxy.activeScheduleId, isNull);
+  });
+
+  test(
+    'failed connection before execute allows a fresh service epoch',
+    () async {
+      final commands = <String>[];
+      final payloads = <Map<String, dynamic>>[];
+      var epoch = 'old';
+      final proxy = ServiceSchedulerProxy((command, payload) async {
+        commands.add(command);
+        if (command == 'status') return {'ok': true, 'epoch': epoch};
+        payloads.add(jsonDecode(payload) as Map<String, dynamic>);
+        if (epoch == 'old') throw const ServiceConnectionException();
+        return {'ok': true};
+      });
+      final failed = await proxy.executeNow(id);
+      expect(
+        failureUserMessage(failed.exceptionOrNull()),
+        contains('Nenhum backup foi solicitado'),
+      );
+      epoch = 'new';
+      expect((await proxy.executeNow(id)).isSuccess(), isTrue);
+      expect(commands, ['status', 'execute', 'status', 'execute']);
+      expect(payloads.last['epoch'], 'new');
+      expect(payloads.last['requestId'], isNot(payloads.first['requestId']));
+    },
+  );
+
+  test('unavailable retry preserves an earlier ambiguous execution', () async {
+    final payloads = <String>[];
+    var handshakes = 0;
+    final proxy = ServiceSchedulerProxy((command, payload) async {
+      if (command == 'status') {
+        handshakes++;
+        return {'ok': true, 'epoch': 'original'};
+      }
+      payloads.add(payload);
+      if (payloads.length == 1) throw TimeoutException('reply lost');
+      if (payloads.length == 2) throw const ServiceConnectionException();
+      return {'ok': true};
+    });
+    expect((await proxy.executeNow(id)).isError(), isTrue);
+    final disconnected = await proxy.executeNow(id);
+    expect(
+      failureUserMessage(disconnected.exceptionOrNull()),
+      contains('pode continuar'),
+    );
+    expect((await proxy.executeNow(id)).isSuccess(), isTrue);
+    expect(handshakes, 1);
+    expect(payloads.toSet(), hasLength(1));
+  });
+
+  test('stopped service can recover without reopening the interface', () async {
+    await ipc.stop();
+    final failed = await ui.executeNow(id);
+    expect(
+      failureUserMessage(failed.exceptionOrNull()),
+      contains('Nenhum backup foi solicitado'),
+    );
+    await ipc.startServer(role: 'service');
+    ipc.scheduler = scheduler;
+    when(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+        .thenAnswer((_) async => const rd.Success(rd.unit));
+    expect((await ui.executeNow(id)).isSuccess(), isTrue);
+    verify(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+        .called(1);
   });
 
   test('cancel and refresh are delegated explicitly', () async {

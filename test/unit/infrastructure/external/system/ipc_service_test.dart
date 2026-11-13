@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/in_memory_ipc_transport.dart';
@@ -14,6 +15,17 @@ IpcService _pairedService() {
 
 void main() {
   const validScheduleId = '00000000-0000-4000-8000-000000000001';
+
+  test(
+    'unopened scheduler channel reports a request that was not sent',
+    () async {
+      final ipc = _pairedService();
+      await expectLater(
+        ipc.schedulerRequest('execute', validScheduleId),
+        throwsA(isA<ServiceConnectionException>()),
+      );
+    },
+  );
 
   group('IpcService.checkServerRunning', () {
     test(

@@ -18,11 +18,10 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
-import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_ipc_client.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
-import 'package:backup_database/infrastructure/external/system/windows_service_service.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service/windows_service_presence_probe.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_exit_coordinator.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -587,13 +586,17 @@ class AppBootstrap {
   }) async {
     if (Platform.isWindows &&
         bootstrapContext.launchOrigin != LaunchOrigin.scheduledExecution) {
-      final status = await WindowsServiceService(ProcessService()).getStatus();
-      ExecutionOwnership.administrativeUi =
-          ExecutionOwnership.useAdministrativeUi(
-            scheduledLaunch: false,
-            serviceInstalled: status.getOrNull()?.isInstalled ?? false,
-            statusUnknown: status.isError(),
-          );
+      final presence = WindowsServicePresenceProbe().read();
+      LoggerService.info(
+        'event=boot_service_presence source=windows_scm '
+        'presence=${presence.presence.name} error=${presence.errorCode}',
+      );
+      ExecutionOwnership
+          .administrativeUi = ExecutionOwnership.useAdministrativeUi(
+        scheduledLaunch: false,
+        serviceInstalled: presence.presence == WindowsServicePresence.installed,
+        statusUnknown: presence.presence == WindowsServicePresence.unknown,
+      );
       if (ExecutionOwnership.administrativeUi) {
         if (ExecutionOwnership.suppressAutomaticUi(
           automaticLaunch:
