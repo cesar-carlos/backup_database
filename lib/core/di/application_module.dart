@@ -69,7 +69,10 @@ Future<void> setupApplicationModule(GetIt getIt) async {
 
   getIt.registerLazySingleton<ISchedulerService>(
     () => ExecutionOwnership.administrativeUi
-        ? ServiceSchedulerProxy(IpcService().schedulerRequest)
+        ? ServiceSchedulerProxy(
+            IpcService().schedulerRequest,
+            progressNotifier: getIt<IBackupProgressNotifier>(),
+          )
         : SchedulerService(
             scheduleRepository: getIt<IScheduleRepository>(),
             destinationRepository: getIt<IBackupDestinationRepository>(),

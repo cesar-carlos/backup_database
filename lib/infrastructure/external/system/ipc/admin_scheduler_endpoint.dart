@@ -26,12 +26,17 @@ class AdminSchedulerEndpoint {
       return {..._error('Executor indisponível'), 'uncertain': true};
     }
     if (command == 'status') {
-      return {'ok': true, 'busy': target.isExecutingBackup, 'epoch': _epoch};
+      return {
+        'ok': true,
+        'busy': target.isExecutingBackup,
+        'epoch': _epoch,
+        'progressVersion': target is IScopedBackupProgress ? 1 : 0,
+      };
     }
     if (command == 'refresh' && UuidValidator.isValid(payload)) {
       return _result(() => target.refreshSchedule(payload));
     }
-    if (command != 'execute' && command != 'cancel') {
+    if (command != 'execute' && command != 'cancel' && command != 'progress') {
       return _error('Comando inválido');
     }
     Map<String, dynamic> args;
@@ -54,11 +59,37 @@ class AdminSchedulerEndpoint {
           'O serviço reiniciou. Confira o histórico antes de iniciar outra execução.',
         ),
         'uncertain': true,
+        'code': 'service_restarted',
+        'epoch': _epoch,
+        'scheduleId': id,
+        'requestId': requestId,
       };
     }
     final receipt = _receipts[requestId];
     if (receipt != null && receipt.scheduleId != id) {
       return _error('Identificador reutilizado para outro agendamento');
+    }
+    if (command == 'progress') {
+      if (receipt == null) return _error('Execução ainda não registrada');
+      final snapshot = !receipt.completed && target is IScopedBackupProgress
+          ? (target as IScopedBackupProgress).progressForRun(id, requestId)
+          : null;
+      return {
+        'ok': true,
+        'epoch': _epoch,
+        'requestId': requestId,
+        'scheduleId': id,
+        'completed': receipt.completed,
+        'progress': snapshot == null
+            ? null
+            : {
+                'step': snapshot.step,
+                'message': snapshot.message,
+                'value': (snapshot.progress?.isFinite ?? false)
+                    ? snapshot.progress
+                    : null,
+              },
+      };
     }
     if (command == 'cancel') {
       if (receipt == null || receipt.completed) {

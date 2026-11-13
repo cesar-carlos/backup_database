@@ -9,6 +9,7 @@ import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
+import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
 import 'package:backup_database/domain/entities/disk_space_info.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -231,6 +232,37 @@ void main() {
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
     }
+  });
+
+  test('progress is exposed only for the active schedule and run', () async {
+    const snapshot = BackupProgressSnapshot(
+      step: 'Compactando',
+      message: 'Compressing',
+      progress: 0.6,
+    );
+    final entered = Completer<void>();
+    final pending = Completer<rd.Result<BackupHistory>>();
+    when(() => progressNotifier.currentSnapshot).thenReturn(snapshot);
+    when(() => scheduleRepository.getById(scheduleId))
+        .thenAnswer((_) async => rd.Success(buildSchedule()));
+    when(
+      () => backupOrchestratorService.executeBackup(
+        schedule: any(named: 'schedule'),
+        outputDirectory: any(named: 'outputDirectory'),
+      ),
+    ).thenAnswer((_) {
+      entered.complete();
+      return pending.future;
+    });
+    expect(service.progressForRun(scheduleId, 'active'), isNull);
+    final work = service.executeNow(scheduleId, runId: 'active');
+    await entered.future;
+    expect(service.progressForRun(scheduleId, 'active'), same(snapshot));
+    expect(service.progressForRun(scheduleId, 'old'), isNull);
+    expect(service.progressForRun('other-schedule', 'active'), isNull);
+    pending.complete(const rd.Failure(DatabaseFailure(message: 'failed')));
+    await work;
+    expect(service.progressForRun(scheduleId, 'active'), isNull);
   });
 
   group('SchedulerService concurrency and cancellation', () {

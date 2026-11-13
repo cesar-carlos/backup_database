@@ -54,6 +54,7 @@ class BackupProgress {
     BackupStep? step,
     String? message,
     double? progress,
+    bool clearProgress = false,
     String? error,
     DateTime? startedAt,
     Duration? elapsed,
@@ -66,7 +67,7 @@ class BackupProgress {
     return BackupProgress(
       step: step ?? this.step,
       message: message ?? this.message,
-      progress: progress ?? this.progress,
+      progress: clearProgress ? null : (progress ?? this.progress),
       error: error ?? this.error,
       startedAt: startedAt ?? this.startedAt,
       elapsed: elapsed ?? this.elapsed,
@@ -83,6 +84,10 @@ class BackupProgressProvider extends ChangeNotifier
     implements IBackupRunningState, IBackupProgressNotifier {
   BackupProgress? _currentProgress;
   bool _isRunning = false;
+  int _executionId = 0;
+
+  /// Local identity, stable across progress events and distinct for each run.
+  int get executionId => _executionId;
   String? _currentScheduleName;
 
   BackupProgress? get currentProgress => _currentProgress;
@@ -157,6 +162,7 @@ class BackupProgressProvider extends ChangeNotifier
   bool tryStartBackup([String? scheduleName]) {
     if (_isRunning) return false;
     _isRunning = true;
+    _executionId++;
     _currentScheduleName = scheduleName;
     _currentProgress = BackupProgress(
       step: BackupStep.initializing,
@@ -233,7 +239,10 @@ class BackupProgressProvider extends ChangeNotifier
         _currentProgress?.copyWith(
           step: step,
           message: message,
-          progress: progress,
+          progress: (progress?.isFinite ?? false)
+              ? progress!.clamp(0.0, 1.0)
+              : null,
+          clearProgress: progress == null || !progress.isFinite,
           elapsed: elapsed,
         ) ??
         BackupProgress(

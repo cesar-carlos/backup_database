@@ -66,6 +66,49 @@ void main() {
     });
   });
 
+  test('unknown progress clears the previous percentage', () {
+    provider.startBackup('Backup');
+    provider.updateProgressWithStep(
+      step: BackupStep.executingBackup,
+      message: '50%',
+      progress: 0.5,
+    );
+    provider.updateProgressWithStep(
+      step: BackupStep.uploading,
+      message: 'Waiting for executor',
+    );
+    expect(provider.currentProgress!.progress, isNull);
+    expect(provider.currentSnapshot!.progress, isNull);
+  });
+
+  test('invalid progress is indeterminate and finite progress is bounded', () {
+    provider.startBackup('Backup');
+    for (final value in [
+      double.nan,
+      double.infinity,
+      double.negativeInfinity,
+    ]) {
+      provider.updateProgressWithStep(
+        step: BackupStep.uploading,
+        message: 'Upload',
+        progress: value,
+      );
+      expect(provider.currentProgress!.progress, isNull);
+    }
+    provider.updateProgressWithStep(
+      step: BackupStep.uploading,
+      message: 'Upload',
+      progress: 2,
+    );
+    expect(provider.currentProgress!.progress, 1);
+    provider.updateProgressWithStep(
+      step: BackupStep.uploading,
+      message: 'Upload',
+      progress: -1,
+    );
+    expect(provider.currentProgress!.progress, 0);
+  });
+
   group('BackupProgressProvider lifecycle', () {
     test('should clear running state on completeBackup', () {
       provider.tryStartBackup('Done');

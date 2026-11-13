@@ -10,7 +10,7 @@ import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
-class BackupProgressDialog extends StatelessWidget {
+class BackupProgressDialog extends StatefulWidget {
   const BackupProgressDialog({super.key});
 
   static Future<void> show(BuildContext context) {
@@ -18,6 +18,27 @@ class BackupProgressDialog extends StatelessWidget {
       context: context,
       builder: (context) => const BackupProgressDialog(),
     );
+  }
+
+  @override
+  State<BackupProgressDialog> createState() => _BackupProgressDialogState();
+}
+
+class _BackupProgressDialogState extends State<BackupProgressDialog> {
+  Timer? _elapsedTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _elapsedTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _elapsedTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -36,175 +57,184 @@ class BackupProgressDialog extends StatelessWidget {
             ? scheduler.activeScheduleId
             : null;
 
+        final elapsed = provider.isRunning && progress?.startedAt != null
+            ? DateTime.now().difference(progress!.startedAt!)
+            : progress?.elapsed;
+
         if (progress == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!context.mounted) return;
-            Navigator.of(context).maybePop();
+            if (!context.mounted || provider.currentProgress != null) return;
+            if (ModalRoute.of(context)?.isCurrent ?? false) {
+              Navigator.of(context).maybePop();
+            }
           });
           return const SizedBox.shrink();
         }
 
-        return Semantics(
-          label: texts.title,
-          child: ContentDialog(
-            title: Row(
-              children: [
-                if (progress.step == BackupStep.completed)
-                  Icon(
-                    FluentIcons.check_mark,
-                    color: colors.success,
-                  )
-                else if (progress.step == BackupStep.error)
-                  Icon(FluentIcons.error, color: colors.danger)
-                else
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: ProgressRing(strokeWidth: 2),
-                  ),
-                const SizedBox(width: 12),
-                Text(texts.title),
-              ],
-            ),
-            content: ConstrainedBox(
-              constraints: AppDialogConstraints.of(
-                context,
-                preferredWidth: 800,
+        return PopScope(
+          canPop: !provider.isRunning,
+          child: Semantics(
+            label: texts.title,
+            child: ContentDialog(
+              title: Row(
+                children: [
+                  if (progress.step == BackupStep.completed)
+                    Icon(
+                      FluentIcons.check_mark,
+                      color: colors.success,
+                    )
+                  else if (progress.step == BackupStep.error)
+                    Icon(FluentIcons.error, color: colors.danger)
+                  else
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: ProgressRing(strokeWidth: 2),
+                    ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(texts.title)),
+                ],
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Semantics(
-                      liveRegion: true,
-                      label: UploadProgressLabels.localizeMessage(
-                        progress.message,
-                        locale,
-                      ),
-                      child: Text(
-                        UploadProgressLabels.localizeMessage(
+              content: ConstrainedBox(
+                constraints: AppDialogConstraints.of(
+                  context,
+                  preferredWidth: 800,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Semantics(
+                        liveRegion: true,
+                        label: UploadProgressLabels.localizeMessage(
                           progress.message,
                           locale,
                         ),
-                        style: FluentTheme.of(context).typography.bodyLarge,
+                        child: Text(
+                          UploadProgressLabels.localizeMessage(
+                            progress.message,
+                            locale,
+                          ),
+                          style: FluentTheme.of(context).typography.bodyLarge,
+                        ),
                       ),
-                    ),
-                    if (progress.progress != null &&
-                        progress.step != BackupStep.completed) ...[
-                      const SizedBox(height: 16),
-                      Semantics(
-                        label:
+                      if (progress.progress != null &&
+                          progress.step != BackupStep.completed) ...[
+                        const SizedBox(height: 16),
+                        Semantics(
+                          label:
+                              '${texts.overallProgressLabel}: '
+                              '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                          child: Text(
                             '${texts.overallProgressLabel}: '
                             '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                        child: Text(
-                          '${texts.overallProgressLabel}: '
-                          '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                          style: FluentTheme.of(context).typography.caption,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Semantics(
-                        label:
-                            '${texts.overallProgressLabel}, '
-                            '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
-                        child: _CustomProgressBar(
-                          value: progress.progress!.clamp(0.0, 1.0),
-                        ),
-                      ),
-                    ],
-                    if (progress.elapsed != null) ...[
-                      const SizedBox(height: 16),
-                      Semantics(
-                        label:
-                            '${texts.elapsedLabel}: '
-                            '${_formatDuration(progress.elapsed!, texts)}',
-                        child: Text(
-                          '${texts.elapsedLabel}: '
-                          '${_formatDuration(progress.elapsed!, texts)}',
-                          style:
-                              FluentTheme.of(
-                                context,
-                              ).typography.caption?.copyWith(
-                                color: colors.disabled,
-                              ),
-                        ),
-                      ),
-                    ],
-                    if (progress.error != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: colors.danger.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: colors.danger.withValues(alpha: 0.4),
+                            style: FluentTheme.of(context).typography.caption,
                           ),
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              FluentIcons.error,
-                              color: colors.danger,
+                        const SizedBox(height: 8),
+                        Semantics(
+                          label:
+                              '${texts.overallProgressLabel}, '
+                              '${(progress.progress!.clamp(0.0, 1.0) * 100).toStringAsFixed(0)}%',
+                          child: _CustomProgressBar(
+                            value: progress.progress!.clamp(0.0, 1.0),
+                          ),
+                        ),
+                      ],
+                      if (elapsed != null) ...[
+                        const SizedBox(height: 16),
+                        Semantics(
+                          label:
+                              '${texts.elapsedLabel}: '
+                              '${_formatDuration(elapsed, texts)}',
+                          child: Text(
+                            '${texts.elapsedLabel}: '
+                            '${_formatDuration(elapsed, texts)}',
+                            style:
+                                FluentTheme.of(
+                                  context,
+                                ).typography.caption?.copyWith(
+                                  color: colors.disabled,
+                                ),
+                          ),
+                        ),
+                      ],
+                      if (progress.error != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colors.danger.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: colors.danger.withValues(alpha: 0.4),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                progress.error!,
-                                style: TextStyle(
-                                  color: colors.danger,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                FluentIcons.error,
+                                color: colors.danger,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  progress.error!,
+                                  style: TextStyle(
+                                    color: colors.danger,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              // Botão de cancelar disponível enquanto o backup está em
-              // execução e ainda não foi cancelado. Habilitado apenas
-              // quando temos `historyId` (orchestrator publica logo após
-              // criar o registro do BackupHistory).
-              if (progress.step != BackupStep.completed &&
-                  progress.step != BackupStep.error)
-                Button(
-                  onPressed:
-                      (progress.cancelRequested ||
-                          (progress.historyId == null && remoteId == null))
-                      ? null
-                      : () {
-                          unawaited(
-                            _confirmAndCancel(
-                              context: context,
-                              provider: provider,
-                              historyId: progress.historyId,
-                              remoteScheduleId: remoteId,
-                              texts: texts,
-                            ),
-                          );
-                        },
-                  child: Text(
-                    progress.cancelRequested
-                        ? texts.cancellingButton
-                        : texts.cancelButton,
                   ),
                 ),
-              if (progress.step == BackupStep.completed ||
-                  progress.step == BackupStep.error)
-                Button(
-                  onPressed: () {
-                    provider.reset();
-                    Navigator.of(context).pop();
-                  },
-                  child: Text(texts.closeButton),
-                ),
-            ],
+              ),
+              actions: [
+                // Botão de cancelar disponível enquanto o backup está em
+                // execução e ainda não foi cancelado. Habilitado apenas
+                // quando temos `historyId` (orchestrator publica logo após
+                // criar o registro do BackupHistory).
+                if (progress.step != BackupStep.completed &&
+                    progress.step != BackupStep.error)
+                  Button(
+                    onPressed:
+                        (progress.cancelRequested ||
+                            (progress.historyId == null && remoteId == null))
+                        ? null
+                        : () {
+                            unawaited(
+                              _confirmAndCancel(
+                                context: context,
+                                provider: provider,
+                                historyId: progress.historyId,
+                                remoteScheduleId: remoteId,
+                                texts: texts,
+                              ),
+                            );
+                          },
+                    child: Text(
+                      progress.cancelRequested
+                          ? texts.cancellingButton
+                          : texts.cancelButton,
+                    ),
+                  ),
+                if (progress.step == BackupStep.completed ||
+                    progress.step == BackupStep.error)
+                  Button(
+                    onPressed: () {
+                      provider.reset();
+                      Navigator.of(context).pop();
+                    },
+                    child: Text(texts.closeButton),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -230,6 +260,7 @@ class BackupProgressDialog extends StatelessWidget {
     required _BackupProgressTexts texts,
     String? remoteScheduleId,
   }) async {
+    final executionId = provider.executionId;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => ContentDialog(
@@ -247,7 +278,12 @@ class BackupProgressDialog extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true ||
+        !context.mounted ||
+        !provider.isRunning ||
+        provider.executionId != executionId) {
+      return;
+    }
 
     try {
       // Resolução tardia do orchestrator para evitar dependência circular
@@ -260,7 +296,9 @@ class BackupProgressDialog extends StatelessWidget {
       } else if (historyId != null) {
         getIt<BackupOrchestratorService>().cancelByHistoryId(historyId);
       }
-      provider.markCancelRequested();
+      if (provider.executionId == executionId) {
+        provider.markCancelRequested();
+      }
     } on Object catch (e) {
       debugPrint('Falha ao solicitar cancelamento de backup: $e');
       if (context.mounted) {

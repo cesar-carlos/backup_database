@@ -19,6 +19,7 @@ import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/backup_metrics.dart';
+import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/entities/schedule.dart'
     show DatabaseType, Schedule;
@@ -38,7 +39,21 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
 
-class SchedulerService implements ISchedulerService, IScopedBackupCancellation {
+class SchedulerService
+    implements
+        ISchedulerService,
+        IScopedBackupCancellation,
+        IScopedBackupProgress {
+  String? _progressRunId;
+
+  @override
+  BackupProgressSnapshot? progressForRun(String scheduleId, String runId) {
+    if (_progressRunId != runId || _lock.runningRunIds[scheduleId] != runId) {
+      return null;
+    }
+    return _progressNotifier.currentSnapshot;
+  }
+
   SchedulerService({
     required this._scheduleRepository,
     required this._destinationRepository,
@@ -427,6 +442,7 @@ class SchedulerService implements ISchedulerService, IScopedBackupCancellation {
     // significa que outro caller (ex.: socket handler) já reservou o
     // slot, o que é o comportamento desejado.
     _progressNotifier.tryStartBackup(schedule.name);
+    _progressRunId = effectiveRunId;
     _progressNotifier.setCurrentBackupName(schedule.name);
 
     final canceledAtStart = await _failIfCancellationRequested(
