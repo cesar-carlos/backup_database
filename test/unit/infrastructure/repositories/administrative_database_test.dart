@@ -1,4 +1,4 @@
-import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:backup_database/core/config/execution_ownership.dart';
@@ -55,27 +55,48 @@ void main() {
             .single,
         5000,
       );
-      final locked = Completer<void>();
-      final release = Completer<void>();
-      final writing = service.transaction(() async {
-        await service.customStatement(
-          'INSERT INTO concurrency_probe VALUES (1)',
-        );
-        locked.complete();
-        await release.future;
+      // Use an independent OS process, as in production. A native SQLite
+      // busy handler in a second Dart isolate can block VM safepoints while
+      // coverage runs, preventing the first isolate from committing.
+      final writer = await Process.start(
+        Platform.isWindows ? 'py' : 'python3',
+        [
+          if (Platform.isWindows) '-3',
+          '-c',
+          '''import sqlite3, sys, time
+db = sqlite3.connect(sys.argv[1])
+db.execute('BEGIN IMMEDIATE')
+db.execute('INSERT INTO concurrency_probe VALUES (1)')
+print('locked', flush=True)
+sys.stdin.readline()
+time.sleep(0.5)
+db.commit()
+db.close()
+''',
+          file.path,
+        ],
+      );
+      final errors = writer.stderr.transform(utf8.decoder).join();
+      addTearDown(() {
+        writer.kill();
       });
-      await locked.future;
+      expect(
+        await writer.stdout
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .first,
+        'locked',
+      );
       expect(
         await admin.customSelect('SELECT * FROM concurrency_probe').get(),
         isEmpty,
       );
-      final secondWrite = admin.customStatement(
+      writer.stdin.writeln('release');
+      await writer.stdin.flush();
+      await admin.customStatement(
         'INSERT INTO concurrency_probe VALUES (2)',
       );
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      release.complete();
-      await writing;
-      await secondWrite;
+      expect(await writer.exitCode, 0, reason: await errors);
       expect(
         (await admin.customSelect('SELECT * FROM concurrency_probe').get())
             .length,
