@@ -212,6 +212,32 @@ void main() {
     },
   );
 
+  test(
+    'concurrent forced refresh is not lost behind a normal restore',
+    () async {
+      saved['dropbox_oauth_token']!['expirationDate'] = DateTime.now()
+          .add(const Duration(hours: 2))
+          .toIso8601String();
+      final auth = service();
+      final normal = auth.signInSilently();
+      final forced = auth.signInSilently(forceRefresh: true);
+      final secondForced = auth.signInSilently(forceRefresh: true);
+      expect((await normal).getOrThrow().accessToken, 'old');
+      expect((await forced).getOrThrow().accessToken, 'fresh');
+      expect((await secondForced).getOrThrow().accessToken, 'fresh');
+      expect(requests, 1);
+    },
+  );
+
+  test('forced caller reuses a normal restore that already renewed', () async {
+    final auth = service();
+    final normal = auth.signInSilently();
+    final forced = auth.signInSilently(forceRefresh: true);
+    expect((await normal).isSuccess(), isTrue);
+    expect((await forced).isSuccess(), isTrue);
+    expect(requests, 1);
+  });
+
   test('force refresh renews even before expiration', () async {
     saved['dropbox_oauth_token']!['expirationDate'] = DateTime.now()
         .add(const Duration(hours: 2))

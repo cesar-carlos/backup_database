@@ -55,6 +55,9 @@ class DropboxAuthService {
   final OAuthSessionLock _sessionLock;
   Map<String, dynamic>? _tokenSnapshot;
   Future<rd.Result<DropboxAuthResult>>? _silentInFlight;
+  Future<rd.Result<DropboxAuthResult>>? _forcedInFlight;
+  bool _silentForceRefresh = false;
+  int _refreshRevision = 0;
   Future<void> _storageTail = Future<void>.value();
   int _generation = 0;
   bool _loginPending = false;
@@ -356,7 +359,18 @@ class DropboxAuthService {
         ),
       );
     }
-    return _silentInFlight ??= _restoreSession(forceRefresh: forceRefresh)
+    final pending = _silentInFlight;
+    if (pending != null) {
+      if (!forceRefresh || _silentForceRefresh) return pending;
+      final revision = _refreshRevision;
+      return _forcedInFlight ??= (() async {
+        final result = await pending;
+        if (result.isError() || _refreshRevision != revision) return result;
+        return signInSilently(forceRefresh: true);
+      })().whenComplete(() => _forcedInFlight = null);
+    }
+    _silentForceRefresh = forceRefresh;
+    return _silentInFlight = _restoreSession(forceRefresh: forceRefresh)
         .whenComplete(() => _silentInFlight = null);
   }
 
@@ -485,6 +499,7 @@ class DropboxAuthService {
         generation,
         expectedToken: expectedToken,
       );
+      _refreshRevision++;
 
       return rd.Success(
         DropboxAuthResult(
