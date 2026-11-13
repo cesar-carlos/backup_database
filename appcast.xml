@@ -5,6 +5,27 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.10</title>
+      <pubDate>Fri, 13 Nov 2026 21:30:52 +0000</pubDate>
+      <description>## Correções
+
+- Dropbox: autenticação restaurada pelo serviço Windows sem depender da interface ou abrir um navegador durante o backup.
+- Configuração OAuth compartilhada pelo armazenamento seguro da máquina, com migração automática das preferências antigas ao abrir a interface no usuário que configurou a conta.
+- Falhas de rede preservam as credenciais; a renovação mantém o refresh token mesmo quando o Dropbox não retorna um novo.
+- Renovação forçada após resposta 401 e limite de tentativas nas operações de pasta, evitando repetições indefinidas.
+- Respostas atrasadas de renovação não restauram credenciais após logout. Chamadas simultâneas compartilham a renovação em andamento.
+- Bloqueio entre processos e comparação da sessão persistida impedem que uma renovação antiga sobrescreva logout ou troca de conta realizada na interface.
+- Melhor diagnóstico para permissões da conta do serviço, compartilhamentos UNC e unidades de rede mapeadas pelo usuário.
+- Testes de regressão para autenticação, migração, renovação, logout, falhas de conexão e mensagens de acesso ao destino.
+
+## Instalação
+
+Utilize `BackupDatabase-Setup-3.6.10.exe` ou a atualização automática. O arquivo `.sha256` acompanha o instalador para verificação de integridade.
+
+Para migrar uma configuração Dropbox antiga, abra a interface uma vez no usuário que configurou a conta. As configurações Google existentes são preservadas.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.10/BackupDatabase-Setup-3.6.10.exe" sparkle:version="3.6.10" sparkle:os="windows" length="43937602" type="application/octet-stream" sha256="bb7f8f3d30e6692f0c617ae040ec514c0a882d08e64cdd20d0d015c961b88302" />
+    </item>
+    <item>
       <title>Version 3.6.9</title>
       <pubDate>Fri, 13 Nov 2026 20:52:00 +0000</pubDate>
       <description>## Correções
