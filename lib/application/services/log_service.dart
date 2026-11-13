@@ -61,31 +61,15 @@ class LogService {
         (searchQuery != null && searchQuery.trim().isNotEmpty);
     if (!hasFilters) return _logRepository.getAll(limit: limit, offset: offset);
 
-    // Combine todos os filtros antes de paginar; antes o nível anulava a busca.
-    final result = await _logRepository.getAll();
-    return result.map((logs) {
-      final query = searchQuery?.trim().toLowerCase() ?? '';
-      final filtered =
-          logs
-              .where(
-                (log) =>
-                    (level == null || log.level == level) &&
-                    (category == null || log.category == category) &&
-                    (startDate == null || !log.createdAt.isBefore(startDate)) &&
-                    (endDate == null || !log.createdAt.isAfter(endDate)) &&
-                    (query.isEmpty ||
-                        '${log.message} ${log.details ?? ""} ${log.backupHistoryId ?? ""}'
-                            .toLowerCase()
-                            .contains(query)),
-              )
-              .toList()
-            ..sort((a, b) {
-              final order = b.createdAt.compareTo(a.createdAt);
-              return order != 0 ? order : a.id.compareTo(b.id);
-            });
-      final page = filtered.skip(offset ?? 0);
-      return (limit == null ? page : page.take(limit)).toList();
-    });
+    return _logRepository.getFiltered(
+      limit: limit,
+      offset: offset,
+      level: level,
+      category: category,
+      startDate: startDate,
+      endDate: endDate,
+      searchQuery: searchQuery,
+    );
   }
 
   Future<rd.Result<String>> exportLogs({

@@ -6,6 +6,7 @@ import 'package:backup_database/core/utils/app_data_directory_resolver.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_app_database_lifecycle.dart';
 import 'package:backup_database/infrastructure/datasources/daos/daos.dart';
+import 'package:backup_database/infrastructure/datasources/local/shared_database_setup.dart';
 import 'package:backup_database/infrastructure/datasources/local/tables/tables.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -2235,6 +2236,9 @@ LazyDatabase _openConnection([String databaseName = 'backup_database']) {
     final dbFolder = await resolveMachineDataDirectory();
     await dbFolder.create(recursive: true);
     final file = File(p.join(dbFolder.path, '$databaseName.db'));
-    return NativeDatabase.createInBackground(file);
+    return NativeDatabase.createInBackground(
+      file,
+      setup: configureSharedDatabase,
+    );
   });
 }

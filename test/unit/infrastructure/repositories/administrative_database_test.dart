@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
+import 'package:backup_database/infrastructure/datasources/local/shared_database_setup.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -17,6 +19,72 @@ void main() {
     ExecutionOwnership.administrativeUi = false;
     await directory.delete(recursive: true);
   });
+
+  test(
+    'UI reads during service write and waits for concurrent writer',
+    () async {
+      final service = AppDatabase.forTesting(
+        NativeDatabase.createInBackground(
+          file,
+          setup: configureSharedDatabase,
+        ),
+      );
+      await service.customSelect('SELECT 1').get();
+      await service.customStatement(
+        'CREATE TABLE concurrency_probe (value INTEGER)',
+      );
+      ExecutionOwnership.administrativeUi = true;
+      final admin = AppDatabase.forTesting(
+        NativeDatabase.createInBackground(
+          file,
+          setup: configureSharedDatabase,
+        ),
+      );
+      await admin.customSelect('SELECT 1').get();
+      expect(
+        (await admin.customSelect('PRAGMA journal_mode').getSingle())
+            .data
+            .values
+            .single,
+        'wal',
+      );
+      expect(
+        (await admin.customSelect('PRAGMA busy_timeout').getSingle())
+            .data
+            .values
+            .single,
+        5000,
+      );
+      final locked = Completer<void>();
+      final release = Completer<void>();
+      final writing = service.transaction(() async {
+        await service.customStatement(
+          'INSERT INTO concurrency_probe VALUES (1)',
+        );
+        locked.complete();
+        await release.future;
+      });
+      await locked.future;
+      expect(
+        await admin.customSelect('SELECT * FROM concurrency_probe').get(),
+        isEmpty,
+      );
+      final secondWrite = admin.customStatement(
+        'INSERT INTO concurrency_probe VALUES (2)',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      release.complete();
+      await writing;
+      await secondWrite;
+      expect(
+        (await admin.customSelect('SELECT * FROM concurrency_probe').get())
+            .length,
+        2,
+      );
+      await admin.close();
+      await service.close();
+    },
+  );
 
   test('admin reads shared database without running schema repairs', () async {
     final owner = AppDatabase.forTesting(NativeDatabase(file));
