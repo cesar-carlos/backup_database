@@ -17,6 +17,7 @@ import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/destination/destination_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/external/external.dart';
 import 'package:backup_database/infrastructure/external/google/google_oauth_config_store.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_config_store.dart';
 import 'package:backup_database/infrastructure/repositories/repositories.dart';
 import 'package:backup_database/infrastructure/scripts/backup_script_orchestrator_impl.dart';
 import 'package:backup_database/infrastructure/socket/client/connection_manager.dart';
@@ -223,7 +224,14 @@ Future<void> setupInfrastructureModule(GetIt getIt) async {
     () => GoogleDriveDestinationService(getIt<GoogleAuthService>()),
   );
   getIt.registerLazySingleton<DropboxAuthService>(
-    () => DropboxAuthService(getIt<ISecureCredentialService>()),
+    () => DropboxAuthService(
+      getIt<ISecureCredentialService>(),
+      configurationStore: OAuthConfigStore(
+        getIt<ISecureCredentialService>(),
+        storageKey: 'dropbox_oauth_config',
+        label: 'Dropbox',
+      ),
+    ),
   );
   getIt.registerLazySingleton<IDropboxDestinationService>(
     () => DropboxDestinationService(getIt<DropboxAuthService>()),

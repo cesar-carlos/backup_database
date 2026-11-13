@@ -8,7 +8,13 @@ class DropboxFolderOps {
   DropboxFolderOps(this._authClient);
   final DropboxAuthClient _authClient;
 
-  Future<rd.Result<void>> getOrCreateFolder(String folderPath) async {
+  Future<rd.Result<void>> getOrCreateFolder(String folderPath) =>
+      _getOrCreateFolder(folderPath, canRefresh: true);
+
+  Future<rd.Result<void>> _getOrCreateFolder(
+    String folderPath, {
+    required bool canRefresh,
+  }) async {
     try {
       final dioResult = await _authClient.getAuthenticatedDio();
       if (dioResult.isError()) {
@@ -64,8 +70,17 @@ class DropboxFolderOps {
             return const rd.Success(());
           }
         } else if (e.response?.statusCode == 401) {
+          if (!canRefresh) {
+            return const rd.Failure(
+              DropboxFailure(
+                message: 'Dropbox recusou a autorização após renovar a sessão.',
+              ),
+            );
+          }
           _authClient.invalidateCache();
-          final refreshResult = await _authClient.signInSilently();
+          final refreshResult = await _authClient.signInSilently(
+            forceRefresh: true,
+          );
           if (refreshResult.isError()) {
             return rd.Failure(
               DropboxFailure(
@@ -75,7 +90,7 @@ class DropboxFolderOps {
               ),
             );
           }
-          return await getOrCreateFolder(folderPath);
+          return await _getOrCreateFolder(folderPath, canRefresh: false);
         } else {
           return rd.Failure(
             DropboxFailure(
@@ -106,8 +121,17 @@ class DropboxFolderOps {
         }
 
         if (e.response?.statusCode == 401) {
+          if (!canRefresh) {
+            return const rd.Failure(
+              DropboxFailure(
+                message: 'Dropbox recusou a autorização após renovar a sessão.',
+              ),
+            );
+          }
           _authClient.invalidateCache();
-          final refreshResult = await _authClient.signInSilently();
+          final refreshResult = await _authClient.signInSilently(
+            forceRefresh: true,
+          );
           if (refreshResult.isError()) {
             return rd.Failure(
               DropboxFailure(
@@ -117,7 +141,7 @@ class DropboxFolderOps {
               ),
             );
           }
-          return await getOrCreateFolder(folderPath);
+          return await _getOrCreateFolder(folderPath, canRefresh: false);
         }
 
         return rd.Failure(

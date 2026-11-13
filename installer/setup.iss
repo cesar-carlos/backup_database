@@ -1,5 +1,5 @@
 #define MyAppName "Backup Database"
-#define MyAppVersion "3.6.9"
+#define MyAppVersion "3.6.10"
 #define MyAppPublisher "Backup Database"
 #define MyAppURL "https://github.com/cesar-carlos/backup_database"
 #define MyAppExeName "backup_database.exe"

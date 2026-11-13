@@ -35,6 +35,21 @@ class DropboxAuthProvider
 
   static const _oauthConfigKey = 'dropbox_oauth_config';
 
+  @override
+  Future<Map<String, dynamic>?> loadPersistedConfig() =>
+      _authService.configurationStore?.readForUi() ??
+      super.loadPersistedConfig();
+
+  @override
+  Future<void> savePersistedConfig(Map<String, dynamic> config) =>
+      _authService.configurationStore?.write(config) ??
+      super.savePersistedConfig(config);
+
+  @override
+  Future<void> removePersistedConfig() =>
+      _authService.configurationStore?.remove() ??
+      super.removePersistedConfig();
+
   // ===========================================================================
   // Hooks abstratos
   // ===========================================================================
