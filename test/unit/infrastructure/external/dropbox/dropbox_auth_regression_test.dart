@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:backup_database/application/providers/dropbox_auth_provider.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
@@ -10,6 +11,7 @@ import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_cli
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_auth_service.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_folder_ops.dart';
 import 'package:backup_database/infrastructure/external/oauth/oauth_config_store.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_session_lock.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -31,7 +33,12 @@ void main() {
   late bool fail;
   Completer<void>? pending;
   late Completer<void> started;
-  setUp(() {
+  late Directory lockDirectory;
+  setUp(() async {
+    lockDirectory = await Directory.systemTemp.createTemp(
+      'dropbox-session-test-',
+    );
+    addTearDown(() => lockDirectory.delete(recursive: true));
     SharedPreferences.setMockInitialValues({});
     EncryptionService.initializeWithDeviceKey('dropbox-regression');
     addTearDown(EncryptionService.resetToLegacy);
@@ -103,6 +110,7 @@ void main() {
   DropboxAuthService service() => DropboxAuthService(
     store,
     dio: dio,
+    sessionLock: OAuthSessionLock(directory: lockDirectory),
     configurationStore: OAuthConfigStore(
       store,
       storageKey: 'dropbox_oauth_config',
@@ -171,6 +179,39 @@ void main() {
     expect(saved.containsKey('dropbox_oauth_token'), isFalse);
     expect(auth.isSignedIn, isFalse);
   });
+  test(
+    'logout in another service object rejects the in-flight refresh',
+    () async {
+      pending = Completer<void>();
+      final work = service().signInSilently();
+      await started.future;
+      await service().signOut();
+      pending!.complete();
+      expect((await work).isError(), isTrue);
+      expect(saved.containsKey('dropbox_oauth_token'), isFalse);
+    },
+  );
+
+  test(
+    'another session replacement cannot be overwritten by stale refresh',
+    () async {
+      pending = Completer<void>();
+      final work = service().signInSilently();
+      await started.future;
+      await OAuthSessionLock(directory: lockDirectory).run(() async {
+        saved['dropbox_oauth_token'] = {
+          'sessionId': 'replacement',
+          'accessToken': 'replacement',
+          'refreshToken': 'other-refresh',
+          'email': 'other@example.com',
+        };
+      });
+      pending!.complete();
+      expect((await work).isError(), isTrue);
+      expect(saved['dropbox_oauth_token']!['accessToken'], 'replacement');
+    },
+  );
+
   test('force refresh renews even before expiration', () async {
     saved['dropbox_oauth_token']!['expirationDate'] = DateTime.now()
         .add(const Duration(hours: 2))

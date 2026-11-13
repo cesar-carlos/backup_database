@@ -5,9 +5,12 @@ import 'package:backup_database/core/errors/dropbox_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/infrastructure/external/oauth/oauth_config_store.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_session_lock.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 class DropboxAuthResult {
   const DropboxAuthResult({
@@ -44,17 +47,22 @@ class DropboxAuthService {
   DropboxAuthService(
     this._secureCredentialService, {
     this.configurationStore,
+    OAuthSessionLock? sessionLock,
     this._dio,
-  });
+  }) : _sessionLock = sessionLock ?? OAuthSessionLock();
 
   final OAuthConfigStore? configurationStore;
+  final OAuthSessionLock _sessionLock;
+  Map<String, dynamic>? _tokenSnapshot;
   Future<rd.Result<DropboxAuthResult>>? _silentInFlight;
   Future<void> _storageTail = Future<void>.value();
   int _generation = 0;
   bool _loginPending = false;
 
   Future<T> _withStorage<T>(Future<T> Function() action) {
-    final result = _storageTail.then((_) => action());
+    final result = _storageTail.then(
+      (_) => configurationStore == null ? action() : _sessionLock.run(action),
+    );
     _storageTail = result.then<void>(
       (_) {},
       onError: (Object _, StackTrace _) {},
@@ -69,6 +77,7 @@ class DropboxAuthService {
   }
 
   void _clearCache() {
+    _tokenSnapshot = null;
     _cachedAccessToken = null;
     _cachedRefreshToken = null;
     _cachedEmail = null;
@@ -412,6 +421,9 @@ class DropboxAuthService {
   }
 
   Future<rd.Result<DropboxAuthResult>> _refreshToken(int generation) async {
+    final expectedToken = _tokenSnapshot == null
+        ? null
+        : Map<String, dynamic>.of(_tokenSnapshot!);
     final previous = (
       _cachedAccessToken,
       _cachedRefreshToken,
@@ -467,7 +479,12 @@ class DropboxAuthService {
         _tokenExpiration = DateTime.now().add(Duration(seconds: expiresIn));
       }
 
-      await _saveCredentials(data, _cachedEmail!, generation);
+      await _saveCredentials(
+        data,
+        _cachedEmail!,
+        generation,
+        expectedToken: expectedToken,
+      );
 
       return rd.Success(
         DropboxAuthResult(
@@ -548,10 +565,20 @@ class DropboxAuthService {
   Future<void> _saveCredentials(
     Map<String, dynamic> tokenResponse,
     String email,
-    int generation,
-  ) => _withStorage(() async {
+    int generation, {
+    Map<String, dynamic>? expectedToken,
+  }) => _withStorage(() async {
     _checkGeneration(generation);
+    if (expectedToken != null) {
+      final current = (await _secureCredentialService.getToken(key: _tokenKey))
+          .getOrThrow();
+      _checkGeneration(generation);
+      if (!mapEquals(current, expectedToken)) {
+        throw StateError('A sessão Dropbox foi alterada em outro processo.');
+      }
+    }
     final credentials = {
+      'sessionId': expectedToken?['sessionId'] ?? const Uuid().v4(),
       'accessToken': tokenResponse['access_token'],
       'refreshToken': _cachedRefreshToken,
       'clientId': _clientId,
@@ -570,6 +597,7 @@ class DropboxAuthService {
       LoggerService.error('Failed to save Dropbox credentials: $error');
       throw Exception('Falha ao salvar credenciais Dropbox');
     }
+    _tokenSnapshot = Map<String, dynamic>.of(credentials);
   });
 
   Future<void> _loadStoredCredentials(int generation) async {
@@ -590,6 +618,7 @@ class DropboxAuthService {
     }
 
     _cachedAccessToken = credentials['accessToken'] as String?;
+    _tokenSnapshot = Map<String, dynamic>.of(credentials);
     _cachedRefreshToken = credentials['refreshToken'] as String?;
     _cachedEmail = credentials['email'] as String?;
 
