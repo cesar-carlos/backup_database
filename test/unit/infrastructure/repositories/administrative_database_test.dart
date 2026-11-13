@@ -20,6 +20,57 @@ void main() {
     await directory.delete(recursive: true);
   });
 
+  test('Windows WAL files preserve the database access rules', () async {
+    final database = sqlite.sqlite3.open(file.path);
+    try {
+      configureSharedDatabase(database);
+      database.execute('CREATE TABLE acl_probe (value INTEGER)');
+      final restrict = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          r'''
+$ErrorActionPreference = 'Stop'
+$path = $env:BACKUP_DATABASE_ACL_SOURCE
+$acl = [System.IO.File]::GetAccessControl($path)
+$acl.SetAccessRuleProtection($true, $false)
+$sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+$rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow')
+$acl.AddAccessRule($rule)
+[System.IO.File]::SetAccessControl($path, $acl)
+''',
+        ],
+        environment: {'BACKUP_DATABASE_ACL_SOURCE': file.path},
+      );
+      expect(restrict.exitCode, 0, reason: restrict.stderr.toString());
+      synchronizeDatabaseSidecarAccess(file.path);
+      final check = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          r'''
+$ErrorActionPreference = 'Stop'
+$path = $env:BACKUP_DATABASE_ACL_SOURCE
+$section = [System.Security.AccessControl.AccessControlSections]::Access
+$source = ([System.IO.File]::GetAccessControl($path)).GetSecurityDescriptorSddlForm($section)
+foreach ($suffix in @('-wal', '-shm')) {
+  $actual = ([System.IO.File]::GetAccessControl($path + $suffix)).GetSecurityDescriptorSddlForm($section)
+  if ($actual -ne $source) { throw 'Access rules differ' }
+}
+''',
+        ],
+        environment: {'BACKUP_DATABASE_ACL_SOURCE': file.path},
+      );
+      expect(check.exitCode, 0, reason: check.stderr.toString());
+    } finally {
+      database.close();
+    }
+  }, skip: !Platform.isWindows);
+
   test(
     'UI reads during service write and waits for concurrent writer',
     () async {

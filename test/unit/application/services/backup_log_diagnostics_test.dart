@@ -39,6 +39,39 @@ void main() {
   });
   tearDown(() => database.close());
 
+  test(
+    'SQL log search treats percent and underscore as literal characters',
+    () async {
+      for (final message in [
+        'progresso 50%',
+        'arquivo_backup',
+        'progresso 500',
+        'arquivoXbackup',
+      ]) {
+        await logs.create(
+          BackupLog(
+            level: LogLevel.error,
+            category: LogCategory.execution,
+            message: message,
+          ),
+        );
+      }
+      final service = LogService(logs);
+      expect(
+        (await service.getLogs(searchQuery: '50%'))
+            .getOrThrow()
+            .map((e) => e.message),
+        ['progresso 50%'],
+      );
+      expect(
+        (await service.getLogs(searchQuery: '_'))
+            .getOrThrow()
+            .map((e) => e.message),
+        ['arquivo_backup'],
+      );
+    },
+  );
+
   for (final format in ExportFormat.values) {
     test('exports ${format.name} to the exact selected file path', () async {
       final directory = await Directory.systemTemp.createTemp('backup-export-');

@@ -2236,9 +2236,15 @@ LazyDatabase _openConnection([String databaseName = 'backup_database']) {
     final dbFolder = await resolveMachineDataDirectory();
     await dbFolder.create(recursive: true);
     final file = File(p.join(dbFolder.path, '$databaseName.db'));
+    final ownsDatabase = !ExecutionOwnership.administrativeUi;
     return NativeDatabase.createInBackground(
       file,
-      setup: configureSharedDatabase,
+      setup: (database) {
+        configureSharedDatabase(
+          database,
+          synchronizeWindowsPermissions: ownsDatabase,
+        );
+      },
     );
   });
 }

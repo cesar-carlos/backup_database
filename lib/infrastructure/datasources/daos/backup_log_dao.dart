@@ -29,11 +29,16 @@ class BackupLogDao extends DatabaseAccessor<AppDatabase>
     }
     final search = searchQuery?.trim().toLowerCase() ?? '';
     if (search.isNotEmpty) {
+      Expression<bool> containsLiteral(Expression<String> column) =>
+          FunctionCallExpression<int>('instr', [
+            column.lower(),
+            Variable(search),
+          ]).isBiggerThanValue(0);
       query.where(
         (t) =>
-            t.message.lower().contains(search) |
-            t.details.lower().contains(search) |
-            t.backupHistoryId.lower().contains(search),
+            containsLiteral(t.message) |
+            containsLiteral(t.details) |
+            containsLiteral(t.backupHistoryId),
       );
     }
     query.orderBy([
