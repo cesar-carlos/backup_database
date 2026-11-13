@@ -97,6 +97,32 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   /// Desserializa a `TConfig` do formato persistido em prefs.
   TConfig configFromJson(Map<String, dynamic> json);
 
+  Future<Map<String, dynamic>?> loadPersistedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final encrypted = prefs.getString(oauthConfigPrefsKey);
+    return encrypted == null
+        ? null
+        : jsonDecode(EncryptionService.decrypt(encrypted))
+              as Map<String, dynamic>;
+  }
+
+  Future<void> savePersistedConfig(Map<String, dynamic> config) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.setString(
+      oauthConfigPrefsKey,
+      EncryptionService.encrypt(jsonEncode(config)),
+    )) {
+      throw StateError('Falha ao salvar configuração OAuth.');
+    }
+  }
+
+  Future<void> removePersistedConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.remove(oauthConfigPrefsKey)) {
+      throw StateError('Falha ao remover configuração OAuth.');
+    }
+  }
+
   /// Extrai o email do `TAuthResult` retornado pelo auth service após
   /// signIn/signInSilently.
   String emailOf(TAuthResult result);
@@ -223,8 +249,7 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
       genericErrorMessage: 'Erro ao remover configuração',
       action: () async {
         await _signOutService();
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove(oauthConfigPrefsKey);
+        await removePersistedConfig();
         _oauthConfig = null;
         _isConfigured = false;
         _currentEmail = null;
@@ -237,12 +262,8 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
 
   Future<void> _loadOAuthConfig() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final encryptedConfig = prefs.getString(oauthConfigPrefsKey);
-      if (encryptedConfig == null) return;
-
-      final decryptedConfig = EncryptionService.decrypt(encryptedConfig);
-      final json = jsonDecode(decryptedConfig) as Map<String, dynamic>;
+      final json = await loadPersistedConfig();
+      if (json == null) return;
       _oauthConfig = configFromJson(json);
       LoggerService.debug('Configuração OAuth $serviceLabel carregada');
     } on Object catch (e, s) {
@@ -265,10 +286,7 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
     if (config == null) return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = jsonEncode(configToJson(config));
-      final encryptedConfig = EncryptionService.encrypt(json);
-      await prefs.setString(oauthConfigPrefsKey, encryptedConfig);
+      await savePersistedConfig(configToJson(config));
     } on Object catch (e) {
       LoggerService.error(
         'Erro ao salvar configuração OAuth $serviceLabel',

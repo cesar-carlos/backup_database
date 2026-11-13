@@ -5,6 +5,7 @@ import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
+import 'package:backup_database/infrastructure/external/google/google_oauth_config_store.dart';
 import 'package:http/http.dart' as http;
 import 'package:oauth2_client/access_token_response.dart';
 import 'package:oauth2_client/google_oauth2_client.dart';
@@ -48,9 +49,12 @@ class GoogleAuthService {
     this.httpClient,
     this.requestTimeout = const Duration(seconds: 30),
     this.authorize,
+    this.configurationStore,
   });
 
   final http.Client? httpClient;
+  final GoogleOAuthConfigStore? configurationStore;
+  Future<void>? _headlessInitialization;
   final Duration requestTimeout;
   final Future<AccessTokenResponse?> Function()? authorize;
   bool _loginPending = false;
@@ -342,9 +346,30 @@ class GoogleAuthService {
         GoogleDriveFailure(message: 'Login Google em andamento.'),
       );
     }
+    try {
+      final refreshing = _refreshInFlight;
+      if (refreshing != null) return await refreshing;
+      if (configurationStore != null) {
+        await (_headlessInitialization ??= _initializeFromSharedConfig()
+            .whenComplete(() => _headlessInitialization = null));
+      }
+    } on Object catch (e) {
+      return rd.Failure(
+        GoogleDriveFailure(
+          message:
+              'Não foi possível carregar a configuração Google do servidor. '
+              'Verifique o acesso ao armazenamento de credenciais.',
+          originalError: e,
+        ),
+      );
+    }
     if (!_isInitialized) {
       return const rd.Failure(
-        GoogleDriveFailure(message: 'GoogleAuthService não inicializado.'),
+        GoogleDriveFailure(
+          message:
+              'Configuração Google Drive indisponível no servidor. '
+              'Abra a interface e configure a conexão Google do destino.',
+        ),
       );
     }
 
@@ -381,6 +406,41 @@ class GoogleAuthService {
         ),
       );
     }
+  }
+
+  Future<void> _initializeFromSharedConfig() async {
+    final generation = _generation;
+    final config = await configurationStore!.read();
+    _checkGeneration(generation);
+    if (config == null) {
+      _invalidate();
+      _isInitialized = false;
+      return;
+    }
+    if (!_isInitialized ||
+        _clientId != config['clientId'] ||
+        _clientSecret != config['clientSecret']) {
+      await initialize(
+        clientId: config['clientId'] as String,
+        clientSecret: config['clientSecret'] as String?,
+      );
+      return;
+    }
+    // Login/logout in the UI must be visible to an already-running service.
+    await _withStorage(() async {
+      final exists = (await _secureCredentialService.containsKey(
+        key: _tokenKey,
+      )).getOrThrow();
+      _checkGeneration(generation);
+      if (!exists) {
+        _cachedAccessToken = null;
+        _cachedRefreshToken = null;
+        _cachedEmail = null;
+        _tokenExpiration = null;
+        return;
+      }
+      await _loadStoredCredentials(generation, failOnReadError: true);
+    });
   }
 
   Future<rd.Result<GoogleAuthResult>> _refreshToken(int generation) async {
@@ -543,17 +603,25 @@ class GoogleAuthService {
     LoggerService.debug('Credenciais Google salvas');
   });
 
-  Future<void> _loadStoredCredentials(int generation) async {
+  Future<void> _loadStoredCredentials(
+    int generation, {
+    bool failOnReadError = false,
+  }) async {
     final result = await _secureCredentialService.getToken(key: _tokenKey);
     _checkGeneration(generation);
 
     if (result.isError()) {
+      if (failOnReadError) throw result.exceptionOrNull()!;
       return;
     }
 
     final credentials = result.getOrElse((_) => <String, dynamic>{});
     if (credentials['clientId'] != null &&
         credentials['clientId'] != _clientId) {
+      _cachedAccessToken = null;
+      _cachedRefreshToken = null;
+      _cachedEmail = null;
+      _tokenExpiration = null;
       return;
     }
 
