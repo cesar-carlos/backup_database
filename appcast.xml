@@ -5,6 +5,20 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.11</title>
+      <pubDate>Fri, 13 Nov 2026 22:21:12 +0000</pubDate>
+      <description>## Melhorias e correções
+
+- Progresso detalhado dos backups iniciados pela interface e executados pelo serviço Windows, com etapas e percentual atualizados a cada segundo.
+- Recuperação do acompanhamento após falhas de comunicação e timeout, com descarte de respostas atrasadas.
+- Detecção de reinício do serviço sem reenviar automaticamente o backup nem exibir sucesso indevido.
+- Correções no diálogo de progresso, cancelamento, tempo decorrido e preservação do estado de execução.
+- Testes de regressão para isolamento entre execuções, comunicação, encerramento e ciclo de vida do diálogo.
+
+Para usar o progresso detalhado, atualize a interface e o serviço para esta versão.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.11/BackupDatabase-Setup-3.6.11.exe" sparkle:version="3.6.11" sparkle:os="windows" length="43937049" type="application/octet-stream" sha256="4172071dbca08b2873816f4fcea9c75ae7ad7c0e937d44b653d7daf8f32bea13" />
+    </item>
+    <item>
       <title>Version 3.6.10</title>
       <pubDate>Fri, 13 Nov 2026 21:30:52 +0000</pubDate>
       <description>## Correções
