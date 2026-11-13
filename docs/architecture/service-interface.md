@@ -38,6 +38,11 @@ preferências lidas apenas no boot do serviço exigem reiniciá-lo. A interface 
 um aviso de modo administrativo e aguarda a conclusão de comandos; não espelha
 percentuais de progresso nem a lista de conexões TCP do serviço.
 
+As conexões compartilham SQLite em WAL, com espera de até cinco segundos pelo
+escritor. O executor tenta copiar a DACL do banco para os arquivos WAL/SHM sem
+adicionar usuários. Se esse ajuste falhar, registra um aviso e mantém os backups
+funcionando; o acesso da interface pode exigir corrigir as permissões existentes.
+
 O auto update é coordenado pelo serviço. A interface administrativa bloqueia a
 instalação própria, pois consultar um snapshot de serviço ocioso não impede que um
 novo backup comece logo após a consulta.

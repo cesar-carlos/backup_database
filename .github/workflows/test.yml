@@ -7,9 +7,17 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  test:
+  checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -19,6 +27,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
+          flutter-version: "3.50.0"
           cache: true
 
       - name: Install dependencies
@@ -40,14 +49,6 @@ jobs:
             echo "APP_NAME=Backup Database" > .env
             echo "SINGLE_INSTANCE_ENABLED=true" >> .env
           fi
-
-      - name: Check cross-platform socket and service regressions
-        run: >-
-          flutter test
-          test/unit/infrastructure/external/destinations/ftp_socket_interruption_test.dart
-          test/unit/infrastructure/external/system/single_instance_service_test.dart
-          test/unit/infrastructure/external/system/nssm_config_plan_test.dart
-          --reporter expanded
 
       - name: Analyze
         run: flutter analyze --no-fatal-infos
@@ -75,9 +76,6 @@ jobs:
             exit 1
           fi
 
-      - name: Run unit tests with coverage
-        run: flutter test test/unit/ --coverage --reporter compact
-
       - name: Run widget tests
         run: flutter test test/widget --reporter compact
 
@@ -86,25 +84,63 @@ jobs:
         working-directory: widgetbook
         run: flutter analyze --no-fatal-infos
 
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.50.0"
+          cache: true
+      - run: flutter pub get
+      - name: Create test environment
+        run: cp .env.example .env
+      - name: Run unit tests
+        env:
+          COLLECT_COVERAGE: ${{ github.event_name != 'pull_request' }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          args=()
+          if [ "$COLLECT_COVERAGE" = "true" ]; then args+=(--coverage); fi
+          flutter test test/unit/ --total-shards 3 --shard-index "$SHARD_INDEX" --reporter compact "${args[@]}"
+
       - name: Report filtered line coverage
+        if: github.event_name != 'pull_request'
         run: python scripts/coverage.py --filter-only
 
       - name: Upload filtered coverage report
         uses: actions/upload-artifact@v4
-        if: always()
+        if: ${{ always() && github.event_name != 'pull_request' }}
         with:
-          name: coverage-lcov-filtered
+          name: coverage-lcov-filtered-${{ matrix.shard }}
           path: coverage/lcov.filtered.info
           if-no-files-found: ignore
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
-        if: ${{ always() && hashFiles('coverage/lcov.filtered.info') != '' }}
+        if: ${{ always() && github.event_name != 'pull_request' && hashFiles('coverage/lcov.filtered.info') != '' }}
         with:
           files: coverage/lcov.filtered.info
+          flags: unit-tests
+          name: unit-shard-${{ matrix.shard }}
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
 
-      - name: Integration tests skipped on GitHub Actions
-        run: echo "Integration tests run only in local/dev environments."
+  # Preserve the existing required check name; skipped/cancelled jobs fail it.
+  test:
+    if: always()
+    needs: [checks, unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all validations
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          UNIT_RESULT: ${{ needs.unit-tests.result }}
+        run: test "$CHECKS_RESULT" = success && test "$UNIT_RESULT" = success

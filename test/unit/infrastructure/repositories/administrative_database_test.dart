@@ -5,6 +5,9 @@ import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/infrastructure/datasources/local/database.dart';
 import 'package:backup_database/infrastructure/datasources/local/shared_database_setup.dart';
 import 'package:drift/native.dart';
+// Drift wraps errors crossing the background-isolate boundary in this type.
+// ignore: experimental_member_use
+import 'package:drift/remote.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
@@ -71,6 +74,30 @@ foreach ($suffix in @('-wal', '-shm')) {
     }
   }, skip: !Platform.isWindows);
 
+  test('executor remains usable when Windows ACL synchronization fails', () {
+    final database = sqlite.sqlite3.open(file.path);
+    try {
+      var attempted = false;
+      configureSharedDatabase(
+        database,
+        synchronizeWindowsPermissions: true,
+        synchronizeSidecarAccess: (_) {
+          attempted = true;
+          throw const ProcessException('powershell.exe', [], 'Unavailable');
+        },
+      );
+      expect(attempted, isTrue);
+      // A new transaction proves the ACL attempt also released its lock.
+      database.execute('BEGIN IMMEDIATE');
+      database.execute('CREATE TABLE still_running (value INTEGER)');
+      database.execute('INSERT INTO still_running VALUES (1)');
+      database.execute('COMMIT');
+      expect(database.select('SELECT * FROM still_running').single['value'], 1);
+    } finally {
+      database.close();
+    }
+  }, skip: !Platform.isWindows);
+
   test(
     'UI reads during service write and waits for concurrent writer',
     () async {
@@ -104,17 +131,18 @@ foreach ($suffix in @('-wal', '-shm')) {
             .data
             .values
             .single,
-        5000,
+        // Linux uses a bounded busy handler, which clears the PRAGMA value.
+        Platform.isLinux ? 0 : 5000,
       );
-      // Use an independent OS process, as in production. A native SQLite
-      // busy handler in a second Dart isolate can block VM safepoints while
-      // coverage runs, preventing the first isolate from committing.
+      // Use an independent OS process, as in production, so a synchronous
+      // busy handler cannot prevent the lock holder from committing.
       final writer = await Process.start(
         Platform.isWindows ? 'py' : 'python3',
         [
           if (Platform.isWindows) '-3',
           '-c',
-          '''import sqlite3, sys, time
+          '''
+import sqlite3, sys, time
 db = sqlite3.connect(sys.argv[1])
 db.execute('BEGIN IMMEDIATE')
 db.execute('INSERT INTO concurrency_probe VALUES (1)')
@@ -128,9 +156,7 @@ db.close()
         ],
       );
       final errors = writer.stderr.transform(utf8.decoder).join();
-      addTearDown(() {
-        writer.kill();
-      });
+      addTearDown(writer.kill);
       expect(
         await writer.stdout
             .transform(utf8.decoder)
@@ -142,6 +168,25 @@ db.close()
         await admin.customSelect('SELECT * FROM concurrency_probe').get(),
         isEmpty,
       );
+      final waiting = Stopwatch()..start();
+      await expectLater(
+        admin.customStatement('INSERT INTO concurrency_probe VALUES (99)'),
+        throwsA(
+          isA<DriftRemoteException>().having(
+            (error) => error.remoteCause,
+            'SQLite failure',
+            isA<sqlite.SqliteException>().having(
+              (error) => error.resultCode,
+              'SQLITE_BUSY',
+              5,
+            ),
+          ),
+        ),
+      );
+      expect(waiting.elapsedMilliseconds, greaterThanOrEqualTo(4500));
+      expect(waiting.elapsedMilliseconds, lessThan(12000));
+      // A timed-out write must not be applied later, and the next attempt
+      // must receive a fresh waiting budget when the owner releases the lock.
       writer.stdin.writeln('release');
       await writer.stdin.flush();
       await admin.customStatement(
@@ -149,9 +194,10 @@ db.close()
       );
       expect(await writer.exitCode, 0, reason: await errors);
       expect(
-        (await admin.customSelect('SELECT * FROM concurrency_probe').get())
-            .length,
-        2,
+        (await admin.customSelect('SELECT * FROM concurrency_probe').get()).map(
+          (row) => row.data['value'],
+        ),
+        [1, 2],
       );
       await admin.close();
       await service.close();
