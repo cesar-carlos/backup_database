@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
+import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
@@ -12,11 +14,115 @@ typedef SchedulerRequest = Future<Map<String, dynamic>> Function(
   String scheduleId,
 );
 
-/// Administrative UI has no local execution fallback, timers or cancellation
+/// Administrative UI has no local execution fallback, scheduling timers or cancellation
 /// ownership. Closing it must never cancel work owned by the Windows service.
 class ServiceSchedulerProxy implements ISchedulerService {
-  ServiceSchedulerProxy(this.request);
+  ServiceSchedulerProxy(
+    this.request, {
+    this.progressNotifier,
+    this.progressInterval = const Duration(seconds: 1),
+    this.progressTimeout = const Duration(seconds: 5),
+  });
+  final IBackupProgressNotifier? progressNotifier;
+  final Duration progressInterval;
+  final Duration progressTimeout;
+  Completer<Map<String, dynamic>>? _progressInterruption;
+  int _lifecycle = 0;
+  Timer? _progressTimer;
+  Object? _progressSession;
+
+  void _stopProgress() {
+    _progressSession = null;
+    _progressTimer?.cancel();
+    _progressTimer = null;
+  }
+
+  void _startProgress(String payload) {
+    if (progressNotifier == null) return;
+    _stopProgress();
+    final session = Object();
+    _progressSession = session;
+    final identity = jsonDecode(payload) as Map<String, dynamic>;
+    var inFlight = false;
+    _progressTimer = Timer.periodic(progressInterval, (_) async {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        final reply = await request(
+          'progress',
+          payload,
+        ).timeout(progressTimeout);
+        if (!identical(_progressSession, session)) return;
+        if (reply['code'] == 'service_restarted' &&
+            reply['epoch'] is String &&
+            reply['epoch'] != identity['epoch'] &&
+            reply['requestId'] == identity['requestId'] &&
+            reply['scheduleId'] == identity['scheduleId']) {
+          final interruption = _progressInterruption;
+          _stopProgress();
+          if (interruption != null && !interruption.isCompleted) {
+            interruption.complete({
+              'ok': false,
+              'uncertain': true,
+              'error':
+                  'O serviço reiniciou. Não foi possível confirmar o resultado '
+                  'desta execução. Consulte o histórico antes de iniciar outro backup.',
+            });
+          }
+          return;
+        }
+        if (reply['ok'] != true ||
+            reply['epoch'] != identity['epoch'] ||
+            reply['requestId'] != identity['requestId'] ||
+            reply['scheduleId'] != identity['scheduleId']) {
+          throw StateError('Progresso não confirmado');
+        }
+        final data = reply['progress'];
+        if (data == null) {
+          progressNotifier!.updateProgress(
+            step: 'Iniciando',
+            message: reply['completed'] == true
+                ? 'Aguardando confirmação do resultado no serviço...'
+                : 'Aguardando atualização do progresso no serviço...',
+          );
+          return;
+        }
+        if (data is! Map) throw const FormatException('Progresso inválido');
+        final step = data['step'];
+        final message = data['message'];
+        final value = data['value'];
+        if (step is! String ||
+            message is! String ||
+            (value != null && value is! num)) {
+          throw const FormatException('Progresso inválido');
+        }
+        // Only the execute receipt can declare completion/failure. Cleanup
+        // and notifications may still be running after the last progress event.
+        if (step == 'Concluído' || step == 'Erro') return;
+        progressNotifier!.updateProgress(
+          step: step,
+          message: message,
+          progress: value is num && value.isFinite
+              ? value.toDouble().clamp(0.0, 1.0)
+              : null,
+        );
+      } on Object {
+        if (identical(_progressSession, session)) {
+          progressNotifier!.updateProgress(
+            step: 'Iniciando',
+            message:
+                'Aguardando comunicação com o serviço. '
+                'O backup pode continuar em execução...',
+          );
+        }
+      } finally {
+        inFlight = false;
+      }
+    });
+  }
+
   final SchedulerRequest request;
+  bool _supportsProgress = false;
   bool _pending = false;
   bool _suspended = false;
   String? activeScheduleId;
@@ -60,6 +166,9 @@ class ServiceSchedulerProxy implements ISchedulerService {
     }
     _pending = true;
     activeScheduleId = scheduleId;
+    final lifecycle = _lifecycle;
+    final interruption = Completer<Map<String, dynamic>>();
+    _progressInterruption = interruption;
     final hadPreviousAttempt = _attempts.containsKey(scheduleId);
     var executeRequested = false;
     try {
@@ -73,7 +182,8 @@ class ServiceSchedulerProxy implements ISchedulerService {
             ),
           );
         }
-        if (_suspended) {
+        _supportsProgress = status['progressVersion'] == 1;
+        if (_suspended || lifecycle != _lifecycle) {
           return const rd.Failure(
             BackupFailure(
               message: 'Interface encerrando. Nenhum backup foi solicitado.',
@@ -88,7 +198,11 @@ class ServiceSchedulerProxy implements ISchedulerService {
         _attempts[scheduleId] = payload;
       }
       executeRequested = true;
-      final response = await request('execute', payload);
+      if (_supportsProgress) _startProgress(payload);
+      final response = await Future.any([
+        request('execute', payload),
+        interruption.future,
+      ]);
       if (response['ok'] is! bool) {
         throw StateError('Resposta inválida do serviço');
       }
@@ -133,6 +247,8 @@ class ServiceSchedulerProxy implements ISchedulerService {
         ),
       );
     } finally {
+      _stopProgress();
+      _progressInterruption = null;
       _pending = false;
       activeScheduleId = null;
     }
@@ -167,7 +283,11 @@ class ServiceSchedulerProxy implements ISchedulerService {
   @override
   Future<void> start() async {}
   @override
-  void stop() {}
+  void stop() {
+    _lifecycle++;
+    _stopProgress();
+  }
+
   @override
   void suspendExecutions() => _suspended = true;
   @override

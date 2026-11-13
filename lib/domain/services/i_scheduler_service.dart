@@ -1,8 +1,14 @@
+import 'package:backup_database/domain/entities/backup_progress_snapshot.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:result_dart/result_dart.dart';
 
 abstract class IScopedBackupCancellation {
   Future<Result<void>> cancelRun(String scheduleId, String runId);
+}
+
+/// Read-only progress for one identified execution. Never starts work.
+abstract class IScopedBackupProgress {
+  BackupProgressSnapshot? progressForRun(String scheduleId, String runId);
 }
 
 abstract class ISchedulerService {

@@ -21,7 +21,7 @@ class GlobalBackupProgressListener extends StatefulWidget {
 class _GlobalBackupProgressListenerState
     extends State<GlobalBackupProgressListener> {
   bool _isDialogVisible = false;
-  late BackupProgressProvider _provider;
+  BackupProgressProvider? _provider;
 
   @override
   void initState() {
@@ -32,8 +32,9 @@ class _GlobalBackupProgressListenerState
   }
 
   void _setupListener() {
+    if (!mounted) return;
     _provider = BackupProgressProvider.of(context);
-    _provider.addListener(_onProgressChanged);
+    _provider!.addListener(_onProgressChanged);
     _checkAndShowDialog();
   }
 
@@ -42,13 +43,11 @@ class _GlobalBackupProgressListenerState
   }
 
   void _checkAndShowDialog() {
-    final shouldBeVisible = _provider.isRunning;
+    final shouldBeVisible = _provider?.isRunning ?? false;
 
     if (shouldBeVisible && !_isDialogVisible) {
       _isDialogVisible = true;
       _showDialog();
-    } else if (!shouldBeVisible && _isDialogVisible) {
-      _isDialogVisible = false;
     }
   }
 
@@ -60,10 +59,10 @@ class _GlobalBackupProgressListenerState
     unawaited(
       BackupProgressDialog.show(dialogContext).then((_) {
         if (mounted) {
-          _provider.reset();
           setState(() {
             _isDialogVisible = false;
           });
+          _checkAndShowDialog();
         }
       }),
     );
@@ -71,7 +70,7 @@ class _GlobalBackupProgressListenerState
 
   @override
   void dispose() {
-    _provider.removeListener(_onProgressChanged);
+    _provider?.removeListener(_onProgressChanged);
     super.dispose();
   }
 
