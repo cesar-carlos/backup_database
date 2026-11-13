@@ -7,6 +7,7 @@ import 'package:result_dart/result_dart.dart' as rd;
 
 class SchedulerExecutionLock {
   final Set<String> executingSchedules = {};
+  final Map<String, String> runningRunIds = {};
   final Set<String> cancelRequestedSchedules = {};
   final Map<String, String> runningHistoryIds = {};
   final Map<String, DateTime> lastProgressAtByScheduleId = {};
@@ -43,6 +44,7 @@ class SchedulerExecutionLock {
     }
 
     executingSchedules.add(schedule.id);
+    if (runId != null) runningRunIds[schedule.id] = runId;
     final startedAt = DateTime.now();
     startedAtByScheduleId[schedule.id] = startedAt;
     lastProgressAtByScheduleId[schedule.id] = startedAt;
@@ -54,6 +56,7 @@ class SchedulerExecutionLock {
       );
     } finally {
       executingSchedules.remove(schedule.id);
+      runningRunIds.remove(schedule.id);
       cancelRequestedSchedules.remove(schedule.id);
       runningHistoryIds.remove(schedule.id);
       startedAtByScheduleId.remove(schedule.id);

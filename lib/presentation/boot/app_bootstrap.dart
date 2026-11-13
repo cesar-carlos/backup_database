@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/config/environment_loader.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -17,9 +18,11 @@ import 'package:backup_database/domain/services/i_single_instance_service.dart';
 import 'package:backup_database/domain/services/i_socket_server_lifecycle.dart';
 import 'package:backup_database/domain/services/i_temporary_backup_cleanup_scheduler.dart';
 import 'package:backup_database/domain/services/i_windows_service_service.dart';
+import 'package:backup_database/infrastructure/external/process/process_service.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_ipc_client.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
 import 'package:backup_database/infrastructure/external/system/windows_message_box.dart';
+import 'package:backup_database/infrastructure/external/system/windows_service_service.dart';
 import 'package:backup_database/presentation/app_widget.dart';
 import 'package:backup_database/presentation/boot/app_exit_coordinator.dart';
 import 'package:backup_database/presentation/boot/app_initializer.dart';
@@ -582,9 +585,30 @@ class AppBootstrap {
     required LaunchBootstrapContext bootstrapContext,
     required BootstrapConfig bootstrapConfig,
   }) async {
+    if (Platform.isWindows &&
+        bootstrapContext.launchOrigin != LaunchOrigin.scheduledExecution) {
+      final status = await WindowsServiceService(ProcessService()).getStatus();
+      ExecutionOwnership.administrativeUi =
+          ExecutionOwnership.useAdministrativeUi(
+            scheduledLaunch: false,
+            serviceInstalled: status.getOrNull()?.isInstalled ?? false,
+            statusUnknown: status.isError(),
+          );
+      if (ExecutionOwnership.administrativeUi) {
+        if (ExecutionOwnership.suppressAutomaticUi(
+          automaticLaunch:
+              bootstrapContext.launchOrigin == LaunchOrigin.windowsStartup,
+        )) {
+          exit(0);
+        }
+        SingleInstanceService.selectAdministrativeUi();
+      }
+    }
     final singleInstanceChecker = SingleInstanceChecker(
       singleInstanceService: SingleInstanceService(),
-      ipcClient: SingleInstanceIpcClient(),
+      ipcClient: SingleInstanceIpcClient(
+        ipc: SingleInstanceService().ipcService,
+      ),
       messageBox: const WindowsMessageBox(),
       launchOrigin: bootstrapContext.launchOrigin,
       scheduledScheduleId: ScheduleArgs.extract(bootstrapContext.rawArgs),
@@ -715,7 +739,9 @@ class AppBootstrap {
             return singleInstanceService.startIpcServer(
               role: SingleInstanceConfig.ipcInstanceRoleUi,
               onShowWindow: onShowWindow,
-              onRunSchedule: onRunSchedule,
+              onRunSchedule: ExecutionOwnership.administrativeUi
+                  ? null
+                  : onRunSchedule,
             );
           },
       logInfo: LoggerService.info,

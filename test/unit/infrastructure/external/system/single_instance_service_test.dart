@@ -2,6 +2,7 @@ import 'dart:ffi';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/in_memory_ipc_transport.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 import 'package:backup_database/infrastructure/external/system/single_instance_service.dart';
@@ -44,6 +45,53 @@ SingleInstanceService createService({
 );
 
 void main() {
+  test(
+    'service and session UIs coexist but a second executor cannot acquire',
+    () async {
+      final names = <String>{};
+      final handles = <int, String>{};
+      var nextHandle = 100;
+      var lastError = 0;
+      SingleInstanceService lock(String name) => SingleInstanceService.forTest(
+        mutexName: name,
+        isDebugMode: false,
+        isWindowsPlatform: () => true,
+        createMutex: (_, _, pointer) {
+          final key = pointer.toDartString();
+          lastError = names.add(key) ? 0 : ERROR_ALREADY_EXISTS;
+          final handle = nextHandle++;
+          if (lastError == 0) handles[handle] = key;
+          return handle;
+        },
+        openMutex: (_, _, _) => 0,
+        setLastError: (value) => lastError = value,
+        getLastError: () => lastError,
+        closeHandle: (handle) {
+          names.remove(handles.remove(handle));
+          return 1;
+        },
+        ipcService: IpcService(transport: InMemoryIpcTransport()),
+      );
+      final executor = lock(SingleInstanceConfig.instanceMutexName);
+      final ui1 = lock(SingleInstanceConfig.administrativeMutex(1));
+      final ui2 = lock(SingleInstanceConfig.administrativeMutex(2));
+      final duplicate = lock(SingleInstanceConfig.instanceMutexName);
+      final duplicateUi = lock(SingleInstanceConfig.administrativeMutex(1));
+      expect(await executor.checkAndLock(isServiceMode: true), isTrue);
+      expect(await ui1.checkAndLock(), isTrue);
+      expect(await ui2.checkAndLock(), isTrue);
+      expect(await duplicate.checkAndLock(), isFalse);
+      expect(await duplicateUi.checkAndLock(), isFalse);
+      await ui1.releaseLock();
+      expect(names, contains(SingleInstanceConfig.instanceMutexName));
+      final reopened = lock(SingleInstanceConfig.administrativeMutex(1));
+      expect(await reopened.checkAndLock(), isTrue);
+      await reopened.releaseLock();
+      await ui2.releaseLock();
+      await executor.releaseLock();
+      expect(names, isEmpty);
+    },
+  );
   test(
     'IPC stop failure still closes mutex and permits reacquisition',
     () async {

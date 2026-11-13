@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/application/services/backup_orchestrator_service.dart';
+import 'package:backup_database/application/services/service_scheduler_proxy.dart';
 import 'package:backup_database/core/di/service_locator.dart';
 import 'package:backup_database/core/l10n/upload_progress_labels.dart';
 import 'package:backup_database/core/theme/theme.dart';
+import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -27,6 +29,12 @@ class BackupProgressDialog extends StatelessWidget {
       builder: (context, provider, child) {
         final colors = context.colors;
         final progress = provider.currentProgress;
+        final scheduler = getIt.isRegistered<ISchedulerService>()
+            ? getIt<ISchedulerService>()
+            : null;
+        final remoteId = scheduler is ServiceSchedulerProxy
+            ? scheduler.activeScheduleId
+            : null;
 
         if (progress == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -167,14 +175,16 @@ class BackupProgressDialog extends StatelessWidget {
                   progress.step != BackupStep.error)
                 Button(
                   onPressed:
-                      (progress.cancelRequested || progress.historyId == null)
+                      (progress.cancelRequested ||
+                          (progress.historyId == null && remoteId == null))
                       ? null
                       : () {
                           unawaited(
                             _confirmAndCancel(
                               context: context,
                               provider: provider,
-                              historyId: progress.historyId!,
+                              historyId: progress.historyId,
+                              remoteScheduleId: remoteId,
                               texts: texts,
                             ),
                           );
@@ -216,8 +226,9 @@ class BackupProgressDialog extends StatelessWidget {
   static Future<void> _confirmAndCancel({
     required BuildContext context,
     required BackupProgressProvider provider,
-    required String historyId,
+    required String? historyId,
     required _BackupProgressTexts texts,
+    String? remoteScheduleId,
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -238,13 +249,37 @@ class BackupProgressDialog extends StatelessWidget {
     );
     if (confirmed != true) return;
 
-    provider.markCancelRequested();
     try {
       // Resolução tardia do orchestrator para evitar dependência circular
       // entre o widget e a camada de DI no momento do build inicial.
-      getIt<BackupOrchestratorService>().cancelByHistoryId(historyId);
+      if (remoteScheduleId != null) {
+        final result = await getIt<ISchedulerService>().cancelExecution(
+          remoteScheduleId,
+        );
+        if (result.isError()) throw result.exceptionOrNull()!;
+      } else if (historyId != null) {
+        getIt<BackupOrchestratorService>().cancelByHistoryId(historyId);
+      }
+      provider.markCancelRequested();
     } on Object catch (e) {
       debugPrint('Falha ao solicitar cancelamento de backup: $e');
+      if (context.mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => ContentDialog(
+            title: const Text('Cancelamento não confirmado'),
+            content: Text(
+              'Não foi possível confirmar o cancelamento no executor. $e',
+            ),
+            actions: [
+              Button(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 }

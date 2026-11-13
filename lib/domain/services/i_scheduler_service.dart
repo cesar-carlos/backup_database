@@ -1,6 +1,10 @@
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:result_dart/result_dart.dart';
 
+abstract class IScopedBackupCancellation {
+  Future<Result<void>> cancelRun(String scheduleId, String runId);
+}
+
 abstract class ISchedulerService {
   /// True while [executeNow] is actively running a backup (lock held).
   bool get isExecutingBackup;

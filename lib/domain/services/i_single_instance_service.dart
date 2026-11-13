@@ -13,8 +13,8 @@ enum SingleInstanceLockDenialReason {
   creationFailed,
 }
 
-/// Ensures only one process of the application runs at a time
-/// using a machine-global Windows mutex and IPC communication.
+/// Enforces the selected process scope: one machine-global executor, or one
+/// administrative window per Windows session, with separate IPC endpoints.
 abstract class ISingleInstanceService {
   /// Checks if this is the first instance and acquires the lock.
   ///
@@ -22,8 +22,8 @@ abstract class ISingleInstanceService {
   /// Returns `false` when another instance holds the mutex or when
   /// CreateMutex fails. Read [lockDenialReason] to tell those apart.
   ///
-  /// [isServiceMode] only affects fallback/logging policy; UI and service
-  /// compete for the same machine-global mutex.
+  /// [isServiceMode] affects fallback/logging policy. A standalone UI and the
+  /// service compete for the executor lock; administrative UI uses its own lock.
   ///
   /// [fallbackMode] overrides env/provider resolution when set.
   Future<bool> checkAndLock({

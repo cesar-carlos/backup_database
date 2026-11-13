@@ -34,13 +34,25 @@ class NotificationAuditWriter {
         ? 'failure'
         : 'skipped';
     final message =
-        'Notificação $eventType para ${target.recipientEmail}: $status';
+        'Envio da notificação ($eventType) para ${target.recipientEmail}: '
+        '${result.isSent
+            ? "enviado"
+            : result.isFailed
+            ? "falhou"
+            : "ignorado"}';
     final detailsBuffer = StringBuffer()
       ..write('configId=$configId;')
       ..write('targetId=${target.id};')
       ..write('recipient=${target.recipientEmail};')
       ..write('event=$eventType;')
       ..write('status=$status');
+    if (eventType == 'backup_error') {
+      detailsBuffer.write(
+        '; Este registro descreve a entrega do aviso, não a causa do backup. '
+        'Consulte os logs de Execução com nível Erro'
+        '${historyId == null ? "." : " da execução $historyId."}',
+      );
+    }
     if (result.reason != null && result.reason!.trim().isNotEmpty) {
       detailsBuffer.write(';reason=${result.reason!.trim()}');
     }

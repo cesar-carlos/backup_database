@@ -11,6 +11,7 @@ import 'package:backup_database/core/constants/log_step_constants.dart';
 import 'package:backup_database/core/constants/observability_metrics.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/core/utils/directory_permission_check.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
@@ -37,7 +38,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:result_dart/result_dart.dart' as rd;
 import 'package:uuid/uuid.dart';
 
-class SchedulerService implements ISchedulerService {
+class SchedulerService implements ISchedulerService, IScopedBackupCancellation {
   SchedulerService({
     required this._scheduleRepository,
     required this._destinationRepository,
@@ -609,6 +610,7 @@ class SchedulerService implements ISchedulerService {
       }
 
       final uploadErrors = <String>[];
+      final uploadDetails = <String>[];
       var hasCriticalUploadError = false;
 
       final canceledBeforeUpload = await _failIfCancellationRequested(
@@ -693,6 +695,10 @@ class SchedulerService implements ISchedulerService {
               'Falha ao enviar para ${destination.name}: '
               '${_failureMessage(failure)}';
           uploadErrors.add(errorMessage);
+          uploadDetails.add(
+            'Destino: ${destination.name} (${destination.id})\n'
+            '${failureDiagnostics(failure)}',
+          );
           LoggerService.error(errorMessage, failure);
           hasCriticalUploadError = true;
         });
@@ -715,6 +721,7 @@ class SchedulerService implements ISchedulerService {
             .updateHistoryAndLogIfRunning(
               history: failedHistory,
               logStep: LogStepConstants.uploadFailed,
+              logDetails: uploadDetails.join('\n\n'),
               logLevel: LogLevel.error,
               logMessage:
                   'Falha ao enviar backup para destinos:\n$errorMessage',
@@ -1076,6 +1083,21 @@ class SchedulerService implements ISchedulerService {
     }
 
     return const rd.Success(rd.unit);
+  }
+
+  @override
+  Future<rd.Result<void>> cancelRun(String scheduleId, String runId) {
+    if (_lock.runningRunIds[scheduleId] != runId) {
+      return Future.value(
+        const rd.Failure(
+          ValidationFailure(
+            message: 'A execução indicada não está mais ativa. Nenhum outro backup foi cancelado.',
+          ),
+        ),
+      );
+    }
+    // No await between identity validation and marking cancellation.
+    return cancelExecution(scheduleId);
   }
 
   @override

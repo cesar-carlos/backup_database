@@ -190,7 +190,14 @@ class ServiceModeInitializer {
         action: () async {
           final started = await singleInstanceService!.startIpcServer(
             role: SingleInstanceConfig.ipcInstanceRoleService,
-            onRunSchedule: ScheduledBackupExecutor.execute,
+            onRunSchedule: (id) async {
+              // IPC listens before recovery is finished. Do not let an early
+              // Task Scheduler command race stale-history reconciliation.
+              if (SingleInstanceService().ipcService.scheduler == null) {
+                return ScheduledBackupExitCode.genericFailure;
+              }
+              return ScheduledBackupExecutor.execute(id);
+            },
           );
           if (!started) {
             throw StateError(
@@ -252,6 +259,7 @@ class ServiceModeInitializer {
             startSocketServer: socketLifecycle.start,
             logInfo: LoggerService.info,
           );
+          SingleInstanceService().ipcService.scheduler = schedulerService;
         },
       );
 
@@ -346,15 +354,8 @@ class ServiceModeInitializer {
       );
     }
 
-    try {
-      await singleInstanceService?.releaseLock();
-    } on Object catch (failure, stack) {
-      LoggerService.warning(
-        'Erro ao liberar lock antes de encerrar modo servico',
-        failure,
-        stack,
-      );
-    }
+    // The OS closes the executor mutex at process exit. Releasing it here
+    // would admit a replacement while timed-out work can still be running.
 
     _tryCompleteError(completer, error);
 
@@ -372,16 +373,8 @@ class ServiceModeInitializer {
     required Future<void> Function(int code) flushAndExit,
   }) async {
     await appendLog('initialize: shutdown signal received');
-    try {
-      await singleInstanceService?.releaseLock();
-    } on Object catch (failure, stack) {
-      LoggerService.warning(
-        'Erro ao liberar lock no shutdown do modo servico',
-        failure,
-        stack,
-      );
-    }
-    await appendLog('initialize: lock released, exiting');
+    // Keep the executor lock through log flush and process termination.
+    await appendLog('initialize: executor lock retained until process exit');
     await flushAndExit(ServiceModeExitCode.gracefulShutdown);
   }
 

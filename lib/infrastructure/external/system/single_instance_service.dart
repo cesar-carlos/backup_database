@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_single_instance_service.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/windows_named_pipe_transport.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 import 'package:ffi/ffi.dart';
@@ -37,7 +38,28 @@ typedef SecurityAttributesProvider = MutexSecurityAttributes? Function();
 /// and IPC to communicate between instances.
 class SingleInstanceService implements ISingleInstanceService {
   factory SingleInstanceService() => _instance;
+  static void selectAdministrativeUi() {
+    final session = calloc<DWORD>();
+    try {
+      if (!ProcessIdToSessionId(GetCurrentProcessId(), session).value) {
+        throw StateError('Não foi possível identificar a sessão do Windows');
+      }
+      final pipe = SingleInstanceConfig.administrativePipe(session.value);
+      _instance = SingleInstanceService._(
+        mutexName: SingleInstanceConfig.administrativeMutex(session.value),
+        ipcService: IpcService(
+          transport: WindowsNamedPipeTransport(pipeName: pipe),
+        ),
+      );
+    } finally {
+      calloc.free(session);
+    }
+  }
+
+  IpcService get ipcService => _ipcService;
+
   SingleInstanceService._({
+    this.mutexName = SingleInstanceConfig.instanceMutexName,
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
     int Function(int, int, Pointer<Utf16>)? openMutex,
     void Function(int)? setLastError,
@@ -69,9 +91,11 @@ class SingleInstanceService implements ISingleInstanceService {
        _ipcService = ipcService ?? IpcService() {
     _ipcServerProbe = ipcServerProbe ?? _ipcService.checkServerRunning;
   }
-  static final SingleInstanceService _instance = SingleInstanceService._();
+  static SingleInstanceService _instance = SingleInstanceService._();
+  final String mutexName;
 
   SingleInstanceService.forTest({
+    String mutexName = SingleInstanceConfig.instanceMutexName,
     bool isDebugMode = true,
     int Function(Pointer<NativeType>, int, Pointer<Utf16>)? createMutex,
     int Function(int, int, Pointer<Utf16>)? openMutex,
@@ -84,6 +108,7 @@ class SingleInstanceService implements ISingleInstanceService {
     IpcService? ipcService,
     Future<bool> Function()? ipcServerProbe,
   }) : this._(
+         mutexName: mutexName,
          isDebugMode: isDebugMode,
          createMutex: createMutex,
          openMutex: openMutex,
@@ -217,7 +242,6 @@ class SingleInstanceService implements ISingleInstanceService {
   }
 
   _LockResult _tryCreateNamedMutex() {
-    const mutexName = SingleInstanceConfig.instanceMutexName;
     final mutexNamePtr = mutexName.toNativeUtf16();
     // F1: passa SECURITY_ATTRIBUTES com DACL Everyone (MUTEX_ALL_ACCESS).
     // Sem isso, o serviço como LocalSystem cria o mutex com DACL default
@@ -332,7 +356,6 @@ class SingleInstanceService implements ISingleInstanceService {
       return false;
     }
 
-    const mutexName = SingleInstanceConfig.instanceMutexName;
     final mutexNamePtr = mutexName.toNativeUtf16();
     try {
       _setLastErrorFn(0);

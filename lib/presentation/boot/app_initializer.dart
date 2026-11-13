@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:backup_database/application/providers/providers.dart';
 import 'package:backup_database/application/services/auto_update_service.dart';
 import 'package:backup_database/application/services/initial_setup_service.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/core.dart';
 import 'package:backup_database/core/di/service_locator.dart'
@@ -29,6 +30,7 @@ class AppInitializer {
   }
 
   static Future<void> _initializeDefaultCredential() async {
+    if (ExecutionOwnership.administrativeUi) return;
     // A credencial default existe para o **socket server** aceitar conexões
     // de clientes. Em modo cliente não temos socket server (gate em
     // `AppModePolicy.shouldStartSocketServer`) — criar a credencial só
@@ -223,6 +225,16 @@ Future<AppUpdateBlockOutcome?> checkInstallReadiness({
   AppUpdateSource source = AppUpdateSource.manual,
 }) async {
   try {
+    // The service owns active jobs and performs updates itself. A UI snapshot
+    // of "idle" cannot reserve the executor against a new scheduled backup.
+    if (ExecutionOwnership.administrativeUi) {
+      return const AppUpdateBlockOutcome(
+        reason: AppUpdateBlockReason.readinessCheckUnavailable,
+        message:
+            'A atualização deve ser coordenada pelo serviço do Windows. '
+            'A interface administrativa não interrompe o executor para atualizar.',
+      );
+    }
     if (getIt.isRegistered<BackupProgressProvider>()) {
       final backupProgress = getIt<BackupProgressProvider>();
       if (backupProgress.isRunning) {

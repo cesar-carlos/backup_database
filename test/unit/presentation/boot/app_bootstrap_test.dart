@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/core/config/single_instance_config.dart';
 import 'package:backup_database/core/exit_codes.dart';
@@ -21,6 +22,33 @@ void _ignoreLogWithError(
 
 void main() {
   group('AppBootstrap', () {
+    test(
+      'administrative UI opens without scheduler, queue, socket or cleanup',
+      () async {
+        ExecutionOwnership.administrativeUi = true;
+        addTearDown(() => ExecutionOwnership.administrativeUi = false);
+        final events = <String>[];
+        await AppBootstrap(
+          dependencies: _buildDependencies(
+            context: _uiContext(),
+            events: events,
+          ),
+        ).start();
+        expect(events, contains('run_app'));
+        expect(events, contains('ui_services'));
+        expect(events, contains('ipc'));
+        for (final producer in [
+          'scheduler_start',
+          'queue_init',
+          'cleanup_locks',
+          'socket_start',
+          'staging_start',
+          'temp_cleanup_start',
+        ]) {
+          expect(events, isNot(contains(producer)), reason: producer);
+        }
+      },
+    );
     setUpAll(() {
       dotenv.loadFromString(envString: 'DUMMY=value');
     });

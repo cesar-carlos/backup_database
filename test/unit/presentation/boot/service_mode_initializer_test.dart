@@ -40,31 +40,46 @@ void main() {
   });
 
   group('ServiceModeInitializer.completeGracefulShutdown', () {
-    test('releases the lock and then exits', () async {
+    test('failed exit still does not release the executor lock', () async {
       final service = _FakeSingleInstanceService();
-      final logs = <String>[];
-      final exits = <int>[];
-
-      await ServiceModeInitializer.completeGracefulShutdown(
-        singleInstanceService: service,
-        appendLog: (String message) async {
-          logs.add(message);
-        },
-        flushAndExit: (code) async {
-          exits.add(code);
-        },
+      await expectLater(
+        ServiceModeInitializer.completeGracefulShutdown(
+          singleInstanceService: service,
+          appendLog: (_) async {},
+          flushAndExit: (_) async => throw StateError('exit failed'),
+        ),
+        throwsStateError,
       );
-
-      expect(service.releaseCount, 1);
-      expect(exits, [ServiceModeExitCode.gracefulShutdown]);
-      expect(logs, [
-        'initialize: shutdown signal received',
-        'initialize: lock released, exiting',
-      ]);
-      expect(service.events, ['release']);
+      expect(service.releaseCount, 0);
     });
+    test(
+      'retains the executor lock until the OS terminates the process',
+      () async {
+        final service = _FakeSingleInstanceService();
+        final logs = <String>[];
+        final exits = <int>[];
 
-    test('still exits when releasing the lock throws', () async {
+        await ServiceModeInitializer.completeGracefulShutdown(
+          singleInstanceService: service,
+          appendLog: (String message) async {
+            logs.add(message);
+          },
+          flushAndExit: (code) async {
+            exits.add(code);
+          },
+        );
+
+        expect(service.releaseCount, 0);
+        expect(exits, [ServiceModeExitCode.gracefulShutdown]);
+        expect(logs, [
+          'initialize: shutdown signal received',
+          'initialize: executor lock retained until process exit',
+        ]);
+        expect(service.events, isEmpty);
+      },
+    );
+
+    test('does not invoke explicit lock release while exiting', () async {
       final service = _FakeSingleInstanceService(
         releaseError: StateError('mutex busy'),
       );
@@ -78,7 +93,7 @@ void main() {
         },
       );
 
-      expect(service.releaseCount, 1);
+      expect(service.releaseCount, 0);
       expect(exits, [ServiceModeExitCode.gracefulShutdown]);
     });
 

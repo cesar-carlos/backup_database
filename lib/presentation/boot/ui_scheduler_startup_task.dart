@@ -1,4 +1,5 @@
 import 'package:backup_database/core/config/app_mode_policy.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/config/process_role.dart';
 import 'package:backup_database/presentation/boot/bootstrap_config.dart';
 import 'package:backup_database/presentation/boot/bootstrap_error_policy.dart';
@@ -23,6 +24,7 @@ class UiSchedulerStartupTask {
   final BootstrapLogWithError logError;
 
   Future<void> start(BootstrapConfig config) async {
+    if (ExecutionOwnership.administrativeUi) return;
     try {
       if (!AppModePolicy.shouldStartLocalSchedulerInUi) {
         logInfo(

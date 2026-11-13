@@ -6,6 +6,7 @@ import 'package:backup_database/application/services/services.dart';
 import 'package:backup_database/core/bootstrap/machine_scope_r1_legacy_paths_hint.dart';
 import 'package:backup_database/core/config/app_mode.dart';
 import 'package:backup_database/core/config/environment_loader.dart';
+import 'package:backup_database/core/config/execution_ownership.dart';
 import 'package:backup_database/core/constants/license_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
 import 'package:backup_database/core/errors/failure.dart';
@@ -42,11 +43,23 @@ Future<Directory> getAppDataDirectory() => resolveMachineRootDirectory();
 /// encryption, database, HTTP client, and system utilities.
 Future<void> setupCoreModule(GetIt getIt) async {
   await ensureMachineStorageDirectoriesExist();
-  final migrationSummary = await ensureLegacyAppDataMigratedToMachineScope();
+  final migrationSummary = ExecutionOwnership.administrativeUi
+      ? MachineLegacyMigrationSummary(
+          copiedAnySqliteBundle: false,
+          legacyMarkerExists: true,
+          machineRootPath: (await resolveMachineRootDirectory()).path,
+          dataDirectoryPath: (await resolveMachineDataDirectory()).path,
+          legacyUserAppDataPath: null,
+        )
+      : await ensureLegacyAppDataMigratedToMachineScope();
 
-  await DatabaseConfigTablesDropV223.run();
+  if (!ExecutionOwnership.administrativeUi) {
+    await DatabaseConfigTablesDropV223.run();
+  }
 
-  final exportData224 = await runFullDatabaseMigration224();
+  final exportData224 = ExecutionOwnership.administrativeUi
+      ? null
+      : await runFullDatabaseMigration224();
 
   final appDataDir = await getAppDataDirectory();
   final logsDirectory = p.join(

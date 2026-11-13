@@ -26,6 +26,7 @@ class LogProvider extends ChangeNotifier
   int _currentPage = 0;
   final int _pageSize = 50;
   bool _hasMore = true;
+  bool _reloadRequested = false;
 
   List<BackupLog> get logs => _logs;
   LogLevel? get filterLevel => _filterLevel;
@@ -39,7 +40,10 @@ class LogProvider extends ChangeNotifier
 
   Future<void> loadLogs({bool append = false}) async {
     // Evita recarregamento concorrente da mesma página.
-    if (isLoading) return;
+    if (isLoading) {
+      if (!append) _reloadRequested = true;
+      return;
+    }
 
     await runAsync<void>(
       genericErrorMessage: 'Erro ao carregar logs',
@@ -68,6 +72,10 @@ class LogProvider extends ChangeNotifier
         );
       },
     );
+    if (_reloadRequested && !isDisposed) {
+      _reloadRequested = false;
+      await loadLogs();
+    }
   }
 
   Future<void> loadMore() async {

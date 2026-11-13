@@ -386,7 +386,7 @@ class _LogListItem extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
+                      child: SelectableText(
                         log.message,
                         style: FluentTheme.of(context).typography.body,
                       ),
@@ -400,11 +400,13 @@ class _LogListItem extends StatelessWidget {
                 ),
                 if (log.details != null) ...[
                   const SizedBox(height: 4),
-                  Text(
+                  SelectableText(
                     log.details!,
                     style: FluentTheme.of(context).typography.caption,
                   ),
                 ],
+                if (log.backupHistoryId != null)
+                  SelectableText('Execução: ${log.backupHistoryId}'),
                 const SizedBox(height: 4),
                 Row(
                   children: [
