@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
 import 'package:result_dart/result_dart.dart' as rd;
@@ -59,6 +60,8 @@ class ServiceSchedulerProxy implements ISchedulerService {
     }
     _pending = true;
     activeScheduleId = scheduleId;
+    final hadPreviousAttempt = _attempts.containsKey(scheduleId);
+    var executeRequested = false;
     try {
       var payload = _attempts[scheduleId];
       if (payload == null) {
@@ -84,6 +87,7 @@ class ServiceSchedulerProxy implements ISchedulerService {
         });
         _attempts[scheduleId] = payload;
       }
+      executeRequested = true;
       final response = await request('execute', payload);
       if (response['ok'] is! bool) {
         throw StateError('Resposta inválida do serviço');
@@ -99,12 +103,33 @@ class ServiceSchedulerProxy implements ISchedulerService {
         ),
       );
     } on Object catch (e) {
+      if (!hadPreviousAttempt &&
+          (!executeRequested || e is ServiceConnectionException)) {
+        // Neither a failed handshake nor an unopened channel can start work.
+        // Do not retain an old epoch for an operation that was never sent.
+        _attempts.remove(scheduleId);
+        return rd.Failure(
+          BackupFailure(
+            message:
+                'Não foi possível conectar ao serviço de backup. '
+                'Nenhum backup foi solicitado por esta tentativa. '
+                'Abra Configurações > Serviço Windows e verifique o status. '
+                'Se estiver parado, use Iniciar; se estiver iniciando, aguarde '
+                'e tente novamente. Se estiver em execução, consulte os logs '
+                'do serviço para identificar a falha de comunicação.',
+            code: 'service_unavailable_before_execution',
+            originalError: e,
+          ),
+        );
+      }
       // Keep the same identity after a lost/invalid reply. No automatic retry.
       return rd.Failure(
         BackupFailure(
           message:
               'Não foi possível confirmar a operação; ela pode continuar no serviço. '
               'Uma nova tentativa nesta interface consultará a mesma execução. $e',
+          code: 'service_execution_unconfirmed',
+          originalError: e,
         ),
       );
     } finally {

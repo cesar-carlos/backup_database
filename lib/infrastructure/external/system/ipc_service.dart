@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:backup_database/core/config/single_instance_config.dart';
+import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/core/utils/windows_user_service.dart';
@@ -159,7 +160,7 @@ class IpcService implements IIpcService {
       timeout: SingleInstanceConfig.ipcConnectTimeout,
     );
     if (channel == null) {
-      throw StateError('Serviço indisponível. Verifique se está iniciado.');
+      throw const ServiceConnectionException();
     }
     try {
       await channel.writeLine('BD_ADMIN_V1|$command|$scheduleId');
