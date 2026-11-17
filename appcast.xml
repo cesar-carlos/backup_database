@@ -5,6 +5,22 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.12</title>
+      <pubDate>Tue, 17 Nov 2026 13:09:44 +0000</pubDate>
+      <description>## Correções e melhorias
+
+- FTP: preservação segura de parciais, retomada pelo tamanho remoto após reconectar e bloqueio de publicação sem validação de integridade.
+- FTP: falhas de SIZE, HASH e read-back não são tratadas como arquivo ausente ou sucesso; conexões interrompidas e respostas atrasadas não são reutilizadas.
+- Verificação de conteúdo para arquivos finais existentes e interpretação mais rigorosa do SHA-256 remoto.
+- Flutter 3.50.0, Dart 3.14.0 e atualização das dependências compatíveis, preservando o fork FTP.
+- Migração de janela e bandeja para as APIs nativas atuais, com preservação das políticas de abertura, restauração e encerramento.
+- Atualização dos seletores de pasta, temas, Widgetbook e testes visuais.
+- Correções de ciclo de vida e estado dos providers e documentação revisada.
+
+Utilize o instalador ou a atualização automática. O arquivo .sha256 permite verificar a integridade do instalador.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.12/BackupDatabase-Setup-3.6.12.exe" sparkle:version="3.6.12" sparkle:os="windows" length="44452103" type="application/octet-stream" sha256="905b1fca9f6e189c9967136380eaf77bd757f1b4ea51f304505157b2219fbd02" />
+    </item>
+    <item>
       <title>Version 3.6.11</title>
       <pubDate>Fri, 13 Nov 2026 22:21:12 +0000</pubDate>
       <description>## Melhorias e correções
