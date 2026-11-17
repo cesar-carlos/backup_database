@@ -270,6 +270,11 @@ Referencias:
 ## Suporte
 
 - [Issues](https://github.com/cesar-carlos/backup_database/issues)
+- [Protecao de credenciais e compartilhamento de logs](docs/security/logging-and-secrets.md)
+- [Procedimento de troca da chave de licenciamento](docs/security/license-key-rotation.md)
+
+Nao anexe senhas, tokens, chaves privadas ou arquivos de configuracao completos
+em issues. Os filtros de logs nao substituem a revisao do material compartilhado.
 
 ## Licenca
 

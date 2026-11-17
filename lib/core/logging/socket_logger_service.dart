@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
+
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/protocol/message.dart';
 import 'package:backup_database/infrastructure/protocol/message_types.dart';
@@ -81,17 +83,42 @@ class SocketLoggerService {
     MessageType type,
     Map<String, dynamic> payload,
   ) {
-    final sensitiveKeysByType = _sensitiveKeysByMessageType[type];
-    if (sensitiveKeysByType == null || sensitiveKeysByType.isEmpty) {
-      return payload;
+    final sensitiveKeys = {
+      ...?_sensitiveKeysByMessageType[type],
+      'password',
+      'passwordHash',
+      'passwd',
+      'pwd',
+      'senha',
+      'cryptKey',
+      'token',
+      'accessToken',
+      'refreshToken',
+      'sessionToken',
+      'clientSecret',
+      'privateKey',
+      'apiKey',
+      'authorization',
+      'nonce',
+    }.map((key) => key.replaceAll(RegExp('[_-]'), '').toLowerCase()).toSet();
+    Object? redact(Object? value) {
+      if (value is Map) {
+        return value.map(
+          (key, item) => MapEntry(
+            key,
+            sensitiveKeys.contains(
+                  key.toString().replaceAll(RegExp('[_-]'), '').toLowerCase(),
+                )
+                ? '***'
+                : redact(item),
+          ),
+        );
+      }
+      if (value is List) return value.map(redact).toList();
+      return value is String ? redactFailureDetails(value) : value;
     }
-    final redacted = <String, dynamic>{};
-    for (final entry in payload.entries) {
-      redacted[entry.key] = sensitiveKeysByType.contains(entry.key)
-          ? '***'
-          : entry.value;
-    }
-    return redacted;
+
+    return Map<String, dynamic>.from(redact(payload)! as Map);
   }
 
   /// Map de tipos de mensagem → set de chaves do payload cuja
@@ -108,9 +135,14 @@ class SocketLoggerService {
   };
 
   Future<void> _writeLine(String line) async {
+    final safeLine = redactFailureDetails(line);
     try {
       final file = await _getCurrentLogFile();
-      await file.writeAsString('$line\n', mode: FileMode.append, flush: true);
+      await file.writeAsString(
+        '$safeLine\n',
+        mode: FileMode.append,
+        flush: true,
+      );
 
       final stat = await file.stat();
       if (stat.size > maxFileSize) {

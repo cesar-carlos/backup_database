@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show pid;
 
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
+
 import 'package:backup_database/core/logging/file_logger_service.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:logger/logger.dart';
@@ -93,10 +95,10 @@ class LoggerService {
     } on Object catch (e, stackTrace) {
       initError = e;
       _fileLogger = null;
-      _instance.w(
+      warning(
         'Falha ao inicializar file logger em: $logsDirectory',
-        error: e,
-        stackTrace: stackTrace,
+        e,
+        stackTrace,
       );
     }
 
@@ -114,10 +116,10 @@ class LoggerService {
         sentinelWrittenAt = DateTime.now();
       } on Object catch (e, stackTrace) {
         sentinelError = e;
-        _instance.w(
+        warning(
           'LoggerService sentinel write falhou em: $logsDirectory',
-          error: e,
-          stackTrace: stackTrace,
+          e,
+          stackTrace,
         );
       }
     }
@@ -294,6 +296,24 @@ class LoggerService {
   }) {
     if (isSilenced) return;
 
+    _writeLog(
+      severity,
+      redactFailureDetails(message),
+      callContextPrefix: redactFailureDetails(callContextPrefix),
+      error: error == null ? null : redactFailureDetails(error.toString()),
+      stackTrace: stackTrace == null
+          ? null
+          : StackTrace.fromString(redactFailureDetails(stackTrace.toString())),
+    );
+  }
+
+  static void _writeLog(
+    _LogSeverity severity,
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+    String callContextPrefix = '',
+  }) {
     final consoleMessage = callContextPrefix.isEmpty
         ? message
         : callContextPrefix + message;

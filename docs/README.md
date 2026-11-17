@@ -20,6 +20,8 @@ contrato do produto. Contrato vivo de servidor/protocolo:
 | Operar bandeja, retencao e transferencias | [Operacao do servidor](operations/server_and_transfers.md) |
 | Configurar o auto update | [Auto update](install/auto_update_setup.md) |
 | Gerar e publicar instalador | [Release](install/release_guide.md) |
+| Trocar a chave de licenciamento comprometida | [Rotacao de chave](security/license-key-rotation.md) |
+| Entender ocultacao de credenciais e compartilhar logs | [Seguranca dos logs](security/logging-and-secrets.md) |
 
 ## Mapa das pastas
 
@@ -30,6 +32,7 @@ contrato do produto. Contrato vivo de servidor/protocolo:
 | `adr/` | Decisoes arquiteturais aceitas (nao editar as accepted) |
 | `email/` | Fluxo de notificacoes SMTP e OAuth |
 | `ftp-server/` | Hardening e operacao de servidor FTP destino |
+| `security/` | Protecao de credenciais, limites dos logs e resposta a exposicoes |
 | `analise_implementacao_*.md` | Comportamento real das CLIs por banco |
 | `notes/` | Runbooks manuais ainda operacionais |
 | `notes/archive/` | Planos, auditorias e snapshots datados |

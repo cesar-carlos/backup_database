@@ -7,6 +7,8 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | Script | Tipo | Finalidade |
 |---|---|---|
 | `check_database.dart` | Dart | Diagnostico do banco local (somente leitura) |
+| `generate_license_keypair.dart` | Dart | Prepara par Ed25519 em pasta protegida fora do repositorio, sem imprimir a chave privada |
+| `hash_admin_password.dart` | Dart | Gera hash administrativo; recebe a senha como argumento, exigindo cuidado com historico e lista de processos |
 | `recreate_database.dart` | Dart | Recria banco local do zero (destrutivo) |
 | `migrate_database.dart` | Dart | Migra banco preservando dados com backup/export |
 | `parse_ftp_metrics.dart` | Dart | Extrai metricas de FTP a partir de logs |
@@ -18,6 +20,14 @@ Este diretorio reune scripts de suporte para manutencao, metricas e release.
 | `windows_icon_utils.py` | Python | Modulo compartilhado: hashing, sidecar e checagem do PNG embutido no `.exe` |
 | `install_git_hooks.py` | Python | Instala hooks opt-in de `scripts/hooks/` em `.git/hooks/` |
 | `hooks/pre-commit` | Bash | Hook opt-in: roda `verify_windows_icons.py` quando assets de icone sao staged |
+
+## Chaves de licenciamento
+
+Para geracao de chaves e retirada de confianca na chave comprometida, siga
+[o procedimento de rotacao](../docs/security/license-key-rotation.md).
+O gerador exige dois argumentos: identificador novo e pasta externa existente.
+Ele cria `signer.env` privado e `public.env` publico em uma subpasta protegida;
+nao altera a configuracao instalada nem publica a chave nova.
 
 ## Icones Windows
 

@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
+
 import 'package:path/path.dart' as p;
 
 /// Service para salvar logs em arquivos rotacionados
@@ -43,7 +45,7 @@ class FileLoggerService {
   Future<void> log(String message, {LogLevel level = LogLevel.info}) async {
     final timestamp = DateTime.now().toIso8601String();
     final levelStr = level.name.toUpperCase();
-    final logLine = '[$timestamp] [$levelStr] $message';
+    final logLine = '[$timestamp] [$levelStr] ${redactFailureDetails(message)}';
 
     await _writeToLogFile(logLine);
   }

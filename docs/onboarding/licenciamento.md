@@ -79,27 +79,29 @@ payload (sem tentar todas as chaves).
 
 ### Em qualquer ambiente
 
-- `BACKUP_DATABASE_LICENSE_PUBLIC_KEY` (base64, 32 bytes Ed25519) **no
-  `.env` do repo** (é OK ser asset — é a chave de verificação).
-  Mapeada implicitamente para `keyId = ed25519-1`.
-
-- Opcional, para rotação:
-  `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS` (JSON
-  `{"ed25519-1": "...", "ed25519-2": "..."}`). Mescla com a chave
-  legacy; precedência para o JSON em colisão de `keyId`.
+- Configure ao menos uma chave pública de verificação válida (32 bytes
+  Ed25519 em base64). Chaves públicas podem estar no asset do aplicativo.
+- Prefira `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS`, um mapa JSON de `keyId`
+  para chave pública. Após a retirada da chave comprometida, mantenha
+  somente a chave nova nesse mapa.
+- `BACKUP_DATABASE_LICENSE_PUBLIC_KEY` é a opção legada, associada a
+  `ed25519-1`. Não é obrigatória se o mapa estiver configurado. As duas
+  fontes são mescladas, com precedência do mapa em colisões; remover a
+  chave antiga apenas do mapa não basta se o campo legado ainda a contém.
 
 ### Em dev/admin (NUNCA no asset bundled)
 
-Coloque em `C:\ProgramData\BackupDatabase\config\.env`:
+Somente na estação autorizada a emitir licenças, coloque em
+`C:\ProgramData\BackupDatabase\config\.env`:
 
 ```bash
 # Chave privada Ed25519 para emitir licenças (64 bytes base64).
-# Gere com: dart run scripts/generate_license_keypair.dart
+# Gere com: dart run scripts/generate_license_keypair.dart ed25519-2 C:\PrivateSigning
 BACKUP_DATABASE_LICENSE_PRIVATE_KEY=<base64>
 
 # keyId que NOVAS licenças geradas vão carregar no payload.
-# Default: ed25519-1. Mude para ed25519-2 (ou outro) durante rotação.
-BACKUP_DATABASE_LICENSE_ACTIVE_KEY_ID=ed25519-1
+# Deve corresponder ao identificador do novo par gerado.
+BACKUP_DATABASE_LICENSE_ACTIVE_KEY_ID=ed25519-2
 
 # Hash da senha admin do gerador embutido.
 # Gere com: dart run scripts/hash_admin_password.dart 'minhasenha'
@@ -111,12 +113,14 @@ BACKUP_DATABASE_LICENSE_REVOCATION_LIST_PATH=C:\ProgramData\BackupDatabase\confi
 
 ### Em produção (cliente)
 
-- Apenas `BACKUP_DATABASE_LICENSE_PUBLIC_KEY` (do bundled `.env`) e —
-  opcional — `BACKUP_DATABASE_LICENSE_REVOCATION_LIST_PATH` no `.env`
-  externo se quiser CRL.
-- Os outros valores ficam **vazios** no `.env` do repo. O teste
-  `test/unit/core/config/bundled_env_secret_leak_test.dart` quebra a
-  PR se alguém tentar vazar.
+- Distribua somente as chaves públicas de verificação e, opcionalmente,
+  configure `BACKUP_DATABASE_LICENSE_REVOCATION_LIST_PATH` para a CRL.
+  Nunca copie a chave privada de emissão ou o hash administrativo aos clientes.
+- Os campos secretos ficam **vazios** nos quatro arquivos de distribuição:
+  `.env`, `.env.example`, `.env.client` e `.env.server`. O teste
+  `test/unit/core/config/bundled_env_secret_leak_test.dart` verifica os campos
+  proibidos e informa apenas seus nomes ao falhar. Veja os
+  [limites dessa proteção](../security/logging-and-secrets.md).
 
 ## "Como faço para…"
 
@@ -124,24 +128,29 @@ BACKUP_DATABASE_LICENSE_REVOCATION_LIST_PATH=C:\ProgramData\BackupDatabase\confi
 
 A chave atual deve ser rotacionada quando:
 
-- Ela foi exposta acidentalmente (ex.: commitada no `.env` versionado e
-  já replicada em git history — caso que motivou ADR-016).
 - Como prática preventiva periódica (a cada N meses).
 - Após dispensar admin que tinha acesso à private key.
 
 O sistema suporta **rotação graceful**: a chave antiga continua válida
 para licenças já emitidas enquanto a chave nova é introduzida.
 
+**Não use esse período de coexistência para encerrar uma exposição de chave
+privada.** Para o incidente do histórico público, siga
+[o procedimento de comprometimento](../security/license-key-rotation.md).
+Enquanto a chave antiga for aceita, licenças forjadas continuam possíveis.
+
 **Passos:**
 
 1. Em uma máquina dev/admin, gere o novo par:
 
    ```bash
-   dart run scripts/generate_license_keypair.dart ed25519-2
+   dart run scripts/generate_license_keypair.dart ed25519-2 C:\PrivateSigning
    ```
 
-   O script imprime `publicKeyBase64` e `privateKeyBase64`, além de
-   instruções específicas para o seu caso.
+   A pasta de destino deve existir e estar fora do repositório. O script
+   cria uma subpasta exclusiva com acesso restrito ao operador e SYSTEM
+   no Windows (modo 700 em outros sistemas). Grava `signer.env` privado
+   e `public.env` público; não imprime a chave privada nem altera o app.
 
 2. **No `.env` do repositório** (asset bundled), substitua a entrada
    única por um JSON com as duas chaves:
@@ -151,9 +160,9 @@ para licenças já emitidas enquanto a chave nova é introduzida.
    BACKUP_DATABASE_LICENSE_PUBLIC_KEYS={"ed25519-1": "<chave_antiga_base64>", "ed25519-2": "<chave_nova_base64>"}
    ```
 
-   Você pode opcionalmente também deixar `BACKUP_DATABASE_LICENSE_PUBLIC_KEY=`
-   apontando para a chave antiga (legacy) — o decoder mescla as duas
-   fontes com prioridade para o JSON.
+   Deixe `BACKUP_DATABASE_LICENSE_PUBLIC_KEY` vazio para que o conjunto
+   aceito fique explícito no mapa. Confira também a configuração externa,
+   que pode manter uma chave legada independentemente do bundle.
 
 3. **No `.env` externo** (`C:\ProgramData\BackupDatabase\config\.env`)
    de cada estação admin:
@@ -171,7 +180,9 @@ para licenças já emitidas enquanto a chave nova é introduzida.
 
 6. Quando todos os clientes tiverem licenças `ed25519-2`, **remova**
    a entrada `ed25519-1` do JSON `BACKUP_DATABASE_LICENSE_PUBLIC_KEYS`
-   no `.env` do repo, refaça build e distribua. Licenças antigas
+   **e esvazie `BACKUP_DATABASE_LICENSE_PUBLIC_KEY`**, tanto no bundle
+   quanto na configuração externa das instalações.
+   Refaça o build e distribua. Licenças antigas
    passam a ser rejeitadas (`keyId desconhecido: ed25519-1`).
 
 **Verificação:**
@@ -214,6 +225,11 @@ dart run scripts/hash_admin_password.dart 'minhaSenhaForte123!'
 Copie o output em `LICENSE_ADMIN_PASSWORD_HASH=...` no `.env` externo
 de cada estação dev/admin.
 
+O utilitário atual recebe a senha como argumento e imprime o hash. Execute
+somente em estação confiável: a senha pode aparecer no histórico do shell e
+na lista de processos. Não execute em CI, terminal gravado ou sessão
+compartilhada, e trate o hash gerado como informação sensível.
+
 ### …adicionar uma feature nova de licença?
 
 1. Adicione constante em `lib/core/constants/license_features.dart`
@@ -250,12 +266,16 @@ Olhe os logs (`LoggerService.debug`/`warning`):
 - ❌ Cache de feature no `LicensePolicyService` chaveado por algo que
   não seja `runId`.
 
-## Próximos passos sugeridos (não escopo da auditoria atual)
+## Pendência operacional de segurança
 
-- **Rotacionar a chave privada Ed25519**: a chave atual está no git
-  history → considere comprometida. A infraestrutura para rotação
-  graceful está pronta (ver seção "…rotacionar a chave Ed25519" acima);
-  é uma operação manual.
+A chave privada exposta no histórico deve ser substituída conforme o
+[procedimento de comprometimento](../security/license-key-rotation.md).
+A preparação do gerador não executa a troca: ainda é necessário gerar a
+chave de produção, reemitir licenças/CRL, atualizar configurações e publicar
+uma versão que deixe de aceitar a chave antiga.
+
+## Melhorias futuras
+
 - **JSON canônico (RFC 8785)** na assinatura — proteção contra
   mudanças futuras do `jsonEncode` do SDK (ver Opção A do ADR-016).
 - **Mover gerador admin para binário separado**, fora do bundle cliente

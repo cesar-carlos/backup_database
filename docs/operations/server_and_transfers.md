@@ -88,3 +88,8 @@ Veja [auto update](../install/auto_update_setup.md) e
 [testes de atualizacao](../install/testing_auto_update.md). Para investigacao,
 registre modo de execucao, versao, etapa e mensagem de erro; nao publique tokens,
 senhas ou o conteudo completo do `.env`.
+
+Os logs FTP ocultam comandos de autenticacao e ecos das credenciais conhecidas.
+Logs de comunicacao ocultam campos sensiveis em mapas e listas aninhados.
+Consulte [seguranca dos logs](../security/logging-and-secrets.md) para os limites,
+exportacao de registros antigos e cuidados antes de enviar um diagnostico.

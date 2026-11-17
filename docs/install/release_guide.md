@@ -7,6 +7,11 @@ dependencias, preservacao do fork FTP e validacao nativa de janela/bandeja.
 Os comandos e limites dos testes visuais ficam no [Widgetbook](../../widgetbook/README.md).
 Execute testes e build Windows sequencialmente no mesmo checkout.
 
+Para uma release que retire a confianca na chave de licenciamento exposta,
+execute o [procedimento de rotacao](../security/license-key-rotation.md) antes
+de distribuir o instalador. Publicar apenas os filtros de logs nao resolve a
+exposicao da chave. O gerador prepara arquivos; a troca nao e automatica.
+
 ## 1. Atualizar a versao
 
 Edite `pubspec.yaml` com a proxima versao:
@@ -171,6 +176,11 @@ Depois da publicacao:
 6. Quando `scripts/appcast_policy.json` tem `rollout_percentages`, `min_supported_app_version` ou `min_publication_age_minutes`, o XML gerado reflete a policy. Confira se os atributos esperados estao no enclosure.
 
 ## Rollback rapido do feed
+
+Bloquear uma versao no feed nao revoga chaves nem atualiza instalacoes antigas.
+Depois da troca de chave, um rollback de binario ou configuracao que volte a
+aceitar a chave comprometida reabre a vulnerabilidade. Valide esse ponto junto
+com a restauracao do servico e dos arquivos.
 
 Se precisar retirar uma release do auto update sem apagar a release do GitHub:
 

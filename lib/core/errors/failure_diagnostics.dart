@@ -25,8 +25,14 @@ String failureDiagnostics(Object error) {
 
 String redactFailureDetails(String text) => text
     .replaceAll(
-      RegExp(r'Bearer\s+\S+', caseSensitive: false),
-      'Bearer [oculto]',
+      RegExp(
+        r'-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )?PRIVATE KEY-----|$)',
+      ),
+      '[chave privada oculta]',
+    )
+    .replaceAll(
+      RegExp(r'\b(Bearer|Basic)\s+[^\s,;"\x27}]+', caseSensitive: false),
+      '[credencial oculta]',
     )
     .replaceAllMapped(
       RegExp(r'(https?|ftp|sftp)://[^\s/@]+:[^\s/@]+@', caseSensitive: false),
@@ -34,12 +40,8 @@ String redactFailureDetails(String text) => text
     )
     .replaceAllMapped(
       RegExp(
-        r'''(["']?(?:password|pwd|senha|access_token|refresh_token|client_secret|authorization)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;&}]+)''',
+        r'''(["']?(?:[\w-]*(?:password|passwd|senha|token|secret|private[_-]?key|api[_-]?key|crypt[_-]?key)[\w-]*|pwd|authorization)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;&}]+)''',
         caseSensitive: false,
       ),
       (match) => '${match[1]}[oculto]',
-    )
-    .replaceAll(
-      RegExp(r'Bearer\s+\S+', caseSensitive: false),
-      'Bearer [oculto]',
     );
