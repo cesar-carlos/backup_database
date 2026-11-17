@@ -53,13 +53,14 @@ class _GeneralSettingsTabState extends State<GeneralSettingsTab> {
   }
 
   Future<void> _changeTempPath() async {
-    final result = await FilePicker.getDirectoryPath(
+    final selectedDirectory = await FilePicker.pickDirectory(
       dialogTitle: appLocaleString(
         context,
         'Selecionar pasta temporária de downloads',
         'Select temporary downloads folder',
       ),
     );
+    final result = selectedDirectory?.toFilePath();
     if (result != null && mounted) {
       setState(() => _isLoadingTempPath = true);
       final success = await _tempService.setCustomTempPath(result);

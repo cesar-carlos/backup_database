@@ -400,13 +400,14 @@ class _MachineStorageSettingsSectionState
       return;
     }
 
-    final picked = await FilePicker.getDirectoryPath(
+    final selectedDirectory = await FilePicker.pickDirectory(
       dialogTitle: appLocaleString(
         context,
         'Pasta com ficheiros SQLite (.db)',
         'Folder with SQLite database files',
       ),
     );
+    final picked = selectedDirectory?.toFilePath();
     if (picked == null || !mounted) {
       return;
     }

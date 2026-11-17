@@ -1,6 +1,6 @@
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class DatabaseTypeMetadata {
   const DatabaseTypeMetadata({

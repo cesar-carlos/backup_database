@@ -8,6 +8,9 @@ contrato do produto. Contrato vivo de servidor/protocolo:
 
 | Objetivo | Documento |
 | --- | --- |
+| Preparar SDK, dependencias e validar alteracoes | [Desenvolvimento](onboarding/development.md) |
+| Executar catalogo e testes visuais | [Widgetbook](../widgetbook/README.md) |
+| Entender interface, servico e Terminal Server | [Interface e executor](architecture/service-interface.md) |
 | Instalar e configurar a aplicacao | `install/installation_guide.md` |
 | Confirmar requisitos por ambiente e banco | `requirements.md` |
 | Ajustar PATH das ferramentas externas | `path_setup.md` |
@@ -42,6 +45,9 @@ contrato do produto. Contrato vivo de servidor/protocolo:
 ## Fontes de verdade
 
 Requisitos e PATH ficam somente em `requirements.md` e `path_setup.md`.
+SDK, compatibilidade de dependencias e verificacoes locais ficam em
+[Desenvolvimento](onboarding/development.md); comandos e limites dos goldens
+ficam no [Widgetbook](../widgetbook/README.md).
 O build do instalador e descrito em [installer/README.md](../installer/README.md);
 publicacao e assinatura ficam no guia de release. Os atalhos redundantes
 `installer/QUICK_START.md`, `install/requirements.md` e `install/path_setup.md`

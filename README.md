@@ -66,6 +66,10 @@ Guias relacionados:
 
 ### Ambiente de desenvolvimento
 
+Use Flutter **3.50.0**, com Dart **3.14.0** incluido no SDK, conforme os
+workflows. Preparacao, geracao de codigo, compatibilidade dos pacotes e
+validacao: [guia de desenvolvimento](docs/onboarding/development.md).
+
 Para rodar o projeto com `flutter run`, use o `.env` na raiz do repositorio e
 o `.env.example` como base.
 
@@ -157,10 +161,14 @@ variaveis necessarias para o WinSW. A migracao preserva registros NSSM existente
 Observacoes importantes:
 
 - o servico e configurado para `LocalSystem` por padrao
-- nesta rodada, auto update silencioso em modo servico so e suportado para
+- auto update silencioso em modo servico so e suportado para
   servicos WinSW com token administrativo (incluindo contas customizadas)
-- se voce trocar a conta do servico, o produto continua podendo operar, mas o
-  auto update silencioso passa a exigir acao manual
+- uma conta customizada sem token administrativo exige atualizacao manual
+- o servico e opcional: sem ele, a interface executa os backups localmente;
+  com ele registrado, a interface administra o executor sem iniciar outro
+  scheduler, inclusive entre sessoes Terminal Server
+
+Detalhes: [separacao entre interface e servico](docs/architecture/service-interface.md).
 
 ## Estrutura de dados em ProgramData
 
@@ -185,16 +193,16 @@ C:\ProgramData\BackupDatabase\
 
 ## Testes
 
-Unitarios:
+Unitarios e widgets (na raiz):
 
 ```bash
-flutter test test/unit/ --reporter compact
+flutter test test/unit test/widget --reporter compact
 ```
 
 Cobertura:
 
 ```bash
-flutter test --coverage
+flutter test test/unit test/widget --coverage
 python scripts/coverage.py
 python scripts/coverage.py --fail-under 70
 ```
@@ -208,8 +216,13 @@ python test/scripts/run_ftp_integration_tests.py
 
 No GitHub Actions:
 
-- `Test` executa analise estatica e testes unitarios
+- `Test` executa analise estatica, testes unitarios e de widgets
 - `Integration Tests (Self-Hosted)` cobre cenarios de integracao manual/workflow
+
+Os goldens do [Widgetbook](widgetbook/README.md) precisam de execucao separada.
+O [guia de desenvolvimento](docs/onboarding/development.md) descreve tambem o
+smoke nativo de janela/bandeja e a integracao FTP local. Nao execute testes e
+build Windows simultaneamente no mesmo checkout.
 
 ## Build
 

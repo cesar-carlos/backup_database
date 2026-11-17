@@ -28,7 +28,8 @@ $BackupLogCopyWith<BackupLog> get copyWith => _$BackupLogCopyWithImpl<BackupLog>
 
 @override
 String toString() {
-  return 'BackupLog(id: $id, level: $level, category: $category, message: $message, createdAt: $createdAt, backupHistoryId: $backupHistoryId, details: $details)';
+  final _this = this as BackupLog;
+  return 'BackupLog(id: ${_this.id}, level: ${_this.level}, category: ${_this.category}, message: ${_this.message}, createdAt: ${_this.createdAt}, backupHistoryId: ${_this.backupHistoryId}, details: ${_this.details})';
 }
 
 
@@ -229,7 +230,7 @@ _$BackupLogCopyWith<_BackupLog> get copyWith => __$BackupLogCopyWithImpl<_Backup
 
 @override
 String toString() {
-  return 'BackupLog.raw(id: $id, level: $level, category: $category, message: $message, createdAt: $createdAt, backupHistoryId: $backupHistoryId, details: $details)';
+    return 'BackupLog.raw(id: $id, level: $level, category: $category, message: $message, createdAt: $createdAt, backupHistoryId: $backupHistoryId, details: $details)';
 }
 
 

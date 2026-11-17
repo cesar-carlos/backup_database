@@ -7,6 +7,7 @@ import 'package:backup_database/domain/value_objects/database_name.dart';
 import 'package:backup_database/presentation/widgets/molecules/database_config_list_item.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart' show CircleAvatar;
 
 void main() {
   testWidgets('DatabaseConfigListItem uses DatabaseTypeMetadata accent (SQL)', (

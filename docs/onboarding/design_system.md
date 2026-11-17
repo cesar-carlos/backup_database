@@ -4,6 +4,21 @@ Guia curto para quem cria ou altera UI no **backup_database**. Detalhes
 de arquitetura: `docs/adr/009-design-system-themeextension-composition.md`
 e secao **8** de `.cursor/rules/architectural_patterns.mdc`.
 
+## Temas na versao atual
+
+Com Flutter 3.50 e Fluent UI 4.17, os tipos Material sao importados de
+`package:material_ui/material_ui.dart`. Evite misturar esses tipos com os
+de `package:flutter/material.dart`, inclusive em testes e localizacoes.
+
+`context.colors` / `context.appSemanticColors` preserva a API dos componentes:
+com um `FluentTheme`, escolhe a paleta light/dark pelo `brightness`; sem Fluent,
+busca a `ThemeExtension<AppSemanticColors>` no tema Material. Nao registre
+`extensions` em `FluentThemeData`, pois a API atual nao oferece esse campo.
+O fallback sem extensao Material e a paleta light.
+
+O [ADR-018](../adr/018-flutter-350-desktop-and-goldens.md) registra a evolucao
+dos ADRs 009 e 011 sem alterar o historico dessas decisoes.
+
 ## Onde esta o codigo
 
 | Area | Caminho |
@@ -79,6 +94,8 @@ Ver implementacao em `app_button.dart`.
 
 ## Testes
 
+- Catalogo e goldens por use case: [Widgetbook](../../widgetbook/README.md).
+  A captura atual usa light/comfortable; valide dark tambem nos testes de tema.
 - Regressao visual: `test/golden/widgets/common/design_system_atoms_golden_test.dart`
   e imagens em `test/golden/widgets/common/goldens/`.
 - Acessibilidade: `test/widget/presentation/widgets/common/design_system_accessibility_test.dart`

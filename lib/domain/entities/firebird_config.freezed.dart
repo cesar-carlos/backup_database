@@ -28,7 +28,8 @@ $FirebirdConfigCopyWith<FirebirdConfig> get copyWith => _$FirebirdConfigCopyWith
 
 @override
 String toString() {
-  return 'FirebirdConfig(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled)';
+  final _this = this as FirebirdConfig;
+  return 'FirebirdConfig(id: ${_this.id}, name: ${_this.name}, host: ${_this.host}, databaseFile: ${_this.databaseFile}, username: ${_this.username}, password: ${_this.password}, port: ${_this.port}, createdAt: ${_this.createdAt}, updatedAt: ${_this.updatedAt}, aliasName: ${_this.aliasName}, useEmbedded: ${_this.useEmbedded}, clientLibraryPath: ${_this.clientLibraryPath}, serverVersionHint: ${_this.serverVersionHint}, serviceManagerMode: ${_this.serviceManagerMode}, cryptKey: ${_this.cryptKey}, enabled: ${_this.enabled})';
 }
 
 
@@ -247,7 +248,7 @@ _$FirebirdConfigCopyWith<_FirebirdConfig> get copyWith => __$FirebirdConfigCopyW
 
 @override
 String toString() {
-  return 'FirebirdConfig.raw(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled)';
+    return 'FirebirdConfig.raw(id: $id, name: $name, host: $host, databaseFile: $databaseFile, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, aliasName: $aliasName, useEmbedded: $useEmbedded, clientLibraryPath: $clientLibraryPath, serverVersionHint: $serverVersionHint, serviceManagerMode: $serviceManagerMode, cryptKey: $cryptKey, enabled: $enabled)';
 }
 
 

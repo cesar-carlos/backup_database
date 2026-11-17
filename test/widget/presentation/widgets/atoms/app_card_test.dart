@@ -1,12 +1,9 @@
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 FluentThemeData _theme() {
-  return FluentThemeData.light().copyWith(
-    extensions: const [AppSemanticColors.light],
-  );
+  return FluentThemeData.light().copyWith();
 }
 
 void main() {

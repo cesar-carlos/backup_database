@@ -1,27 +1,25 @@
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/tokens.dart';
 import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'
+    hide GlobalMaterialLocalizations;
+import 'package:material_ui/material_ui.dart' show GlobalMaterialLocalizations;
 import 'package:widgetbook/widgetbook.dart';
 import 'package:widgetbook_golden_test/widgetbook_golden_test.dart';
 import 'package:widgetbook_workspace/main.directories.g.dart';
 
 FluentThemeData _goldenFluentTheme() {
-  return FluentThemeData.light().copyWith(
-    extensions: const [AppSemanticColors.light],
-  );
+  return FluentThemeData.light().copyWith();
 }
 
 FluentThemeData _goldenFluentDarkTheme() {
-  return FluentThemeData.dark().copyWith(
-    extensions: const [AppSemanticColors.dark],
-  );
+  return FluentThemeData.dark().copyWith();
 }
 
 bool _includeComponent(String componentName) {
   return const {
     'AppDataGrid',
+    'DatabaseConfigDataGrid',
     'AppDialogShell',
     'AppButton',
     'AppStatusChip',
@@ -54,16 +52,23 @@ bool _skipUseCase(String componentName, String useCaseName) {
 
 WidgetbookNode? _mapNodeForGoldens(WidgetbookNode node) {
   if (node is WidgetbookComponent) {
-    if (!_includeComponent(node.name)) {
+    final componentName = node.name.split('<').first;
+    if (!_includeComponent(componentName)) {
       return null;
     }
     final List<WidgetbookUseCase> cases = node.useCases
-        .where((WidgetbookUseCase u) => !_skipUseCase(node.name, u.name))
+        .where((WidgetbookUseCase u) => !_skipUseCase(componentName, u.name))
+        .map(
+          (u) => WidgetbookUseCase(
+            name: u.name,
+            builder: (_) => _GoldenUseCaseRoot(builder: u.builder),
+          ),
+        )
         .toList();
     if (cases.isEmpty) {
       return null;
     }
-    return WidgetbookComponent(name: node.name, useCases: cases);
+    return WidgetbookComponent(name: componentName, useCases: cases);
   }
   final List<WidgetbookNode>? children = node.children;
   if (children == null || children.isEmpty) {
@@ -77,6 +82,23 @@ WidgetbookNode? _mapNodeForGoldens(WidgetbookNode node) {
     return null;
   }
   return node.copyWith(children: mapped);
+}
+
+// The package renderer finds a use case by its root runtimeType. Common roots
+// such as Align also exist in its own app shell, producing blank/wrong images.
+// Give every case an unambiguous root and deterministic density.
+class _GoldenUseCaseRoot extends StatelessWidget {
+  const _GoldenUseCaseRoot({required this.builder});
+  final WidgetBuilder builder;
+
+  @override
+  Widget build(BuildContext context) => InheritedAppDensity(
+    density: AppDensity.comfortable,
+    child: FluentTheme(
+      data: _goldenFluentTheme(),
+      child: Builder(builder: builder),
+    ),
+  );
 }
 
 List<WidgetbookNode> _goldenRoots() {

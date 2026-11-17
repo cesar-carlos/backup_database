@@ -2,8 +2,8 @@ import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
 import 'package:backup_database/core/theme/tokens/app_radius.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' hide Typography;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart' hide Typography;
 
 class AppTheme {
   AppTheme._();
@@ -30,7 +30,6 @@ class AppTheme {
     final montserratTextTheme = GoogleFonts.montserratTextTheme();
     final theme = FluentThemeData.light();
     return theme.copyWith(
-      extensions: const [AppSemanticColors.light],
       accentColor: brandFluentAccent,
       dialogTheme: flatDialogTheme(theme),
       typography: Typography.raw(
@@ -52,7 +51,6 @@ class AppTheme {
     );
     final theme = FluentThemeData.dark();
     return theme.copyWith(
-      extensions: const [AppSemanticColors.dark],
       accentColor: brandFluentAccent,
       dialogTheme: flatDialogTheme(theme),
       typography: Typography.raw(

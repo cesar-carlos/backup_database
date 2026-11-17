@@ -79,10 +79,7 @@ class FtpUploader {
       onProgress?.call(progressPercent / 100, stepOverride);
     }
 
-    var remoteSize = await ftp.sizeFile(remotePartName);
-    if (remoteSize == -1) {
-      remoteSize = 0;
-    }
+    final remoteSize = await ftp.sizeFile(remotePartName);
 
     const globalResumeEnabled = AppConstants.ftpResumableUpload;
     final resumeEnabled = globalResumeEnabled && enableResumeFromConfig;
@@ -186,10 +183,18 @@ class FtpUploader {
       remoteFileName: remoteFileName,
       expectedSize: expectedSize,
       localSha256: localSha256,
-      enableStrongIntegrityValidation: enableStrongIntegrityValidation,
-      enableReadBackValidation: enableReadBackValidation,
+      // Reusing an existing artifact requires content identity, not just SIZE.
+      enableStrongIntegrityValidation: true,
+      enableReadBackValidation: true,
     );
     if (!integrityResult.isValid) {
+      if (integrityResult.failureCode ==
+          FailureCodes.ftpIntegrityValidationInconclusive) {
+        throw FTPConnectException(
+          'Integridade do arquivo final existente não confirmada',
+          integrityResult.errorMessage,
+        );
+      }
       LoggerService.warning(
         'Arquivo final existente no FTP não passou na validação de '
         'integridade. Upload completo será tentado novamente: '

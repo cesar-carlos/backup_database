@@ -1,9 +1,9 @@
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
 import 'package:backup_database/presentation/widgets/organisms/app_dialog_shell.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show MaterialPageRoute;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart' show MaterialPageRoute;
 
 void main() {
   testWidgets('AppDialogShell renders title, content and actions', (

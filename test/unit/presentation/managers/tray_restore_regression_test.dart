@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:backup_database/presentation/managers/desktop_tray_backend.dart';
 import 'package:backup_database/presentation/managers/tray_manager_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tray_manager/tray_manager.dart';
+
+import '../../../helpers/desktop_backends.dart';
 
 void main() {
+  installDesktopBackends();
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
@@ -87,9 +90,9 @@ void main() {
       tray.onTrayIconMouseUp();
       await Future<void>.delayed(const Duration(milliseconds: 250));
       expect(actions, [TrayMenuAction.show]);
-      tray.onTrayMenuItemClick(MenuItem(key: 'show', label: 'Abrir'));
+      tray.onTrayMenuItemClick(const TrayMenuItem(key: 'show', label: 'Abrir'));
       expect(actions, [TrayMenuAction.show, TrayMenuAction.show]);
-      tray.onTrayMenuItemClick(MenuItem(key: 'exit', label: 'Sair'));
+      tray.onTrayMenuItemClick(const TrayMenuItem(key: 'exit', label: 'Sair'));
       expect(actions.last, TrayMenuAction.exit);
     } finally {
       await tray.dispose();
@@ -123,7 +126,9 @@ void main() {
           );
           expect(calls.last, 'destroy');
           tray.onTrayIconMouseUp();
-          tray.onTrayMenuItemClick(MenuItem(key: 'exit', label: 'Sair'));
+          tray.onTrayMenuItemClick(
+            const TrayMenuItem(key: 'exit', label: 'Sair'),
+          );
           expect(actions, isEmpty);
           shouldFail = false;
           await tray.initialize(onMenuAction: actions.add);

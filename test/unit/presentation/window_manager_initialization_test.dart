@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:window_manager/window_manager.dart';
+
+import '../../helpers/desktop_backends.dart';
 
 void main() {
+  installDesktopBackends();
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('window_manager');
   final messenger =
@@ -64,7 +66,9 @@ void main() {
     await Future.wait([first, second]);
     expect(initialized, 1);
     expect(
-      windowManager.listeners.where((item) => item == manager),
+      WindowManagerService().backendOverride!.listeners.where(
+        (item) => item == manager,
+      ),
       hasLength(1),
     );
   });
@@ -94,7 +98,10 @@ void main() {
       await assertion;
       expect(calls, ['ensureInitialized']);
       expect(manager.isInitialized, isFalse);
-      expect(windowManager.listeners, isNot(contains(manager)));
+      expect(
+        WindowManagerService().backendOverride!.listeners,
+        isNot(contains(manager)),
+      );
     });
   }
 
@@ -209,12 +216,17 @@ void main() {
       throwsA(isA<PlatformException>()),
     );
     expect(manager.isInitialized, isFalse);
-    expect(windowManager.listeners, isNot(contains(manager)));
+    expect(
+      WindowManagerService().backendOverride!.listeners,
+      isNot(contains(manager)),
+    );
     fail = false;
     await manager.initialize(center: false);
     expect(manager.isInitialized, isTrue);
     expect(
-      windowManager.listeners.where((item) => item == manager),
+      WindowManagerService().backendOverride!.listeners.where(
+        (item) => item == manager,
+      ),
       hasLength(1),
     );
   });

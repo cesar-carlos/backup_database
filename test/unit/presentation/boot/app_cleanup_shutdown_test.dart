@@ -14,6 +14,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import '../../../helpers/desktop_backends.dart';
+
 class _Scheduler extends Mock implements ISchedulerService {}
 
 class _Database extends Mock implements IAppDatabaseLifecycle {}
@@ -29,6 +31,7 @@ class _Queue extends Mock implements IExecutionQueueHousekeepingScheduler {}
 class _Cancellation extends Mock implements IBackupCancellationService {}
 
 void main() {
+  installDesktopBackends();
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;

@@ -35,9 +35,20 @@ import 'package:result_dart/result_dart.dart' as rd;
 ///   - garante `notifyListeners()` em `try/finally`;
 ///   - extrai mensagem amigável de qualquer `Object` via [extractFailureMessage].
 mixin AsyncStateMixin on ChangeNotifier {
-  /// Contador de operações em curso. Usar contador em vez de boolean
-  /// resolve o race em que `op A` (`_isLoading=false`) terminava antes
-  /// de `op B`, deixando a UI achando que tudo terminou.
+  bool _disposed = false;
+
+  void _notifyIfAlive() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  /// Contador de operações em curso, inclusive as que terminam após dispose.
+  /// Uma operação não pode remover o estado de carregamento de outra.
   int _runningOperations = 0;
   String? _error;
   String? _lastErrorCode;
@@ -52,7 +63,7 @@ mixin AsyncStateMixin on ChangeNotifier {
     if (_error == null && _lastErrorCode == null) return;
     _error = null;
     _lastErrorCode = null;
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   /// Helper para extrair mensagem amigável de qualquer `Object`.
@@ -85,13 +96,14 @@ mixin AsyncStateMixin on ChangeNotifier {
     String? genericErrorMessage,
     bool rethrowOnError = false,
   }) async {
+    if (_disposed) return null;
     _runningOperations++;
     final wasIdle = _runningOperations == 1;
     final hadError = _error != null;
     if (wasIdle || hadError) {
       _error = null;
       _lastErrorCode = null;
-      notifyListeners();
+      _notifyIfAlive();
     }
 
     try {
@@ -110,10 +122,9 @@ mixin AsyncStateMixin on ChangeNotifier {
       return null;
     } finally {
       _runningOperations--;
-      // Garante notify mesmo se `notifyListeners` lançar (raro mas
-      // defensivo) — não temos try/catch aqui pois Dart `finally`
-      // já protege a saída do método.
-      notifyListeners();
+      // A operação pode terminar depois que a tela/provider foi descartado.
+      // Preserve seu resultado sem notificar um ChangeNotifier já destruído.
+      _notifyIfAlive();
     }
   }
 
@@ -123,7 +134,7 @@ mixin AsyncStateMixin on ChangeNotifier {
   void setErrorManual(String message, {String? code}) {
     _error = message;
     _lastErrorCode = code;
-    notifyListeners();
+    _notifyIfAlive();
   }
 
   /// Pre-check de dependências antes de uma operação de delete.

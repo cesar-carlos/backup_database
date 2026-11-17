@@ -28,7 +28,8 @@ $SqlServerConfigCopyWith<SqlServerConfig> get copyWith => _$SqlServerConfigCopyW
 
 @override
 String toString() {
-  return 'SqlServerConfig(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled, useWindowsAuth: $useWindowsAuth)';
+  final _this = this as SqlServerConfig;
+  return 'SqlServerConfig(id: ${_this.id}, name: ${_this.name}, server: ${_this.server}, database: ${_this.database}, username: ${_this.username}, password: ${_this.password}, port: ${_this.port}, createdAt: ${_this.createdAt}, updatedAt: ${_this.updatedAt}, enabled: ${_this.enabled}, useWindowsAuth: ${_this.useWindowsAuth})';
 }
 
 
@@ -237,7 +238,7 @@ _$SqlServerConfigCopyWith<_SqlServerConfig> get copyWith => __$SqlServerConfigCo
 
 @override
 String toString() {
-  return 'SqlServerConfig.raw(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled, useWindowsAuth: $useWindowsAuth)';
+    return 'SqlServerConfig.raw(id: $id, name: $name, server: $server, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled, useWindowsAuth: $useWindowsAuth)';
 }
 
 

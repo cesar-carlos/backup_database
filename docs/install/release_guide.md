@@ -1,5 +1,12 @@
 # Guia para Criar Release
 
+## Preparar o ambiente
+
+Use o [guia de desenvolvimento](../onboarding/development.md) para SDK,
+dependencias, preservacao do fork FTP e validacao nativa de janela/bandeja.
+Os comandos e limites dos testes visuais ficam no [Widgetbook](../../widgetbook/README.md).
+Execute testes e build Windows sequencialmente no mesmo checkout.
+
 ## 1. Atualizar a versao
 
 Edite `pubspec.yaml` com a proxima versao:
@@ -38,7 +45,7 @@ pwsh -File scripts/release_preflight.ps1 -Mode Installer
 ```
 
 `Quick` verifica formato, encoding, icones, tokens, analise e regressoes Windows.
-`Full` roda todas as suites unitarias e de widgets, alem do Widgetbook.
+`Full` roda as suites unitarias e de widgets e analisa o Widgetbook. Os goldens do Widgetbook e o smoke nativo devem ser executados separadamente.
 `Installer` inclui Full e compila o instalador local, gravando um
 `.validation.json` com commit, arvore Git, tamanho e SHA-256. O script para na
 primeira falha. Isso antecipa erros sem esperar um ciclo de Actions.

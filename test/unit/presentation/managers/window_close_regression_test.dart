@@ -5,7 +5,10 @@ import 'package:backup_database/presentation/managers/window_manager_service.dar
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../../helpers/desktop_backends.dart';
+
 void main() {
+  installDesktopBackends();
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('window_manager');
   final messenger =

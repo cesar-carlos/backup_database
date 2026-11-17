@@ -1,4 +1,3 @@
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/molecules/password_field.dart';
 import 'package:backup_database/presentation/widgets/organisms/message_modal.dart';
@@ -8,9 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../../../support/desktop_tap_target_guideline.dart';
 
 FluentThemeData _a11yFluentTheme() {
-  return FluentThemeData.light().copyWith(
-    extensions: const [AppSemanticColors.light],
-  );
+  return FluentThemeData.light().copyWith();
 }
 
 void main() {

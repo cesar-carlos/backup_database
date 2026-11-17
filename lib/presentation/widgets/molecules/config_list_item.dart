@@ -4,6 +4,7 @@ import 'package:backup_database/core/theme/tokens/app_spacing.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_card.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_icon_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:material_ui/material_ui.dart' show CircleAvatar;
 
 /// **Molecule** — generic configuration row with toggle and row actions.
 class ConfigListItem extends StatelessWidget {

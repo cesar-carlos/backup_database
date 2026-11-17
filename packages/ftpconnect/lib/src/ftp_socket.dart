@@ -78,6 +78,7 @@ class FTPSocket {
         lines.add(line);
         if (code == null) {
           if (!RegExp(r'^\d{3}[ -]').hasMatch(line)) {
+            abort();
             throw FTPConnectException('Illegal Reply Exception', line);
           }
           code = int.parse(line.substring(0, 3));
@@ -106,7 +107,12 @@ class FTPSocket {
     logger.log('> $cmd');
     _socket.write(Utf8Codec().encode('$cmd\r\n'));
 
-    return readResponse();
+    final reply = await readResponse();
+    if (reply.code == 421) {
+      abort();
+      throw FTPConnectException('FTP server closed connection', reply.message);
+    }
+    return reply;
   }
 
   void sendCommandWithoutWaitingResponse(String cmd) {

@@ -92,8 +92,13 @@ Apontamentos pragmaticos para quem for implementar.
 | [ADR-015](015-windows-icon-pipeline-and-shortcut-refresh.md) | Pipeline de icones Windows e refresh do atalho de desktop (hash gate + setup.iss procedures + CI) | accepted | 2026-05-28 |
 | [ADR-016](016-licensing-audit-secret-handling-and-revocation.md) | Audit de licenciamento — secret handling, anti-rollback de CRL e UX de status | accepted | 2026-05-28 |
 | [ADR-017](017-defer-file-transfer-sliding-window.md) | Adiar sliding window (`fileAck`); manter envio passivo de chunks | deferred | 2026-05-28 |
+| [ADR-018](018-flutter-350-desktop-and-goldens.md) | Flutter 3.50: temas, plugins desktop e cobertura dos goldens; atualiza partes dos ADRs 009 e 011 | accepted | 2026-11-17 |
 
 ## Convencoes
+
+A evolucao para as APIs nativas sem a ponte legada esta no
+[ADR-019](019-native-desktop-backends.md), que substitui a decisao 3 do ADR-018.
+
 - **Slug**: kebab-case curto (`001-runid-no-contrato`).
 - **Nao editar** ADRs aceitos. Em vez disso, criar novo ADR com status
   `superseded by ADR-XXX`.

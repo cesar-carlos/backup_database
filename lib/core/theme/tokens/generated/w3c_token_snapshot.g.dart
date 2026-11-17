@@ -1,7 +1,7 @@
 // GENERATED FILE — run from repo root: dart run tools/generate_tokens.dart
 // ignore_for_file: public_member_api_docs, prefer_int_literals
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 abstract final class W3cTokenSpacing {
   static const double lg = 24;
