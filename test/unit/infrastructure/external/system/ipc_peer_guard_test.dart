@@ -2,6 +2,23 @@ import 'package:backup_database/infrastructure/external/system/ipc/ipc_peer_guar
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'diagnostics distinguish inaccessible image from another executable',
+    () {
+      final inaccessible = IpcPeerGuard(
+        expectedImagePath: () => r'C:\app.exe',
+        resolveImagePath: (_) => null,
+      );
+      expect(inaccessible.rejectionReason(123), 'process_image_unavailable');
+      expect(inaccessible.allowPeer(123), isFalse);
+      final different = IpcPeerGuard(
+        expectedImagePath: () => r'C:\app.exe',
+        resolveImagePath: (_) => r'C:\other.exe',
+      );
+      expect(different.rejectionReason(123), 'process_image_mismatch');
+      expect(different.allowPeer(123), isFalse);
+    },
+  );
   group('IpcPeerGuard', () {
     test('should allow a peer with the same executable path', () {
       final guard = IpcPeerGuard(

@@ -45,6 +45,120 @@ void main() {
   tearDown(() async => ipc.stop());
 
   test(
+    'synchronous replay sees a receipt before executor code is invoked',
+    () async {
+      final endpoint = AdminSchedulerEndpoint()..scheduler = scheduler;
+      final status = await endpoint.dispatch('status', '');
+      final payload = jsonEncode({
+        'scheduleId': id,
+        'epoch': status['epoch'],
+        'requestId': '00000000-0000-4000-8000-000000000002',
+      });
+      late Future<Map<String, dynamic>> replay;
+      when(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .thenAnswer((_) {
+            replay = endpoint.dispatch('execute', payload);
+            return Future.value(const rd.Success(rd.unit));
+          });
+      expect((await endpoint.dispatch('execute', payload))['ok'], isTrue);
+      expect((await replay)['ok'], isTrue);
+      verify(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .called(1);
+    },
+  );
+
+  test(
+    'executor exception is logged once with run identity and replayed',
+    () async {
+      final messages = <String>[];
+      final errors = <Object>[];
+      final failure = StateError('underlying executor failure');
+      final endpoint = AdminSchedulerEndpoint(
+        logError: (message, error, stack) {
+          messages.add(message);
+          errors.add(error);
+          expect(stack.toString(), isNotEmpty);
+        },
+      )..scheduler = scheduler;
+      final status = await endpoint.dispatch('status', '');
+      const requestId = '00000000-0000-4000-8000-000000000002';
+      final payload = jsonEncode({
+        'scheduleId': id,
+        'epoch': status['epoch'],
+        'requestId': requestId,
+      });
+      when(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .thenThrow(failure);
+      final first = await endpoint.dispatch('execute', payload);
+      expect(first['uncertain'], isTrue);
+      expect(await endpoint.dispatch('execute', payload), first);
+      expect(errors, [same(failure)]);
+      expect(
+        messages.single,
+        contains('command=execute scheduleId=$id requestId=$requestId'),
+      );
+      verify(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .called(1);
+    },
+  );
+
+  test(
+    'stopping observation releases UI while late receipt remains reusable',
+    () async {
+      final pending = Completer<rd.Result<void>>();
+      when(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .thenAnswer((_) => pending.future);
+      final work = ui.executeNow(id);
+      await Future<void>.delayed(Duration.zero);
+      ui.stop();
+      expect(
+        (await work.timeout(const Duration(seconds: 1))).isError(),
+        isTrue,
+      );
+      expect(ui.isExecutingBackup, isFalse);
+      pending.complete(const rd.Success(rd.unit));
+      await Future<void>.delayed(Duration.zero);
+      expect((await ui.executeNow(id)).isSuccess(), isTrue);
+      verify(() => scheduler.executeNow(id, runId: any(named: 'runId')))
+          .called(1);
+    },
+  );
+
+  test(
+    'reachable service that is still starting does not receive execute',
+    () async {
+      final commands = <String>[];
+      final proxy = ServiceSchedulerProxy((command, _) async {
+        commands.add(command);
+        return {'ok': false, 'code': 'service_not_ready'};
+      });
+      final result = await proxy.executeNow(id);
+      expect(
+        (result.exceptionOrNull()! as BackupFailure).code,
+        'service_not_ready',
+      );
+      expect(commands, ['status']);
+    },
+  );
+
+  test('partial write retry preserves the request identity', () async {
+    final requests = <String>[];
+    final proxy = ServiceSchedulerProxy((command, payload) async {
+      if (command == 'status') return {'ok': true, 'epoch': 'same-service'};
+      requests.add(payload);
+      throw StateError('IPC request write failed or incomplete');
+    });
+    final first = await proxy.executeNow(id);
+    expect(
+      (first.exceptionOrNull()! as BackupFailure).code,
+      'service_execution_unconfirmed',
+    );
+    await proxy.executeNow(id);
+    expect(requests, hasLength(2));
+    expect(requests[1], requests[0]);
+  });
+
+  test(
     'receipt limit refuses new work without evicting replay protection',
     () async {
       final endpoint = AdminSchedulerEndpoint(maxReceipts: 1)
@@ -333,8 +447,11 @@ void main() {
       verifyNever(scheduler.stop);
       verifyNever(scheduler.suspendExecutions);
       verifyNever(() => scheduler.cancelExecution(any()));
+      expect(
+        (await work.timeout(const Duration(seconds: 1))).isError(),
+        isTrue,
+      );
       pending.complete(const rd.Success(rd.unit));
-      expect((await work).isSuccess(), isTrue);
       expect((await ui.executeNow(id)).isError(), isTrue);
     },
   );

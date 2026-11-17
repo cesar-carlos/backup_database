@@ -5,6 +5,7 @@ import 'package:backup_database/core/errors/service_connection_exception.dart';
 import 'package:backup_database/core/utils/ipc_show_window_confirmation.dart';
 import 'package:backup_database/domain/services/i_single_instance_ipc_client.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/in_memory_ipc_transport.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/ipc_channel.dart';
 import 'package:backup_database/infrastructure/external/system/ipc_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,78 @@ IpcService _pairedService() {
   return IpcService(transport: InMemoryIpcTransport());
 }
 
+class _UnavailableTransport implements IIpcTransport, IpcConnectionDiagnostics {
+  @override
+  String get lastConnectionFailure =>
+      'peer_rejected reason=process_image_unavailable';
+  @override
+  Future<IIpcChannel?> connect({required Duration timeout}) async => null;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CloseFailureChannel implements IIpcChannel {
+  _CloseFailureChannel({this.readError});
+  final Error? readError;
+  @override
+  Future<void> writeLine(String line) async {}
+  @override
+  Future<String?> readLine({required Duration timeout}) async {
+    if (readError != null) throw readError!;
+    return '{"ok":true}';
+  }
+
+  @override
+  Future<void> close() async => throw StateError('cleanup failed');
+}
+
+class _ChannelTransport extends _UnavailableTransport {
+  _ChannelTransport(this.channel);
+  final IIpcChannel channel;
+  @override
+  Future<IIpcChannel?> connect({required Duration timeout}) async => channel;
+}
+
 void main() {
+  test('close failure does not replace a confirmed execution result', () async {
+    final service = IpcService(
+      transport: _ChannelTransport(_CloseFailureChannel()),
+    );
+    expect(await service.schedulerRequest('execute', 'attempt'), {'ok': true});
+  });
+
+  test('close failure preserves the original read failure', () async {
+    final failure = StateError('read failed');
+    final service = IpcService(
+      transport: _ChannelTransport(_CloseFailureChannel(readError: failure)),
+    );
+    await expectLater(
+      service.schedulerRequest('execute', 'attempt'),
+      throwsA(same(failure)),
+    );
+  });
+  test(
+    'scheduler preserves the transport diagnostic without sending work',
+    () async {
+      final service = IpcService(transport: _UnavailableTransport());
+      await expectLater(
+        service.schedulerRequest('execute', 'secret-payload'),
+        throwsA(
+          isA<ServiceConnectionException>()
+              .having(
+                (e) => e.reason,
+                'reason',
+                contains('process_image_unavailable'),
+              )
+              .having(
+                (e) => e.toString(),
+                'no payload',
+                isNot(contains('secret-payload')),
+              ),
+        ),
+      );
+    },
+  );
   const validScheduleId = '00000000-0000-4000-8000-000000000001';
 
   test(

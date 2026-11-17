@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:backup_database/core/errors/service_connection_exception.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/execution_origin.dart';
 import 'package:backup_database/domain/services/i_backup_progress_notifier.dart';
 import 'package:backup_database/domain/services/i_scheduler_service.dart';
@@ -175,6 +176,17 @@ class ServiceSchedulerProxy implements ISchedulerService {
       var payload = _attempts[scheduleId];
       if (payload == null) {
         final status = await request('status', '');
+        if (status['code'] == 'service_not_ready') {
+          return const rd.Failure(
+            BackupFailure(
+              message:
+                  'O serviço respondeu, mas o executor ainda não está pronto. '
+                  'Aguarde a inicialização e tente novamente. Se persistir, '
+                  'consulte os logs de inicialização do serviço. Nenhum backup foi solicitado.',
+              code: 'service_not_ready',
+            ),
+          );
+        }
         if (status['ok'] != true || status['epoch'] is! String) {
           return const rd.Failure(
             BackupFailure(
@@ -216,7 +228,13 @@ class ServiceSchedulerProxy implements ISchedulerService {
           message: response['error'] as String? ?? 'Falha no serviço',
         ),
       );
-    } on Object catch (e) {
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'event=service_backup_request_failed scheduleId=$scheduleId '
+        'executeRequested=$executeRequested previousAttempt=$hadPreviousAttempt',
+        e,
+        s,
+      );
       if (!hadPreviousAttempt &&
           (!executeRequested || e is ServiceConnectionException)) {
         // Neither a failed handshake nor an unopened channel can start work.
@@ -230,7 +248,10 @@ class ServiceSchedulerProxy implements ISchedulerService {
                 'Abra Configurações > Serviço Windows e verifique o status. '
                 'Se estiver parado, use Iniciar; se estiver iniciando, aguarde '
                 'e tente novamente. Se estiver em execução, consulte os logs '
-                'do serviço para identificar a falha de comunicação.',
+                'do serviço para identificar a falha de comunicação. '
+                'Se o serviço não estiver instalado, feche a interface pelo '
+                'menu Sair e abra novamente para refazer a detecção. '
+                '${e is ServiceConnectionException && e.reason != null ? 'Diagnóstico: ${e.reason}' : ''}',
             code: 'service_unavailable_before_execution',
             originalError: e,
           ),
@@ -286,6 +307,16 @@ class ServiceSchedulerProxy implements ISchedulerService {
   void stop() {
     _lifecycle++;
     _stopProgress();
+    final interruption = _progressInterruption;
+    if (interruption != null && !interruption.isCompleted) {
+      interruption.complete({
+        'ok': false,
+        'uncertain': true,
+        'error':
+            'O acompanhamento foi encerrado nesta interface. '
+            'O backup pode continuar no serviço; consulte o histórico antes de iniciar outra execução.',
+      });
+    }
   }
 
   @override

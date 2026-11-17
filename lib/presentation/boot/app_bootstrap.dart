@@ -382,6 +382,7 @@ class AppBootstrapDependencies {
 }
 
 class AppBootstrap {
+  static List<String> _servicePresenceDiagnostics = [];
   AppBootstrap({AppBootstrapDependencies? dependencies})
     : _dependencies = dependencies ?? AppBootstrapDependencies.defaults();
 
@@ -397,6 +398,7 @@ class AppBootstrap {
 
   @visibleForTesting
   Future<void> start() async {
+    _servicePresenceDiagnostics = [];
     final bootstrapWatch = Stopwatch()..start();
     final rawArgs = _dependencies.environment.executableArguments();
     final rawEnvironment = _dependencies.environment.environment();
@@ -488,6 +490,14 @@ class AppBootstrap {
       }
 
       await _dependencies.environment.setupServiceLocator();
+      // The presence probe runs before the file logger exists. Persist its
+      // evidence now, otherwise installed GUI builds lose this diagnosis.
+      for (final diagnostic in _servicePresenceDiagnostics) {
+        _dependencies.runtime.logInfo(
+          'event=boot_service_presence_diagnostic $diagnostic '
+          'administrativeUi=${ExecutionOwnership.administrativeUi}',
+        );
+      }
       _logBootstrapPhase(bootstrapWatch, 'service_locator_ready');
 
       await _dependencies.uiServices.ipcServerStartupTask.start(
@@ -586,7 +596,9 @@ class AppBootstrap {
   }) async {
     if (Platform.isWindows &&
         bootstrapContext.launchOrigin != LaunchOrigin.scheduledExecution) {
-      final presence = WindowsServicePresenceProbe().read();
+      final probe = WindowsServicePresenceProbe();
+      final presence = await probe.resolve();
+      _servicePresenceDiagnostics = List.of(probe.diagnostics);
       LoggerService.info(
         'event=boot_service_presence source=windows_scm '
         'presence=${presence.presence.name} error=${presence.errorCode}',

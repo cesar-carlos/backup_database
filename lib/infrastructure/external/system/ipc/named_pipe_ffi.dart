@@ -74,6 +74,12 @@ class NamedPipeFfi {
         'DisconnectNamedPipe',
       );
 
+  static final int Function(int, Pointer<NativeType>) _cancelIoEx = _k32
+      .lookupFunction<
+        Int32 Function(IntPtr, Pointer<NativeType>),
+        int Function(int, Pointer<NativeType>)
+      >('CancelIoEx');
+
   static final int Function(Pointer<Utf16>, int) _waitNamedPipe = _k32
       .lookupFunction<
         Int32 Function(Pointer<Utf16>, Uint32),
@@ -213,6 +219,9 @@ class NamedPipeFfi {
     return handle != 0 && handle != _invalidHandleValue;
   }
 
+  static int _lastOperationError = 0;
+  static int get lastError => _lastOperationError;
+
   static int createServerPipe({
     required String pipeName,
     required bool firstInstance,
@@ -220,12 +229,15 @@ class NamedPipeFfi {
   }) {
     final namePtr = pipeName.toNativeUtf16();
     try {
+      // Resolve GetLastError before the native operation: resolving an FFI
+      // symbol (or freeing memory) can itself overwrite the thread error.
+      _getLastError();
       var openMode = _pipeAccessDuplex;
       if (firstInstance) {
         openMode |= _fileFlagFirstPipeInstance;
       }
       const pipeMode = _pipeRejectRemoteClients;
-      return _createNamedPipe(
+      final handle = _createNamedPipe(
         namePtr,
         openMode,
         pipeMode,
@@ -235,12 +247,15 @@ class NamedPipeFfi {
         0,
         security?.pointer ?? nullptr,
       );
+      _lastOperationError = handleIsValid(handle) ? 0 : _getLastError();
+      return handle;
     } finally {
       calloc.free(namePtr);
     }
   }
 
   static bool connectServerPipe(int handle) {
+    _getLastError();
     final ok = _connectNamedPipe(handle, nullptr);
     if (ok != 0) {
       return true;
@@ -252,6 +267,9 @@ class NamedPipeFfi {
     if (!handleIsValid(handle)) {
       return;
     }
+    // A worker may be blocked in ReadFile. Disconnecting first can itself
+    // block, preventing the server from reaching its shutdown deadline.
+    _cancelIoEx(handle, nullptr);
     _disconnectNamedPipe(handle);
   }
 
@@ -259,7 +277,7 @@ class NamedPipeFfi {
     if (!handleIsValid(handle)) {
       return;
     }
-    _disconnectNamedPipe(handle);
+    disconnect(handle);
     _closeHandle(handle);
   }
 
@@ -267,23 +285,26 @@ class NamedPipeFfi {
     required String pipeName,
     required Duration timeout,
   }) {
-    final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
-      final remaining = deadline.difference(DateTime.now());
-      final handle = _openClient(pipeName);
+    final elapsed = Stopwatch()..start();
+    var lastError = 2;
+    while (elapsed.elapsed < timeout) {
+      final remaining = timeout - elapsed.elapsed;
+      final (handle, error) = _openClient(pipeName);
       if (handleIsValid(handle)) {
         return handle;
       }
-      if (_getLastError() != _errorPipeBusy) {
-        final namePtr = pipeName.toNativeUtf16();
-        try {
-          _waitNamedPipe(
-            namePtr,
-            remaining.inMilliseconds.clamp(1, 0x7fffffff),
+      lastError = error;
+      if (lastError != _errorPipeBusy) {
+        // WaitNamedPipe returns immediately when no pipe exists. Retrying it
+        // without a delay spins a CPU core for the entire connect timeout.
+        if (lastError != 2) {
+          throw FileSystemException(
+            'CreateFileW named pipe',
+            pipeName,
+            OSError('Win32', lastError),
           );
-        } finally {
-          calloc.free(namePtr);
         }
+        sleep(Duration(milliseconds: remaining.inMilliseconds.clamp(1, 25)));
         continue;
       }
       final namePtr = pipeName.toNativeUtf16();
@@ -293,19 +314,30 @@ class NamedPipeFfi {
           remaining.inMilliseconds.clamp(1, 0x7fffffff),
         );
         if (waited == 0) {
-          return null;
+          lastError = _getLastError();
+          if (lastError == 2) continue;
+          throw FileSystemException(
+            'WaitNamedPipeW',
+            pipeName,
+            OSError('Win32', lastError),
+          );
         }
       } finally {
         calloc.free(namePtr);
       }
     }
-    return null;
+    throw FileSystemException(
+      'Named pipe unavailable before deadline',
+      pipeName,
+      OSError('Win32', lastError),
+    );
   }
 
-  static int _openClient(String pipeName) {
+  static (int, int) _openClient(String pipeName) {
     final namePtr = pipeName.toNativeUtf16();
     try {
-      return _createFile(
+      _getLastError();
+      final handle = _createFile(
         namePtr,
         _genericRead | _genericWrite,
         0,
@@ -314,6 +346,8 @@ class NamedPipeFfi {
         0,
         0,
       );
+      final error = handleIsValid(handle) ? 0 : _getLastError();
+      return (handle, error);
     } finally {
       calloc.free(namePtr);
     }
