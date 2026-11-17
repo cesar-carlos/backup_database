@@ -4,7 +4,6 @@ import 'package:backup_database/application/providers/license_provider.dart';
 import 'package:backup_database/application/providers/log_provider.dart';
 import 'package:backup_database/application/providers/scheduler_provider.dart';
 import 'package:backup_database/application/services/log_service.dart';
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/domain/entities/backup_history.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/entities/schedule.dart';
@@ -35,12 +34,7 @@ FluentThemeData testPageFluentTheme(Brightness brightness) {
   final base = brightness == Brightness.dark
       ? FluentThemeData.dark()
       : FluentThemeData.light();
-  return base.copyWith(
-    extensions: [
-      if (brightness == Brightness.dark) AppSemanticColors.dark,
-      if (brightness != Brightness.dark) AppSemanticColors.light,
-    ],
-  );
+  return base;
 }
 
 MediaQueryData pageTestMediaQuery({required double textScale}) {

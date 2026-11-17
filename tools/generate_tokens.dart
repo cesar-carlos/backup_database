@@ -15,7 +15,7 @@ void main(List<String> args) {
     '// ignore_for_file: public_member_api_docs, prefer_int_literals',
   );
   sink.writeln();
-  sink.writeln("import 'package:flutter/material.dart';");
+  sink.writeln("import 'package:material_ui/material_ui.dart';");
   sink.writeln();
   sink.writeln(_emitSpacing(root));
   sink.writeln(_emitRadius(root));

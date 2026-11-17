@@ -28,7 +28,8 @@ $PostgresConfigCopyWith<PostgresConfig> get copyWith => _$PostgresConfigCopyWith
 
 @override
 String toString() {
-  return 'PostgresConfig(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled)';
+  final _this = this as PostgresConfig;
+  return 'PostgresConfig(id: ${_this.id}, name: ${_this.name}, host: ${_this.host}, database: ${_this.database}, username: ${_this.username}, password: ${_this.password}, port: ${_this.port}, createdAt: ${_this.createdAt}, updatedAt: ${_this.updatedAt}, enabled: ${_this.enabled})';
 }
 
 
@@ -235,7 +236,7 @@ _$PostgresConfigCopyWith<_PostgresConfig> get copyWith => __$PostgresConfigCopyW
 
 @override
 String toString() {
-  return 'PostgresConfig.raw(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled)';
+    return 'PostgresConfig.raw(id: $id, name: $name, host: $host, database: $database, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, enabled: $enabled)';
 }
 
 

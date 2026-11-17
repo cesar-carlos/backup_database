@@ -28,7 +28,8 @@ $SybaseConfigCopyWith<SybaseConfig> get copyWith => _$SybaseConfigCopyWithImpl<S
 
 @override
 String toString() {
-  return 'SybaseConfig(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, databaseFile: $databaseFile, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment)';
+  final _this = this as SybaseConfig;
+  return 'SybaseConfig(id: ${_this.id}, name: ${_this.name}, serverName: ${_this.serverName}, databaseName: ${_this.databaseName}, username: ${_this.username}, password: ${_this.password}, port: ${_this.port}, createdAt: ${_this.createdAt}, updatedAt: ${_this.updatedAt}, databaseFile: ${_this.databaseFile}, enabled: ${_this.enabled}, isReplicationEnvironment: ${_this.isReplicationEnvironment})';
 }
 
 
@@ -239,7 +240,7 @@ _$SybaseConfigCopyWith<_SybaseConfig> get copyWith => __$SybaseConfigCopyWithImp
 
 @override
 String toString() {
-  return 'SybaseConfig.raw(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, databaseFile: $databaseFile, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment)';
+    return 'SybaseConfig.raw(id: $id, name: $name, serverName: $serverName, databaseName: $databaseName, username: $username, password: $password, port: $port, createdAt: $createdAt, updatedAt: $updatedAt, databaseFile: $databaseFile, enabled: $enabled, isReplicationEnvironment: $isReplicationEnvironment)';
 }
 
 

@@ -52,6 +52,9 @@ Detalhe normativo: `.cursor/rules/clean_architecture.mdc` e
 
 | Topico | Documento |
 | --- | --- |
+| SDK, dependencias e validacao local | [development.md](development.md) |
+| Separacao entre interface e servico Windows | [Interface e executor](../architecture/service-interface.md) |
+| Evolucao de temas e plugins desktop no Flutter 3.50 | [ADR-018](../adr/018-flutter-350-desktop-and-goldens.md) |
 | Ports genericos por SGBD | `docs/adr/004-generic-hexagonal-ports-sgbds.md` |
 | Design system / tema | `docs/adr/009-design-system-themeextension-composition.md` |
 | Helpers obrigatorios (repos, providers, bytes, …) | `.cursor/rules/architectural_patterns.mdc` |

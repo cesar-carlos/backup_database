@@ -101,20 +101,16 @@ Widget buildDatabaseConfigDataGridWithTestColumnUseCase(BuildContext context) {
 
 @widgetbook.UseCase(name: 'Empty', type: DatabaseConfigDataGrid)
 Widget buildDatabaseConfigDataGridEmptyUseCase(BuildContext context) {
-  return _gridScroll(
-    DatabaseConfigDataGrid<_StoryConfig>(configs: const [], rowOf: _rowOf),
-  );
+  return DatabaseConfigDataGrid<_StoryConfig>(configs: const [], rowOf: _rowOf);
 }
 
 @widgetbook.UseCase(name: 'Empty with add', type: DatabaseConfigDataGrid)
 Widget buildDatabaseConfigDataGridEmptyWithAddUseCase(BuildContext context) {
-  return _gridScroll(
-    DatabaseConfigDataGrid<_StoryConfig>(
-      configs: const [],
-      rowOf: _rowOf,
-      onAddWhenEmpty: () {},
-      addWhenEmptyButtonLabel: 'New configuration',
-    ),
+  return DatabaseConfigDataGrid<_StoryConfig>(
+    configs: const [],
+    rowOf: _rowOf,
+    onAddWhenEmpty: () {},
+    addWhenEmptyButtonLabel: 'New configuration',
   );
 }
 
@@ -123,7 +119,10 @@ Widget _gridScroll(Widget grid) {
     alignment: Alignment.topLeft,
     child: SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: Padding(padding: const EdgeInsets.only(bottom: 16), child: grid),
+      child: SizedBox(
+        width: 1400,
+        child: Padding(padding: const EdgeInsets.only(bottom: 16), child: grid),
+      ),
     ),
   );
 }

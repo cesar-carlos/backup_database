@@ -39,19 +39,26 @@ class FTPFile {
   }
 
   Future<int> size(String? sFilename) async {
-    try {
-      var sResponse = await _socket.sendCommand('SIZE $sFilename');
-      if (!sResponse.isSuccessCode() &&
-          _socket.transferType != TransferType.binary) {
-        final socketTransferTypeBackup = _socket.transferType;
-        await _socket.setTransferType(TransferType.binary);
-        sResponse = await _socket.sendCommand('SIZE $sFilename');
-        await _socket.setTransferType(socketTransferTypeBackup);
-      }
-      return int.parse(sResponse.message.replaceAll('213 ', ''));
-    } catch (e) {
-      return -1;
+    var sResponse = await _socket.sendCommand('SIZE $sFilename');
+    if (!sResponse.isSuccessCode() &&
+        _socket.transferType != TransferType.binary) {
+      final socketTransferTypeBackup = _socket.transferType;
+      await _socket.setTransferType(TransferType.binary);
+      sResponse = await _socket.sendCommand('SIZE $sFilename');
+      await _socket.setTransferType(socketTransferTypeBackup);
     }
+    if (sResponse.code != 213) return -1;
+    final match = RegExp(r'^213 ([0-9]+)\s*$').firstMatch(sResponse.message);
+    if (match == null) {
+      _socket.abort();
+      throw FTPConnectException('Invalid SIZE reply', sResponse.message);
+    }
+    final value = int.tryParse(match.group(1)!);
+    if (value == null) {
+      _socket.abort();
+      throw FTPConnectException('Invalid SIZE value', sResponse.message);
+    }
+    return value;
   }
 
   Future<bool> download(

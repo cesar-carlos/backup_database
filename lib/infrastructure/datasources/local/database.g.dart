@@ -14448,7 +14448,19 @@ class $$SqlServerConfigsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $SqlServerConfigsTableTable,
+                    SqlServerConfigsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SqlServerConfigsTableTable,
+                    SqlServerConfigsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -14802,7 +14814,18 @@ class $$SybaseConfigsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SybaseConfigsTableTable, SybaseConfigsTableData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $SybaseConfigsTableTable,
+                    SybaseConfigsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -15113,7 +15136,19 @@ class $$PostgresConfigsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $PostgresConfigsTableTable,
+                    PostgresConfigsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $PostgresConfigsTableTable,
+                    PostgresConfigsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -15548,7 +15583,19 @@ class $$FirebirdConfigsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $FirebirdConfigsTableTable,
+                    FirebirdConfigsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $FirebirdConfigsTableTable,
+                    FirebirdConfigsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -15896,7 +15943,10 @@ class $$BackupDestinationsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $BackupDestinationsTableTable,
+                    BackupDestinationsTableData
+                  >(table),
                   $$BackupDestinationsTableTableReferences(db, table, e),
                 ),
               )
@@ -15911,10 +15961,11 @@ class $$BackupDestinationsTableTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (scheduleDestinationsTableRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       BackupDestinationsTableData,
                       $BackupDestinationsTableTable,
-                      ScheduleDestinationsTableData
+                      ScheduleDestinationsTableData,
+                      $ScheduleDestinationsTableTable
                     >(
                       currentTable: table,
                       referencedTable: $$BackupDestinationsTableTableReferences
@@ -15925,10 +15976,8 @@ class $$BackupDestinationsTableTableTableManager
                             table,
                             p0,
                           ).scheduleDestinationsTableRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.destinationId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'destination_id',
                       typedResults: items,
                     ),
                 ];
@@ -16577,7 +16626,7 @@ class $$SchedulesTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$SchedulesTableTable, SchedulesTableData>(table),
                   $$SchedulesTableTableReferences(db, table, e),
                 ),
               )
@@ -16592,10 +16641,11 @@ class $$SchedulesTableTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (scheduleDestinationsTableRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       SchedulesTableData,
                       $SchedulesTableTable,
-                      ScheduleDestinationsTableData
+                      ScheduleDestinationsTableData,
+                      $ScheduleDestinationsTableTable
                     >(
                       currentTable: table,
                       referencedTable: $$SchedulesTableTableReferences
@@ -16606,8 +16656,8 @@ class $$SchedulesTableTableTableManager
                             table,
                             p0,
                           ).scheduleDestinationsTableRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.scheduleId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'schedule_id',
                       typedResults: items,
                     ),
                 ];
@@ -16969,7 +17019,10 @@ class $$ScheduleDestinationsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $ScheduleDestinationsTableTable,
+                    ScheduleDestinationsTableData
+                  >(table),
                   $$ScheduleDestinationsTableTableReferences(db, table, e),
                 ),
               )
@@ -17442,7 +17495,18 @@ class $$BackupHistoryTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$BackupHistoryTableTable, BackupHistoryTableData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $BackupHistoryTableTable,
+                    BackupHistoryTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -17692,7 +17756,18 @@ class $$BackupLogsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$BackupLogsTableTable, BackupLogsTableData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $BackupLogsTableTable,
+                    BackupLogsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -18382,7 +18457,9 @@ class $$EmailConfigsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$EmailConfigsTableTable, EmailConfigsTableData>(
+                    table,
+                  ),
                   $$EmailConfigsTableTableReferences(db, table, e),
                 ),
               )
@@ -18398,10 +18475,11 @@ class $$EmailConfigsTableTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (emailNotificationTargetsTableRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       EmailConfigsTableData,
                       $EmailConfigsTableTable,
-                      EmailNotificationTargetsTableData
+                      EmailNotificationTargetsTableData,
+                      $EmailNotificationTargetsTableTable
                     >(
                       currentTable: table,
                       referencedTable: $$EmailConfigsTableTableReferences
@@ -18412,10 +18490,8 @@ class $$EmailConfigsTableTableTableManager
                             table,
                             p0,
                           ).emailNotificationTargetsTableRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where(
-                            (e) => e.emailConfigId == item.id,
-                          ),
+                      currentColumn: 'id',
+                      referencedColumn: 'email_config_id',
                       typedResults: items,
                     ),
                 ];
@@ -18803,7 +18879,10 @@ class $$EmailNotificationTargetsTableTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<
+                    $EmailNotificationTargetsTableTable,
+                    EmailNotificationTargetsTableData
+                  >(table),
                   $$EmailNotificationTargetsTableTableReferences(db, table, e),
                 ),
               )
@@ -19201,7 +19280,19 @@ class $$EmailTestAuditTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $EmailTestAuditTableTable,
+                    EmailTestAuditTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $EmailTestAuditTableTable,
+                    EmailTestAuditTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -19470,7 +19561,16 @@ class $$LicensesTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$LicensesTableTable, LicensesTableData>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $LicensesTableTable,
+                    LicensesTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -19714,7 +19814,19 @@ class $$MachineSettingsTableTableTableManager
                     scheduleTransferDestinationsJson,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $MachineSettingsTableTable,
+                    MachineSettingsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MachineSettingsTableTable,
+                    MachineSettingsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -19992,7 +20104,19 @@ class $$ExecutionQueueItemsTableTableTableManager
                 expiresAtMicros: expiresAtMicros,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ExecutionQueueItemsTableTable,
+                    ExecutionQueueItemsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ExecutionQueueItemsTableTable,
+                    ExecutionQueueItemsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -20200,7 +20324,19 @@ class $$IdempotencyEntriesTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $IdempotencyEntriesTableTable,
+                    IdempotencyEntriesTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $IdempotencyEntriesTableTable,
+                    IdempotencyEntriesTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -20503,7 +20639,19 @@ class $$MutableCommandAuditTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $MutableCommandAuditTableTable,
+                    MutableCommandAuditTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MutableCommandAuditTableTable,
+                    MutableCommandAuditTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -20785,7 +20933,19 @@ class $$ServerCredentialsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ServerCredentialsTableTable,
+                    ServerCredentialsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ServerCredentialsTableTable,
+                    ServerCredentialsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -21043,7 +21203,19 @@ class $$ConnectionLogsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ConnectionLogsTableTable,
+                    ConnectionLogsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ConnectionLogsTableTable,
+                    ConnectionLogsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -21359,7 +21531,19 @@ class $$ServerConnectionsTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ServerConnectionsTableTable,
+                    ServerConnectionsTableData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ServerConnectionsTableTable,
+                    ServerConnectionsTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -21757,7 +21941,18 @@ class $$FileTransfersTableTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$FileTransfersTableTable, FileTransfersTableData>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $FileTransfersTableTable,
+                    FileTransfersTableData
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),

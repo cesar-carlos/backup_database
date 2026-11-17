@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:backup_database/application/providers/async_state_mixin.dart';
 import 'package:backup_database/core/errors/failure.dart';
 import 'package:flutter/foundation.dart';
@@ -32,6 +34,54 @@ class _TestProvider extends ChangeNotifier with AsyncStateMixin {
 }
 
 void main() {
+  for (final fail in [false, true]) {
+    test('completion after dispose is safe (failure: $fail)', () async {
+      final provider = _TestProvider();
+      final pending = Completer<int>();
+      final result = provider.doRunAsync<int>(action: () => pending.future);
+      final notifications = provider.notifyCount;
+      provider.dispose();
+      if (fail) {
+        pending.completeError(StateError('late failure'));
+      } else {
+        pending.complete(42);
+      }
+      expect(await result, fail ? isNull : 42);
+      expect(provider.notifyCount, notifications);
+      expect(provider.isLoading, isFalse);
+    });
+  }
+
+  test('disposed provider never starts new asynchronous work', () async {
+    final provider = _TestProvider()..dispose();
+    var executed = false;
+    expect(
+      await provider.doRunAsync<int>(
+        action: () async {
+          executed = true;
+          return 1;
+        },
+      ),
+      isNull,
+    );
+    expect(executed, isFalse);
+    expect(provider.notifyCount, 0);
+  });
+
+  test('dispose preserves the original rethrown failure', () async {
+    final provider = _TestProvider();
+    final pending = Completer<int>();
+    final error = StateError('original');
+    final result = provider.doRunAsync<int>(
+      action: () => pending.future,
+      rethrowOnError: true,
+    );
+    final assertion = expectLater(result, throwsA(same(error)));
+    provider.dispose();
+    pending.completeError(error);
+    await assertion;
+  });
+
   group('AsyncStateMixin.runAsync — happy path', () {
     test('returns the action value on success', () async {
       final provider = _TestProvider();

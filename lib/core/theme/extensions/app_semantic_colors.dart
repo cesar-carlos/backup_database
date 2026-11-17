@@ -1,5 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 @immutable
 class AppSemanticColors extends ThemeExtension<AppSemanticColors> {
@@ -106,7 +106,9 @@ extension AppSemanticColorsContext on BuildContext {
   AppSemanticColors get appSemanticColors {
     final fluent = FluentTheme.maybeOf(this);
     if (fluent != null) {
-      return fluent.extension<AppSemanticColors>() ?? AppSemanticColors.light;
+      return fluent.brightness == Brightness.dark
+          ? AppSemanticColors.dark
+          : AppSemanticColors.light;
     }
     try {
       final material = Theme.of(this);

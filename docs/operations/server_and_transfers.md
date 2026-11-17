@@ -33,11 +33,38 @@ O envio usa `.part` e so renomeia depois da validacao. Retomada usa `REST` +
 `STOR`; reaproveitar um parcial exige verificacao de conteudo, mesmo quando
 seu tamanho ja coincide. Sem hash remoto, isso exige download de verificacao.
 
+O arquivo final existente tambem exige comparacao de conteudo para ser reutilizado;
+igualdade de tamanho sozinha nao comprova que seja o mesmo backup. Um envio novo
+sem retomada ainda respeita a opcao de validacao forte configurada no destino.
+O sidecar `.sha256` registra o hash local, mas nao substitui a verificacao remota.
+
+Falha inconclusiva de integridade (por exemplo, hash indisponivel ou read-back
+interrompido), retorno falso do envio e falha de renomeacao preservam o `.part`.
+Divergencia confirmada na validacao provoca tentativa de excluir o parcial.
+Ele nunca e promovido a arquivo final sem passar pela validacao exigida.
+
+O transporte transmite um fluxo de bytes, nao arquivos independentes por bloco.
+A retomada consulta `SIZE` e envia o restante com `REST <offset>` seguido de
+`STOR`; o aceite inicial nao basta, e necessario receber a confirmacao final.
+O nome parcial inclui a identidade da execucao/destino. A reutilizacao depende
+de manter o mesmo nome nas tentativas; uma nova execucao com outro `runId` nao
+descobre automaticamente parciais antigos. Sem identidade, o nome e aleatorio.
+
 Cancelamento aborta controle e dados sem enviar `QUIT` concorrentemente. Se
 `keepPartOnCancel` estiver desativado, outra sessao tenta apagar o parcial;
 falhas de acesso/rede sao registradas e podem deixar o parcial no destino.
 Timeout invalida a sessao para nao reutilizar respostas atrasadas. O download
 de verificacao tem timeout de inatividade e confere o tamanho recebido.
+
+Erros de conexao durante `SIZE` nao significam ausencia do arquivo. Respostas
+malformadas ou encerramento pelo servidor (`421`) invalidam a sessao, impedindo
+que uma resposta atrasada seja usada no comando seguinte. Falhas de transporte
+durante HASH ou read-back encerram a tentativa; nao se repete `RETR` nem se
+testam comandos alternativos na mesma conexao comprometida. Respostas negativas
+normais para comandos de hash ainda permitem tentar outro metodo de validacao.
+Se a integridade de um arquivo final existente ficar inconclusiva, a tentativa
+para sem autorizar sua substituicao. A proxima tentativa abre nova conexao e
+consulta novamente o tamanho remoto antes de escolher o offset de retomada.
 
 ## Google Drive
 

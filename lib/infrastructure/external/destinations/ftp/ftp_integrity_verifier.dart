@@ -36,8 +36,6 @@ class FtpIntegrityValidationResult {
 class FtpIntegrityVerifier {
   static const _sizeValidationRetries = 5;
   static const _sizeValidationRetryDelay = Duration(milliseconds: 800);
-  static const _integrityReadBackMaxAttempts = 2;
-  static const _integrityReadBackRetryDelay = Duration(seconds: 1);
 
   static final _random = Random.secure();
 
@@ -237,15 +235,14 @@ class FtpIntegrityVerifier {
   ) async {
     await _ensureBinaryTransferType(ftp);
 
-    // RFC 3659 extension used by many servers.
+    // Unsupported commands return negative replies. Transport exceptions must
+    // stop this attempt; fallback on the same broken session is not safe.
     try {
       await ftp.sendCustomCommand('OPTS HASH SHA-256');
     } on Object catch (e, st) {
-      LoggerService.debug(
-        'FTP OPTS HASH not supported or failed: $e',
-        e,
-        st,
-      );
+      LoggerService.debug('FTP OPTS HASH connection failed: $e', e, st);
+      ftp.abort();
+      rethrow;
     }
 
     final commands = <String>[
@@ -260,12 +257,21 @@ class FtpIntegrityVerifier {
         if (!reply.isSuccessCode()) {
           continue;
         }
-        final parsed = _extractSha256FromReply(reply.message);
+        // A server can echo a filename containing a 64-character digest.
+        // Never mistake that name for the checksum of the remote contents.
+        final message = reply.message.trimRight();
+        final filenameSuffix = ' $remoteFileName';
+        final checksumReply = message.endsWith(filenameSuffix)
+            ? message.substring(0, message.length - filenameSuffix.length)
+            : message;
+        final parsed = _extractSha256FromReply(checksumReply);
         if (parsed != null) {
           return parsed;
         }
       } on Object catch (e) {
-        LoggerService.debug('Comando $command não suportado: $e');
+        LoggerService.debug('Falha de comunicação no comando $command: $e');
+        ftp.abort();
+        rethrow;
       }
     }
 
@@ -273,9 +279,14 @@ class FtpIntegrityVerifier {
   }
 
   String? _extractSha256FromReply(String replyMessage) {
-    final pattern = RegExp('(?<![A-Fa-f0-9])[A-Fa-f0-9]{64}(?![A-Fa-f0-9])');
+    // Accept a checksum field, never an arbitrary digest embedded in prose,
+    // quoted filenames or error text from a nominally successful response.
+    final pattern = RegExp(
+      r'^(?:213|250)\s+(?:SHA-?256\s+)?(?:[0-9]+-[0-9]+\s+)?([A-Fa-f0-9]{64})\s*$',
+      caseSensitive: false,
+    );
     final match = pattern.firstMatch(replyMessage);
-    return match?.group(0);
+    return match?.group(1);
   }
 
   Future<FtpIntegrityValidationResult> _verifyByReadBack({
@@ -291,67 +302,64 @@ class FtpIntegrityVerifier {
     );
 
     Object? lastError;
-    for (var attempt = 0; attempt < _integrityReadBackMaxAttempts; attempt++) {
+    try {
+      await _ensureBinaryTransferType(ftp);
+      final downloaded = await ftp.downloadFile(
+        remoteFileName,
+        tempRemoteCopy,
+      );
+      if (!downloaded) {
+        throw Exception('downloadFile retornou false');
+      }
+
+      final remoteSha = await computeSha256Streaming(tempRemoteCopy);
+      if (remoteSha == null || remoteSha.isEmpty) {
+        throw Exception('Não foi possível calcular SHA-256 do read-back');
+      }
+
+      if (remoteSha.toLowerCase() == localSha256.toLowerCase()) {
+        LoggerService.info(
+          'Integridade FTP validada por read-back para $remoteFileName',
+        );
+        return const FtpIntegrityValidationResult(isValid: true);
+      }
+
+      return FtpIntegrityValidationResult(
+        isValid: false,
+        errorMessage:
+            'Falha de integridade no destino FTP: hash do arquivo '
+            'baixado do servidor diverge do arquivo local. '
+            'SHA local: $localSha256, SHA read-back: $remoteSha',
+        originalError: Exception(
+          'Divergência SHA-256 no read-back: '
+          'local=$localSha256 remoto=$remoteSha',
+        ),
+      );
+    } on Object catch (e) {
+      lastError = e;
+      // RETR may leave late 426/226 replies. A new attempt must reconnect
+      // through the destination orchestrator, not retry on this channel.
+      ftp.abort();
+    } finally {
       try {
-        await _ensureBinaryTransferType(ftp);
-        final downloaded = await ftp.downloadFile(
-          remoteFileName,
-          tempRemoteCopy,
+        if (await tempRemoteCopy.exists()) {
+          await tempRemoteCopy.delete();
+        }
+      } on Object catch (e, st) {
+        LoggerService.debug(
+          'FTP integrity temp copy delete: $e',
+          e,
+          st,
         );
-        if (!downloaded) {
-          throw Exception('downloadFile retornou false');
-        }
-
-        final remoteSha = await computeSha256Streaming(tempRemoteCopy);
-        if (remoteSha == null || remoteSha.isEmpty) {
-          throw Exception('Não foi possível calcular SHA-256 do read-back');
-        }
-
-        if (remoteSha.toLowerCase() == localSha256.toLowerCase()) {
-          LoggerService.info(
-            'Integridade FTP validada por read-back para $remoteFileName',
-          );
-          return const FtpIntegrityValidationResult(isValid: true);
-        }
-
-        return FtpIntegrityValidationResult(
-          isValid: false,
-          errorMessage:
-              'Falha de integridade no destino FTP: hash do arquivo '
-              'baixado do servidor diverge do arquivo local. '
-              'SHA local: $localSha256, SHA read-back: $remoteSha',
-          originalError: Exception(
-            'Divergência SHA-256 no read-back: '
-            'local=$localSha256 remoto=$remoteSha',
-          ),
-        );
-      } on Object catch (e) {
-        lastError = e;
-        if (attempt < _integrityReadBackMaxAttempts - 1) {
-          await Future.delayed(_integrityReadBackRetryDelay);
-        }
-      } finally {
-        try {
-          if (await tempRemoteCopy.exists()) {
-            await tempRemoteCopy.delete();
-          }
-        } on Object catch (e, st) {
-          LoggerService.debug(
-            'FTP integrity temp copy delete: $e',
-            e,
-            st,
-          );
-        }
       }
     }
-
     return FtpIntegrityValidationResult(
       isValid: false,
       failureCode: FailureCodes.ftpIntegrityValidationInconclusive,
       errorMessage:
-          'Não foi possível confirmar a integridade por read-back após '
-          '$_integrityReadBackMaxAttempts tentativas.',
-      originalError: lastError ?? Exception('Read-back sem detalhes'),
+          'Não foi possível confirmar a integridade por read-back. '
+          'A conexão foi encerrada; uma nova tentativa exige reconexão.',
+      originalError: lastError,
     );
   }
 }

@@ -1,4 +1,3 @@
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_density.dart';
 import 'package:backup_database/core/theme/tokens/app_target_size.dart';
 import 'package:backup_database/presentation/providers/app_density_provider.dart';
@@ -7,9 +6,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 FluentThemeData _theme() {
-  return FluentThemeData.light().copyWith(
-    extensions: const [AppSemanticColors.light],
-  );
+  return FluentThemeData.light().copyWith();
 }
 
 Future<void> _pump(WidgetTester tester, Widget child) {

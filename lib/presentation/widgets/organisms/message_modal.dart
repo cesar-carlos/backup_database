@@ -7,8 +7,9 @@ import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
 import 'package:backup_database/presentation/widgets/atoms/widget_texts.dart';
 import 'package:backup_database/presentation/widgets/molecules/cancel_button.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:material_ui/material_ui.dart'
+    show ScaffoldMessenger, SnackBar, Text;
 
 enum MessageType { success, info, warning, error }
 

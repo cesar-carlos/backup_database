@@ -89,8 +89,6 @@ class _LogsPageState extends State<LogsPage> {
       dialogTitle: 'Exportar Logs',
       fileName: suggestedName,
       bytes: Uint8List(0),
-      type: FileType.custom,
-      allowedExtensions: ['txt', 'json', 'csv'],
     );
 
     if (uri == null) return;

@@ -4,12 +4,13 @@ import 'dart:io';
 import 'package:backup_database/core/constants/app_image_assets.dart';
 import 'package:backup_database/core/l10n/app_locale_string.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
+import 'package:backup_database/presentation/managers/desktop_tray_backend.dart';
 import 'package:backup_database/presentation/managers/window_manager_service.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:tray_manager/tray_manager.dart';
 
 enum TrayMenuAction {
   show,
@@ -20,10 +21,14 @@ enum TrayMenuAction {
   exit,
 }
 
-class TrayManagerService with TrayListener {
+class TrayManagerService with TrayEvents {
   factory TrayManagerService() => _instance;
   TrayManagerService._();
   static final TrayManagerService _instance = TrayManagerService._();
+
+  @visibleForTesting
+  TrayBackend? backendOverride;
+  TrayBackend get _backend => backendOverride ?? desktopTrayBackend;
 
   Function(TrayMenuAction)? _onMenuAction;
   bool _isSchedulerPaused = false;
@@ -55,31 +60,31 @@ class TrayManagerService with TrayListener {
     }
 
     _onMenuAction = onMenuAction;
-    trayManager.addListener(this);
+    _backend.addListener(this);
 
     try {
       final iconPath = await _getTrayIconPath();
       final iconFile = File(iconPath);
 
       if (iconFile.existsSync()) {
-        await trayManager.setIcon(iconFile.absolute.path);
+        await _backend.setIcon(iconFile.absolute.path);
       } else {
         final executablePath = Platform.resolvedExecutable;
-        await trayManager.setIcon(executablePath);
+        await _backend.setIcon(executablePath);
       }
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao configurar ícone da bandeja', e, stackTrace);
       try {
         final executablePath = Platform.resolvedExecutable;
-        await trayManager.setIcon(executablePath);
+        await _backend.setIcon(executablePath);
       } on Object catch (e2) {
         LoggerService.error('Erro crítico ao configurar ícone', e2);
-        trayManager.removeListener(this);
+        _backend.removeListener(this);
         rethrow;
       }
     }
 
-    await trayManager.setToolTip('Backup Database - Ativo');
+    await _backend.setToolTip('Backup Database - Ativo');
     await Future.delayed(const Duration(milliseconds: 100));
 
     await _updateMenu();
@@ -201,14 +206,14 @@ class TrayManagerService with TrayListener {
   Future<void> _updateMenu() async {
     try {
       final locale = appLocaleFromPlatform();
-      final menu = Menu(
+      final menu = TrayMenu(
         items: [
-          MenuItem(
+          TrayMenuItem(
             key: 'show',
             label: appLocaleStringForLocale(locale, 'Abrir', 'Open'),
           ),
-          MenuItem.separator(),
-          MenuItem(
+          const TrayMenuItem.separator(),
+          TrayMenuItem(
             key: 'settings',
             label: appLocaleStringForLocale(
               locale,
@@ -216,15 +221,15 @@ class TrayManagerService with TrayListener {
               'Settings',
             ),
           ),
-          MenuItem.separator(),
-          MenuItem(
+          const TrayMenuItem.separator(),
+          TrayMenuItem(
             key: 'exit',
             label: appLocaleStringForLocale(locale, 'Sair', 'Exit'),
           ),
         ],
       );
 
-      await trayManager.setContextMenu(menu);
+      await _backend.setContextMenu(menu);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao configurar menu de contexto', e, stackTrace);
       rethrow;
@@ -239,7 +244,7 @@ class TrayManagerService with TrayListener {
 
   Future<void> _updateTooltip() async {
     final status = _isSchedulerPaused ? 'Pausado' : 'Ativo';
-    await trayManager.setToolTip('Backup Database - $status');
+    await _backend.setToolTip('Backup Database - $status');
   }
 
   Future<void> setBackupRunning(
@@ -248,7 +253,7 @@ class TrayManagerService with TrayListener {
   }) => _enqueueLifecycle(() async {
     if (!_isInitialized) return;
     if (running) {
-      await trayManager.setToolTip(
+      await _backend.setToolTip(
         'Backup Database - Executando backup${databaseName != null ? ': $databaseName' : ''}',
       );
     } else {
@@ -295,14 +300,14 @@ class TrayManagerService with TrayListener {
     try {
       await _updateMenu();
       await Future.delayed(const Duration(milliseconds: 50));
-      await trayManager.popUpContextMenu();
+      await _backend.popUpContextMenu();
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao exibir menu de contexto', e, stackTrace);
     }
   }
 
   @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
+  void onTrayMenuItemClick(TrayMenuItem menuItem) {
     if (!_isInitialized) return;
     switch (menuItem.key) {
       case 'show':
@@ -325,9 +330,9 @@ class TrayManagerService with TrayListener {
     _isInitialized = false;
     _isSchedulerPaused = false;
     _onMenuAction = null;
-    trayManager.removeListener(this);
+    _backend.removeListener(this);
     try {
-      await trayManager.destroy();
+      await _backend.destroy();
     } on Object catch (error, stackTrace) {
       LoggerService.error(
         'Erro ao remover ícone da bandeja',

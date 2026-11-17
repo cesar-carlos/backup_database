@@ -1,4 +1,3 @@
-import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:backup_database/core/theme/tokens/app_density.dart';
 import 'package:backup_database/presentation/providers/app_density_provider.dart';
 import 'package:backup_database/presentation/widgets/atoms/app_button.dart';
@@ -10,9 +9,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 FluentThemeData _goldenFluentTheme() {
-  return FluentThemeData.light().copyWith(
-    extensions: const [AppSemanticColors.light],
-  );
+  return FluentThemeData.light().copyWith();
 }
 
 Widget _goldenApp({required Widget home}) {

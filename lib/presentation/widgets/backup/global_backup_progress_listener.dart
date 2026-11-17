@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:backup_database/application/providers/backup_progress_provider.dart';
 import 'package:backup_database/core/routes/app_router.dart';
 import 'package:backup_database/presentation/widgets/backup/backup_progress_dialog.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class GlobalBackupProgressListener extends StatefulWidget {
   const GlobalBackupProgressListener({

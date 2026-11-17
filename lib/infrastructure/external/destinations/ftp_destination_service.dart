@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/ftp_failure.dart';
 import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/byte_format.dart';
@@ -175,7 +176,6 @@ class FtpDestinationService implements IFtpService {
       );
 
       if (!uploadResult.uploaded) {
-        await _uploader.safeDeletePart(ftp, remotePartName);
         throw Exception('Falha no upload do arquivo (retorno falso)');
       }
       UploadCancellation.throwIfCancelled(isCancelled);
@@ -192,7 +192,12 @@ class FtpDestinationService implements IFtpService {
       );
       UploadCancellation.throwIfCancelled(isCancelled);
       if (!validationResult.isValid) {
-        await _uploader.safeDeletePart(ftp, remotePartName);
+        // A missing HASH/SIZE or interrupted read-back is not corruption.
+        // Preserve the partial so the same attempt can validate it again.
+        if (validationResult.failureCode !=
+            FailureCodes.ftpIntegrityValidationInconclusive) {
+          await _uploader.safeDeletePart(ftp, remotePartName);
+        }
         return rd.Failure(
           FtpFailure(
             message: validationResult.errorMessage!,
@@ -205,7 +210,6 @@ class FtpDestinationService implements IFtpService {
 
       final renamed = await ftp.rename(remotePartName, fileName);
       if (!renamed) {
-        await _uploader.safeDeletePart(ftp, remotePartName);
         throw Exception(
           'Falha ao renomear arquivo temporário para nome final. '
           'Verifique permissões no servidor FTP.',

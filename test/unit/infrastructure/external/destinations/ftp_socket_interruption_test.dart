@@ -6,6 +6,51 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ftpconnect/ftpconnect.dart';
 
 void main() {
+  for (final reply in ['421 Closing', 'not an FTP reply']) {
+    test(
+      'invalidated control reply cannot leak a late success: $reply',
+      () async {
+        final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+        final peers = <Socket>[];
+        final commands = <String>[];
+        server.listen((peer) {
+          peers.add(peer);
+          peer.write('220 Ready\r\n');
+          peer
+              .cast<List<int>>()
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())
+              .listen((command) {
+                commands.add(command);
+                if (command.startsWith('USER')) peer.write('230 OK\r\n');
+                if (command == 'SIZE backup.part') {
+                  peer.write('$reply\r\n213 4\r\n');
+                }
+              }, onError: (Object _) {});
+          unawaited(peer.done.then<void>((_) {}, onError: (Object _) {}));
+        });
+        addTearDown(() async {
+          for (final peer in peers) {
+            peer.destroy();
+          }
+          await server.close();
+        });
+        final ftp = FTPConnect('127.0.0.1', port: server.port, timeout: 1);
+        addTearDown(ftp.abort);
+        await ftp.connect();
+        await expectLater(
+          ftp.sizeFile('backup.part'),
+          throwsA(isA<FTPConnectException>()),
+        );
+        await expectLater(
+          ftp.sendCustomCommand('NOOP'),
+          throwsA(isA<FTPConnectException>()),
+        );
+        expect(commands, isNot(contains('NOOP')));
+      },
+    );
+  }
+
   for (final mode in ['stall', 'truncated', 'cancel', 'slow']) {
     test('read-back $mode has bounded completion and releases sockets', () async {
       final controlServer = await ServerSocket.bind(

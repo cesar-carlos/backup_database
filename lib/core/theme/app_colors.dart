@@ -1,5 +1,5 @@
 import 'package:backup_database/core/theme/tokens/app_palette.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Legacy facade over AppPalette. Prefer AppPalette or
 /// context.appSemanticColors in new code.

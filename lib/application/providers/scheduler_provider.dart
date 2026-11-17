@@ -12,6 +12,7 @@ import 'package:backup_database/domain/use_cases/scheduling/delete_schedule.dart
 import 'package:backup_database/domain/use_cases/scheduling/execute_scheduled_backup.dart';
 import 'package:backup_database/domain/use_cases/scheduling/update_schedule.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
   SchedulerProvider({
@@ -113,22 +114,14 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
   }
 
   Future<bool> duplicateSchedule(Schedule source) async {
-    final copy = Schedule(
+    final copy = source.copyWith(
+      id: const Uuid().v4(),
       name: '${source.name} (cópia)',
-      databaseConfigId: source.databaseConfigId,
-      databaseType: source.databaseType,
-      scheduleType: source.scheduleType,
-      scheduleConfig: source.scheduleConfig,
       destinationIds: List<String>.from(source.destinationIds),
-      backupFolder: source.backupFolder,
-      backupType: source.backupType,
-      truncateLog: source.truncateLog,
-      compressBackup: source.compressBackup,
-      compressionFormat: source.compressionFormat,
-      enabled: source.enabled,
-      enableChecksum: source.enableChecksum,
-      verifyAfterBackup: source.verifyAfterBackup,
-      postBackupScript: source.postBackupScript,
+      lastRunAt: null,
+      nextRunAt: null,
+      createdAt: null,
+      updatedAt: null,
     );
 
     return createSchedule(copy);
@@ -163,14 +156,21 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
       );
     }
 
+    final progressExecutionId = progressProvider?.executionId;
+    bool ownsProgress() =>
+        reservedProgressSlot &&
+        progressProvider != null &&
+        progressProvider.isRunning &&
+        progressProvider.executionId == progressExecutionId;
+
     final ok = await runAsync<bool>(
       genericErrorMessage: 'Erro ao executar backup',
       action: () async {
         final result = await _executeBackup(scheduleId);
         return result.fold(
           (_) {
-            if (progressProvider != null) {
-              progressProvider.completeBackup(
+            if (ownsProgress()) {
+              progressProvider!.completeBackup(
                 message: 'Backup concluído com sucesso!',
               );
             }
@@ -181,8 +181,8 @@ class SchedulerProvider extends ChangeNotifier with AsyncStateMixin {
       },
     );
 
-    if (!(ok ?? false) && progressProvider != null && reservedProgressSlot) {
-      progressProvider.failBackup(error ?? 'Erro desconhecido');
+    if (!(ok ?? false) && ownsProgress()) {
+      progressProvider!.failBackup(error ?? 'Erro desconhecido');
     }
     return ok ?? false;
   }

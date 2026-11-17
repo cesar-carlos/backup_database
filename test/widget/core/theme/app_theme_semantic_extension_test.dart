@@ -1,8 +1,8 @@
 import 'package:backup_database/core/theme/app_theme.dart';
 import 'package:backup_database/core/theme/extensions/app_semantic_colors.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('lightFluentTheme registers AppSemanticColors.light', (
@@ -14,7 +14,7 @@ void main() {
         home: Builder(
           builder: (context) {
             expect(
-              FluentTheme.of(context).extension<AppSemanticColors>(),
+              context.appSemanticColors,
               AppSemanticColors.light,
             );
             expect(
@@ -37,7 +37,7 @@ void main() {
         home: Builder(
           builder: (context) {
             expect(
-              FluentTheme.of(context).extension<AppSemanticColors>(),
+              context.appSemanticColors,
               AppSemanticColors.dark,
             );
             return const SizedBox();

@@ -16,9 +16,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../helpers/desktop_backends.dart';
 import '../../../support/feature_availability_test_support.dart';
 
 void main() {
+  installDesktopBackends();
   TestWidgetsFlutterBinding.ensureInitialized();
   group('SystemSettingsProvider', () {
     setUp(() async {

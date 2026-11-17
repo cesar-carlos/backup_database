@@ -31,7 +31,8 @@ $BackupHistoryCopyWith<BackupHistory> get copyWith => _$BackupHistoryCopyWithImp
 
 @override
 String toString() {
-  return 'BackupHistory(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics, lastProgressAt: $lastProgressAt)';
+  final _this = this as BackupHistory;
+  return 'BackupHistory(id: ${_this.id}, databaseName: ${_this.databaseName}, databaseType: ${_this.databaseType}, backupPath: ${_this.backupPath}, fileSize: ${_this.fileSize}, status: ${_this.status}, startedAt: ${_this.startedAt}, runId: ${_this.runId}, scheduleId: ${_this.scheduleId}, backupType: ${_this.backupType}, errorMessage: ${_this.errorMessage}, finishedAt: ${_this.finishedAt}, durationSeconds: ${_this.durationSeconds}, metrics: ${_this.metrics}, lastProgressAt: ${_this.lastProgressAt})';
 }
 
 
@@ -251,7 +252,7 @@ _$BackupHistoryCopyWith<_BackupHistory> get copyWith => __$BackupHistoryCopyWith
 
 @override
 String toString() {
-  return 'BackupHistory.raw(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics, lastProgressAt: $lastProgressAt)';
+    return 'BackupHistory.raw(id: $id, databaseName: $databaseName, databaseType: $databaseType, backupPath: $backupPath, fileSize: $fileSize, status: $status, startedAt: $startedAt, runId: $runId, scheduleId: $scheduleId, backupType: $backupType, errorMessage: $errorMessage, finishedAt: $finishedAt, durationSeconds: $durationSeconds, metrics: $metrics, lastProgressAt: $lastProgressAt)';
 }
 
 
