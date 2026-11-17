@@ -47,13 +47,15 @@ class IpcPeerGuard {
     return path;
   }
 
-  bool allowPeer(int pid) {
+  bool allowPeer(int pid) => rejectionReason(pid) == null;
+
+  String? rejectionReason(int pid) {
     if (pid <= 0) {
-      return false;
+      return 'invalid_pid';
     }
     final peerPath = resolveImagePath(pid);
     if (peerPath == null || peerPath.isEmpty) {
-      return false;
+      return 'process_image_unavailable';
     }
     final expected = normalizePath(
       expectedImagePath(),
@@ -64,8 +66,8 @@ class IpcPeerGuard {
       expandLongPath: expandLongPath,
     );
     if (expected.isEmpty || actual.isEmpty) {
-      return false;
+      return 'empty_image_path';
     }
-    return expected == actual;
+    return expected == actual ? null : 'process_image_mismatch';
   }
 }

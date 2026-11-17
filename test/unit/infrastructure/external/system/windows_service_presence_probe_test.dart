@@ -12,6 +12,74 @@ bool administrativeMode(ServicePresenceResult result) =>
     );
 
 void main() {
+  test(
+    'native failure followed by SCM 1060 restores standalone mode',
+    () async {
+      final probe = WindowsServicePresenceProbe(
+        query: () => throw StateError('FFI unavailable'),
+      );
+      final result = await probe.resolve(queryExitCode: () async => 1060);
+      expect(result.presence, WindowsServicePresence.absent);
+      expect(administrativeMode(result), isFalse);
+      expect(probe.diagnostics, [
+        contains('FFI unavailable'),
+        contains('source=scm_cli presence=absent error=1060'),
+      ]);
+    },
+  );
+
+  test(
+    'fallback confirms installed service without relying on localized output',
+    () async {
+      final probe = WindowsServicePresenceProbe(
+        query: () => ServicePresenceResult.fromOpenServiceError(5),
+      );
+      final result = await probe.resolve(queryExitCode: () async => 0);
+      expect(administrativeMode(result), isTrue);
+      expect(result.presence, WindowsServicePresence.installed);
+    },
+  );
+
+  for (final code in [5, 36, 1072, 1722]) {
+    test('fallback error $code never authorizes a local executor', () async {
+      final probe = WindowsServicePresenceProbe(
+        query: () => ServicePresenceResult.fromOpenServiceError(5),
+      );
+      expect(
+        administrativeMode(
+          await probe.resolve(queryExitCode: () async => code),
+        ),
+        isTrue,
+      );
+    });
+  }
+
+  test('failed fallback retains unknown state', () async {
+    final probe = WindowsServicePresenceProbe(
+      query: () => ServicePresenceResult.fromOpenServiceError(5),
+    );
+    final result = await probe.resolve(
+      queryExitCode: () async => throw const ProcessException('sc', []),
+    );
+    expect(result.presence, WindowsServicePresence.unknown);
+    expect(result.errorCode, 5);
+  });
+
+  for (final presence in [
+    WindowsServicePresence.absent,
+    WindowsServicePresence.installed,
+  ]) {
+    test('confirmed $presence does not launch fallback', () async {
+      final probe = WindowsServicePresenceProbe(
+        query: () => ServicePresenceResult(presence),
+      );
+      final result = await probe.resolve(
+        queryExitCode: () async => throw StateError('must not call'),
+      );
+      expect(result.presence, presence);
+    });
+  }
+
   test('confirmed absence allows local backups and automatic startup', () {
     final probe = WindowsServicePresenceProbe(
       query: () => ServicePresenceResult.fromOpenServiceError(1060),
@@ -19,6 +87,7 @@ void main() {
     final result = probe.read();
     expect(result.presence, WindowsServicePresence.absent);
     expect(administrativeMode(result), isFalse);
+    expect(probe.diagnostics, ['source=native presence=absent error=1060']);
     final previous = ExecutionOwnership.administrativeUi;
     addTearDown(() => ExecutionOwnership.administrativeUi = previous);
     ExecutionOwnership.administrativeUi = administrativeMode(result);

@@ -156,14 +156,25 @@ class IpcService implements IIpcService {
     String command, [
     String scheduleId = '',
   ]) async {
+    final elapsed = Stopwatch()..start();
     final channel = await _connect(
       timeout: SingleInstanceConfig.ipcConnectTimeout,
     );
     if (channel == null) {
-      throw const ServiceConnectionException();
+      final transport = _transport;
+      final reason = transport is IpcConnectionDiagnostics
+          ? (transport as IpcConnectionDiagnostics).lastConnectionFailure
+          : null;
+      LoggerService.warning(
+        'event=ipc_scheduler_connect_failed command=$command '
+        'elapsedMs=${elapsed.elapsedMilliseconds} reason=${reason ?? 'channel_unavailable'}',
+      );
+      throw ServiceConnectionException(reason: reason);
     }
+    var phase = 'write';
     try {
       await channel.writeLine('BD_ADMIN_V1|$command|$scheduleId');
+      phase = 'read';
       final response = await channel.readLine(
         timeout: command == 'execute'
             ? SingleInstanceConfig.scheduledDelegationTimeout
@@ -174,9 +185,37 @@ class IpcService implements IIpcService {
           'Sem resposta do serviço. A operação pode continuar no servidor; consulte os logs antes de tentar novamente.',
         );
       }
-      return jsonDecode(response) as Map<String, dynamic>;
+      phase = 'decode';
+      final reply = jsonDecode(response) as Map<String, dynamic>;
+      if (reply['ok'] is! bool) {
+        throw const FormatException('Missing IPC result');
+      }
+      if (reply['ok'] != true) {
+        LoggerService.warning(
+          'event=ipc_scheduler_rejected command=$command '
+          'code=${reply['code']} elapsedMs=${elapsed.elapsedMilliseconds}',
+        );
+      }
+      return reply;
+    } on Object catch (e, s) {
+      LoggerService.warning(
+        'event=ipc_scheduler_request_failed command=$command phase=$phase '
+        'elapsedMs=${elapsed.elapsedMilliseconds}',
+        e,
+        s,
+      );
+      rethrow;
     } finally {
-      await channel.close();
+      try {
+        await channel.close();
+      } on Object catch (e, s) {
+        // Cleanup must not replace a confirmed receipt or the original error.
+        LoggerService.warning(
+          'event=ipc_scheduler_close_failed command=$command',
+          e,
+          s,
+        );
+      }
     }
   }
 

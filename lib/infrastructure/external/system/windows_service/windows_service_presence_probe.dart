@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/constants/windows_service_constants.dart';
+import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
@@ -24,18 +26,79 @@ class ServicePresenceResult {
 }
 
 /// Boot only needs existence, not state, shell output or administrator rights.
-/// Keeping this independent of sc.exe also avoids PATH and encoding failures.
+/// Prefer native SCM; a bounded, shell-free query confirms inconclusive results.
 class WindowsServicePresenceProbe {
   WindowsServicePresenceProbe({ServicePresenceResult Function()? query})
     : _query = query ?? queryNative;
 
   final ServicePresenceResult Function() _query;
+  final List<String> diagnostics = [];
 
   ServicePresenceResult read() {
+    diagnostics.clear();
     try {
-      return _query();
-    } on Object {
+      final result = _query();
+      diagnostics.add(
+        'source=native presence=${result.presence.name} error=${result.errorCode}',
+      );
+      return result;
+    } on Object catch (e, s) {
+      diagnostics.add('source=native presence=unknown exception=$e');
+      LoggerService.warning('event=service_presence_native_failed', e, s);
       return const ServicePresenceResult(WindowsServicePresence.unknown);
+    }
+  }
+
+  /// A failed native query is not proof that a service exists. Independently
+  /// confirm it through SCM before choosing the process execution role.
+  Future<ServicePresenceResult> resolve({
+    Future<int> Function()? queryExitCode,
+  }) async {
+    final native = read();
+    if (native.presence != WindowsServicePresence.unknown) return native;
+    LoggerService.warning(
+      'event=service_presence_retry source=native error=${native.errorCode}',
+    );
+    try {
+      final code = await (queryExitCode ?? _queryScExitCode)();
+      final result = code == 0
+          ? const ServicePresenceResult(WindowsServicePresence.installed)
+          : ServicePresenceResult.fromOpenServiceError(code);
+      diagnostics.add(
+        'source=scm_cli presence=${result.presence.name} error=$code',
+      );
+      LoggerService.info(
+        'event=service_presence_fallback source=scm_cli '
+        'presence=${result.presence.name} error=$code',
+      );
+      return result;
+    } on Object catch (e, s) {
+      diagnostics.add('source=scm_cli presence=unknown exception=$e');
+      LoggerService.warning('event=service_presence_fallback_failed', e, s);
+      return native;
+    }
+  }
+
+  static Future<int> _queryScExitCode() async {
+    if (!Platform.isWindows) throw UnsupportedError('Windows SCM required');
+    final root = Platform.environment['SystemRoot'];
+    if (root == null || root.isEmpty) {
+      throw StateError('SystemRoot unavailable');
+    }
+    // Do not search PATH, invoke a shell, or interpret localized console text.
+    final process = await Process.start(
+      '$root\\System32\\sc.exe',
+      ['query', WindowsServiceConstants.serviceName],
+    );
+    final output = Future.wait([
+      process.stdout.drain<void>(),
+      process.stderr.drain<void>(),
+    ]);
+    try {
+      return await process.exitCode.timeout(const Duration(seconds: 5));
+    } finally {
+      process.kill();
+      await output.timeout(const Duration(seconds: 1), onTimeout: () => []);
     }
   }
 

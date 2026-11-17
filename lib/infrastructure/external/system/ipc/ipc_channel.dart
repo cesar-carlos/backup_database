@@ -17,3 +17,8 @@ abstract class IIpcTransport {
 
   Future<IIpcChannel?> connect({required Duration timeout});
 }
+
+/// Optional diagnostics, without exposing request payloads or credentials.
+abstract interface class IpcConnectionDiagnostics {
+  String? get lastConnectionFailure;
+}

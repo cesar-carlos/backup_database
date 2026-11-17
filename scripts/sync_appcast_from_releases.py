@@ -338,7 +338,7 @@ def render_appcast(
         ET.SubElement(item, "pubDate").text = _format_pub_date(release.published_at)
         ET.SubElement(item, "description").text = (
             release.body or "Automatic update via GitHub Release."
-        )
+        ).replace("\r\n", "\n").replace("\r", "\n")
 
         enclosure = ET.SubElement(item, "enclosure")
         enclosure.set("url", release.asset.url)
