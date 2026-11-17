@@ -5,6 +5,24 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.13</title>
+      <pubDate>Tue, 17 Nov 2026 14:43:56 +0000</pubDate>
+      <description>Correções na comunicação entre a interface e o serviço Windows:
+
+- Confirmação adicional da ausência do serviço para permitir backups locais quando ele não está instalado.
+- Correção de conexões IPC tardias, falhas de escrita, reutilização de handles e acúmulo de conexões encerradas.
+- Inicialização, parada e reinício do IPC serializados; cancelamento de leituras pendentes durante o encerramento.
+- Correção da transferência de dados entre isolates.
+- Encerramento do acompanhamento sem cancelar o backup no serviço, preservando a consulta do resultado e a proteção contra execução duplicada.
+- Comprovantes inicializados antes de chamar o executor, protegendo solicitações repetidas.
+- Logs com erro Win32 original, fase da comunicação, diagnóstico da detecção do serviço e exceções do executor.
+- Novos testes de regressão e testes nativos de comunicação Windows incluídos na validação do instalador.
+- Normalização das quebras de linha das notas de release para impedir inconsistências no appcast do auto update.
+
+Após instalar ou remover o serviço, encerre a interface pelo menu Sair e abra novamente para refazer a detecção.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.13/BackupDatabase-Setup-3.6.13.exe" sparkle:version="3.6.13" sparkle:os="windows" length="44479044" type="application/octet-stream" sha256="3f73ba75ffdb9a21935123cbbac6c5bff52753c27c0f87262709b00d21ccc27a" />
+    </item>
+    <item>
       <title>Version 3.6.12</title>
       <pubDate>Tue, 17 Nov 2026 13:09:44 +0000</pubDate>
       <description>## Correções e melhorias
