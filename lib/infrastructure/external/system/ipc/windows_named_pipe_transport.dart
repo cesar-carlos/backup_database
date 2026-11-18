@@ -24,6 +24,9 @@ Future<int?> _openNativePipe(String pipeName, Duration timeout) => Isolate.run(
   () => NamedPipeFfi.connectClient(pipeName: pipeName, timeout: timeout),
 );
 
+Future<bool> _acceptNativePipe(int handle) =>
+    Isolate.run(() => NamedPipeFfi.connectServerPipe(handle));
+
 class WindowsNamedPipeTransport
     implements IIpcTransport, IpcConnectionDiagnostics {
   WindowsNamedPipeTransport({
@@ -31,9 +34,12 @@ class WindowsNamedPipeTransport
     this._peerGuard,
     String? expectedImagePath,
     String? Function()? prepareProcessQueryAccess,
+    Duration? handshakeTimeout,
   }) : _pipeName = pipeName ?? SingleInstanceConfig.ipcPipeName,
        _prepareProcessQueryAccess =
            prepareProcessQueryAccess ?? ProcessQueryAccess.prepare,
+       _handshakeTimeout =
+           handshakeTimeout ?? SingleInstanceConfig.ipcConnectTimeout,
        _expectedImagePath =
            expectedImagePath ??
            (Platform.isWindows ? Platform.resolvedExecutable : '');
@@ -41,6 +47,7 @@ class WindowsNamedPipeTransport
   final String _pipeName;
   final IpcPeerGuard? _peerGuard;
   final String _expectedImagePath;
+  final Duration _handshakeTimeout;
   final String? Function() _prepareProcessQueryAccess;
   bool _queryAccessReady = false;
 
@@ -151,6 +158,7 @@ class WindowsNamedPipeTransport
           expectedImagePath: _expectedImagePath,
           maxInstances: SingleInstanceConfig.ipcMaxPipeInstances,
           maxLineBytes: SingleInstanceConfig.ipcMaxLineBytes,
+          handshakeTimeout: _handshakeTimeout,
         ),
       );
     } on Object catch (e, s) {
@@ -409,6 +417,7 @@ final class _NamedPipeServerSpawn {
     required this.expectedImagePath,
     required this.maxInstances,
     required this.maxLineBytes,
+    required this.handshakeTimeout,
   });
 
   final SendPort toMain;
@@ -416,6 +425,7 @@ final class _NamedPipeServerSpawn {
   final String expectedImagePath;
   final int maxInstances;
   final int maxLineBytes;
+  final Duration handshakeTimeout;
 }
 
 final class _NamedPipeConnSpawn {
@@ -444,6 +454,7 @@ final class _LivePipeConnection {
   Isolate? isolate;
   final int handle;
   SendPort? commandPort;
+  Timer? handshakeTimer;
 }
 
 Future<void> _runNamedPipeServerIsolate(_NamedPipeServerSpawn args) {
@@ -468,6 +479,7 @@ Future<void> _namedPipeServerIsolateMainAsync(
     if (message is int) {
       final connection = connections.finish(message);
       if (connection != null) {
+        connection.handshakeTimer?.cancel();
         NamedPipeFfi.disconnectAndClose(connection.handle);
       }
     }
@@ -485,6 +497,13 @@ Future<void> _namedPipeServerIsolateMainAsync(
     Win32SecurityDescriptor.namedPipeEveryoneGenericAllSddl,
   );
   try {
+    if (security == null) {
+      args.toMain.send(const {
+        't': 'failed',
+        'error': 'pipe_security_descriptor_unavailable',
+      });
+      return;
+    }
     var firstInstance = true;
     var announced = false;
     while (running) {
@@ -513,7 +532,7 @@ Future<void> _namedPipeServerIsolateMainAsync(
         announced = true;
         args.toMain.send(const {'t': 'listening'});
       }
-      final connected = NamedPipeFfi.connectServerPipe(handle);
+      final connected = await _acceptNativePipe(handle);
       await Future<void>.delayed(Duration.zero);
       if (!running) {
         NamedPipeFfi.disconnectAndClose(handle);
@@ -525,6 +544,15 @@ Future<void> _namedPipeServerIsolateMainAsync(
       }
       final connection = _LivePipeConnection(handle: handle);
       final connectionId = connections.reserve(connection);
+      connection.handshakeTimer = Timer(args.handshakeTimeout, () {
+        if (connections[connectionId] == null) return;
+        args.toMain.send(const {
+          't': 'diagnostic',
+          'reason': 'request_read_timeout',
+        });
+        // Parent retains ownership until the worker reports completion.
+        NamedPipeFfi.disconnect(handle);
+      });
       try {
         final child = await Isolate.spawn(
           _runNamedPipeConnectionIsolate,
@@ -540,6 +568,7 @@ Future<void> _namedPipeServerIsolateMainAsync(
         );
         connection.isolate = child;
       } on Object {
+        connection.handshakeTimer?.cancel();
         if (connections.finish(connectionId) != null) {
           NamedPipeFfi.disconnectAndClose(handle);
         }
@@ -569,6 +598,10 @@ void _rememberConnectionCommand({
     return;
   }
   final id = message['id'];
+  if (id is int && message['t'] == 'request_read') {
+    connections[id]?.handshakeTimer?.cancel();
+    return;
+  }
   final port = message['p'];
   if (id is! int || port is! SendPort) {
     return;
@@ -591,6 +624,7 @@ Future<void> _shutdownConnectionIsolates({
     await Future<void>.delayed(_connectionStopPoll);
   }
   for (final connection in connections.snapshot) {
+    connection.handshakeTimer?.cancel();
     NamedPipeFfi.disconnect(connection.handle);
     final port = connection.commandPort;
     if (port == null) {
@@ -638,6 +672,7 @@ Future<void> _runNamedPipeConnectionIsolate(_NamedPipeConnSpawn args) async {
     if (line == null) {
       return;
     }
+    args.toServer.send({'t': 'request_read', 'id': args.connectionId});
     final closed = Completer<void>();
     cmd.listen((Object? message) {
       if (message is Map && message['t'] == 'write') {

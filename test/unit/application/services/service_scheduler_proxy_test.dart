@@ -158,6 +158,23 @@ void main() {
     expect(requests[1], requests[0]);
   });
 
+  test('write timeout retry preserves the request identity', () async {
+    final requests = <String>[];
+    final proxy = ServiceSchedulerProxy((command, payload) async {
+      if (command == 'status') return {'ok': true, 'epoch': 'same-service'};
+      requests.add(payload);
+      throw TimeoutException('write deadline');
+    });
+    final first = await proxy.executeNow(id);
+    expect(
+      (first.exceptionOrNull()! as BackupFailure).code,
+      'service_execution_unconfirmed',
+    );
+    await proxy.executeNow(id);
+    expect(requests, hasLength(2));
+    expect(requests[1], requests[0]);
+  });
+
   test(
     'receipt limit refuses new work without evicting replay protection',
     () async {
