@@ -5,6 +5,23 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.15</title>
+      <pubDate>Wed, 18 Nov 2026 12:26:44 +0000</pubDate>
+      <description>## Correções
+
+- Impede que uma escrita IPC travada bloqueie indefinidamente a interface.
+- Libera conexões que não enviam a primeira mensagem dentro do prazo, evitando ocupar todas as vagas do serviço.
+- Mantém timers e encerramento ativos enquanto o servidor aguarda novos clientes.
+- Impede a abertura do pipe com permissões padrão quando a criação do descritor de segurança falha.
+- Preserva a identificação da tentativa após timeout para evitar backups duplicados; operações já aceitas não são interrompidas pelo prazo da primeira mensagem.
+- Adiciona testes de regressão e atualiza a documentação de diagnóstico.
+
+## Atualização
+
+Atualize e reinicie o serviço Windows e a interface para aplicar as correções. O instalador publicado é o artefato aprovado pelo workflow Windows e inclui checksum SHA-256 para verificação pelo auto update.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.15/BackupDatabase-Setup-3.6.15.exe" sparkle:version="3.6.15" sparkle:os="windows" length="44486405" type="application/octet-stream" sha256="d6eecb6e1ff0ae6e8f7a227ec11a997caa189f3ed8626a71fd897da341ec3f01" />
+    </item>
+    <item>
       <title>Version 3.6.14</title>
       <pubDate>Wed, 18 Nov 2026 12:06:48 +0000</pubDate>
       <description>## Correções
@@ -850,12 +867,6 @@ O workflow `update-appcast.yml` rodará automaticamente após esta release ser p
       <pubDate>Wed, 11 Mar 2026 13:41:53 +0000</pubDate>
       <description>**Full Changelog**: https://github.com/cesar-carlos/backup_database/compare/v2.3.2...v2.3.3</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.3.3/BackupDatabase-Setup-2.3.3.exe" sparkle:version="2.3.3" sparkle:os="windows" length="38823617" type="application/octet-stream" sha256="28e9244b83ed112c5f7d59f68d9732211c5bb00fae1be1e001a50a6a68920c06" />
-    </item>
-    <item>
-      <title>Version 2.3.2</title>
-      <pubDate>Thu, 05 Mar 2026 18:00:33 +0000</pubDate>
-      <description>Automatic update via GitHub Release.</description>
-      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.3.2/BackupDatabase-Setup-2.3.2.exe" sparkle:version="2.3.2" sparkle:os="windows" length="38815665" type="application/octet-stream" sha256="ac28372b4ef32b277302bcc984e5620c8fb0520e25ff080ca57a3a2669cfb379" />
     </item>
   </channel>
 </rss>
