@@ -5,6 +5,24 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.14</title>
+      <pubDate>Wed, 18 Nov 2026 12:06:48 +0000</pubDate>
+      <description>## Correções
+
+- Corrige a validação do processo na comunicação entre interface e serviço Windows, inclusive entre contas e sessões do Terminal Server. Mantém a comparação do caminho completo do executável e a proteção contra backups duplicados.
+- Melhora o diagnóstico de conexão com operação nativa e código de erro do Windows.
+- Oculta credenciais em logs FTP, socket, arquivos, registros de backup e exportações.
+- Evita exposição de valores sensíveis nas falhas do teste de segurança.
+- Atualiza a documentação e prepara a geração segura de novas chaves de licenciamento.
+
+## Atualização
+
+Atualize e reinicie o serviço e a interface para aplicar a correção de comunicação. A troca da chave de licenciamento de produção permanece uma etapa operacional separada; esta versão não revoga a chave anterior nem reemite licenças.
+
+O instalador e seu SHA-256 foram gerados pelo workflow de verificação do Windows. O auto update valida o tamanho e o hash publicados no appcast.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.14/BackupDatabase-Setup-3.6.14.exe" sparkle:version="3.6.14" sparkle:os="windows" length="44485203" type="application/octet-stream" sha256="1d2df6e8be361d56bcb2fc0d510a7bcf50a3dd5da22577e4bc7436c17103791b" />
+    </item>
+    <item>
       <title>Version 3.6.13</title>
       <pubDate>Tue, 17 Nov 2026 14:43:56 +0000</pubDate>
       <description>Correções na comunicação entre a interface e o serviço Windows:
