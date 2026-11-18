@@ -84,6 +84,27 @@ reinicios do aplicativo: nao ha promessa de retomada apos reiniciar o processo.
 
 ## Atualizacao e diagnostico
 
+### Rejeicao do processo na comunicacao local
+
+`peer_rejected reason=process_image_unavailable` significa que o pipe foi
+encontrado, mas o Windows nao forneceu o caminho do executavel do outro processo.
+Isso pode ocorrer por falta de permissao entre a conta do servico e a sessao
+interativa. Nessa rejeicao, o pedido de backup ainda nao foi enviado.
+
+Antes de abrir ou atender o pipe, o aplicativo acrescenta ao proprio processo
+somente `PROCESS_QUERY_LIMITED_INFORMATION` para usuarios autenticados,
+preservando a DACL existente. Isso permite validar o caminho completo entre
+contas e sessoes; nao concede leitura de memoria, escrita ou encerramento.
+Falhas nessa preparacao bloqueiam a conexao. Executaveis de outro diretorio
+continuam rejeitados, sem fallback para executar backups localmente.
+
+Os logs incluem `ipc_security_setup_failed` ou `ipc_peer_rejected`, a operacao
+nativa e `win32=<codigo>` (por exemplo, `OpenProcess win32=5` indica acesso
+negado). A validacao do lado do servico registra `ipc_server_connection_failed`.
+Para aplicar a correcao, atualize e reinicie tanto o servico quanto a interface;
+atualizar apenas a interface nao altera as permissoes de um servico antigo.
+Se persistir, registre o codigo nativo, PID e versoes dos dois processos.
+
 Veja [auto update](../install/auto_update_setup.md) e
 [testes de atualizacao](../install/testing_auto_update.md). Para investigacao,
 registre modo de execucao, versao, etapa e mensagem de erro; nao publique tokens,

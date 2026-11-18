@@ -10,6 +10,7 @@ import 'package:backup_database/infrastructure/external/system/ipc/ipc_v1_codec.
 import 'package:backup_database/infrastructure/external/system/ipc/named_pipe_ffi.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/pending_pipe_connection.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/pipe_connection_registry.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/process_query_access.dart';
 import 'package:backup_database/infrastructure/external/system/mutex_security_descriptor.dart';
 
 const Duration _connectionStopPoll = Duration(milliseconds: 20);
@@ -29,7 +30,10 @@ class WindowsNamedPipeTransport
     String? pipeName,
     this._peerGuard,
     String? expectedImagePath,
+    String? Function()? prepareProcessQueryAccess,
   }) : _pipeName = pipeName ?? SingleInstanceConfig.ipcPipeName,
+       _prepareProcessQueryAccess =
+           prepareProcessQueryAccess ?? ProcessQueryAccess.prepare,
        _expectedImagePath =
            expectedImagePath ??
            (Platform.isWindows ? Platform.resolvedExecutable : '');
@@ -37,6 +41,26 @@ class WindowsNamedPipeTransport
   final String _pipeName;
   final IpcPeerGuard? _peerGuard;
   final String _expectedImagePath;
+  final String? Function() _prepareProcessQueryAccess;
+  bool _queryAccessReady = false;
+
+  bool _preparePeerVerification() {
+    if (_queryAccessReady) return true;
+    try {
+      final failure = _prepareProcessQueryAccess();
+      if (failure == null) {
+        _queryAccessReady = true;
+        return true;
+      }
+      lastConnectionFailure = 'process_query_access_failed $failure';
+    } on Object catch (e) {
+      lastConnectionFailure = 'process_query_access_failed error=$e';
+    }
+    LoggerService.warning(
+      'event=ipc_security_setup_failed $lastConnectionFailure',
+    );
+    return false;
+  }
 
   @override
   String? lastConnectionFailure;
@@ -76,6 +100,7 @@ class WindowsNamedPipeTransport
     if (_running) {
       return true;
     }
+    if (!_preparePeerVerification()) return false;
 
     _onConnection = onConnection;
     _serverExitObserved = false;
@@ -228,6 +253,7 @@ class WindowsNamedPipeTransport
     if (!Platform.isWindows) {
       return null;
     }
+    if (!_preparePeerVerification()) return null;
     try {
       final handle = await awaitPipeConnection(
         connection: _openNativePipe(_pipeName, timeout),
@@ -247,9 +273,10 @@ class WindowsNamedPipeTransport
         final rejection = guard.rejectionReason(serverPid ?? 0);
         if (rejection != null) {
           lastConnectionFailure =
-              'peer_rejected reason=$rejection pid=$serverPid pipe=$_pipeName';
+              'peer_rejected reason=$rejection pid=$serverPid pipe=$_pipeName'
+              '${_peerGuard == null && NamedPipeFfi.lastImageQueryFailure != null ? ' native=${NamedPipeFfi.lastImageQueryFailure}' : ''}';
           LoggerService.warning(
-            'event=ipc_peer_rejected side=client pid=$serverPid',
+            'event=ipc_peer_rejected side=client $lastConnectionFailure',
           );
           return null;
         }
@@ -599,7 +626,7 @@ Future<void> _runNamedPipeConnectionIsolate(_NamedPipeConnSpawn args) async {
     if (rejection != null) {
       args.toMain.send({
         't': 'diagnostic',
-        'reason': rejection,
+        'reason': '$rejection native=${NamedPipeFfi.lastImageQueryFailure}',
         'pid': clientPid,
       });
       return;
