@@ -46,7 +46,56 @@ class _ChannelTransport extends _UnavailableTransport {
   Future<IIpcChannel?> connect({required Duration timeout}) async => channel;
 }
 
+class _BlockedWriteChannel implements IIpcChannel {
+  final pending = Completer<void>();
+  bool closed = false;
+  bool read = false;
+  @override
+  Future<void> writeLine(String line) => pending.future;
+  @override
+  Future<String?> readLine({required Duration timeout}) async {
+    read = true;
+    return '{"ok":true}';
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+}
+
 void main() {
+  test('write timeout closes channel and remains uncertain even after late completion', () async {
+    final channel = _BlockedWriteChannel();
+    final service = IpcService(
+      transport: _ChannelTransport(channel),
+      writeTimeout: const Duration(milliseconds: 10),
+    );
+    await expectLater(
+      service.schedulerRequest('execute', 'attempt'),
+      throwsA(isA<TimeoutException>()),
+    );
+    expect(channel.closed, isTrue);
+    expect(channel.read, isFalse);
+    channel.pending.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(channel.read, isFalse);
+  });
+
+  test('window activation also releases a stalled write', () async {
+    final channel = _BlockedWriteChannel();
+    final service = IpcService(
+      transport: _ChannelTransport(channel),
+      writeTimeout: const Duration(milliseconds: 10),
+    );
+    expect(
+      await service.notifyExistingInstance(),
+      SingleInstanceShowWindowStatus.notDelivered,
+    );
+    expect(channel.closed, isTrue);
+    channel.pending.completeError(StateError('late write failure'));
+    await Future<void>.delayed(Duration.zero);
+  });
   test('close failure does not replace a confirmed execution result', () async {
     final service = IpcService(
       transport: _ChannelTransport(_CloseFailureChannel()),

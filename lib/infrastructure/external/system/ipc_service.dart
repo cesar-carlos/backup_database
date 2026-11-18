@@ -17,10 +17,15 @@ import 'package:backup_database/infrastructure/external/system/ipc/ipc_transport
 import 'package:backup_database/infrastructure/external/system/ipc/ipc_v1_codec.dart';
 
 class IpcService implements IIpcService {
-  IpcService({IIpcTransport? transport})
-    : _transport = transport ?? IpcTransportFactory.create();
+  IpcService({IIpcTransport? transport, Duration? writeTimeout})
+    : _transport = transport ?? IpcTransportFactory.create(),
+      _writeTimeout = writeTimeout ?? SingleInstanceConfig.ipcConnectTimeout;
 
   final IIpcTransport _transport;
+  final Duration _writeTimeout;
+
+  Future<void> _write(IIpcChannel channel, String message) =>
+      channel.writeLine(message).timeout(_writeTimeout);
 
   /// Only the executor installs this handler. Administrative UI pipes expose
   /// window activation only; commands always target the machine-global pipe.
@@ -81,7 +86,7 @@ class IpcService implements IIpcService {
       LoggerService.debug('ipc_rx len=${message.length}');
       final response = await _dispatch(message);
       if (response != null) {
-        await channel.writeLine(response);
+        await _write(channel, response);
       }
     } on Object catch (e) {
       LoggerService.error('Erro ao processar mensagem IPC', e);
@@ -173,7 +178,7 @@ class IpcService implements IIpcService {
     }
     var phase = 'write';
     try {
-      await channel.writeLine('BD_ADMIN_V1|$command|$scheduleId');
+      await _write(channel, 'BD_ADMIN_V1|$command|$scheduleId');
       phase = 'read';
       final response = await channel.readLine(
         timeout: command == 'execute'
@@ -255,7 +260,7 @@ class IpcService implements IIpcService {
       return SingleInstanceShowWindowStatus.notDelivered;
     }
     try {
-      await channel.writeLine(SingleInstanceConfig.ipcShowWindowMessage);
+      await _write(channel, SingleInstanceConfig.ipcShowWindowMessage);
       final ack = await channel.readLine(
         timeout: SingleInstanceConfig.showWindowResponseTimeout,
       );
@@ -292,7 +297,7 @@ class IpcService implements IIpcService {
       return null;
     }
     try {
-      await channel.writeLine(SingleInstanceConfig.ipcGetUserInfoMessage);
+      await _write(channel, SingleInstanceConfig.ipcGetUserInfoMessage);
       final message = await channel.readLine(
         timeout: SingleInstanceConfig.ipcConnectTimeout,
       );
@@ -323,7 +328,7 @@ class IpcService implements IIpcService {
       return null;
     }
     try {
-      await channel.writeLine(SingleInstanceConfig.ipcPingMessage);
+      await _write(channel, SingleInstanceConfig.ipcPingMessage);
       final response = await channel.readLine(
         timeout: SingleInstanceConfig.ipcConnectTimeout,
       );
@@ -357,7 +362,8 @@ class IpcService implements IIpcService {
       return null;
     }
     try {
-      await channel.writeLine(
+      await _write(
+        channel,
         SingleInstanceConfig.ipcRunScheduleMessage(scheduleId),
       );
       final response = await channel.readLine(

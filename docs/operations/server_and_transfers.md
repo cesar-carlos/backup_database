@@ -105,6 +105,19 @@ Para aplicar a correcao, atualize e reinicie tanto o servico quanto a interface;
 atualizar apenas a interface nao altera as permissoes de um servico antigo.
 Se persistir, registre o codigo nativo, PID e versoes dos dois processos.
 
+### Conexao travada ou cliente sem mensagem
+
+A escrita de comandos tem prazo limitado pelo timeout de conexao IPC. Se esse
+prazo expirar apos abrir o canal, o resultado e incerto: parte ou toda a mensagem
+pode ter sido recebida. A interface mantem a identificacao da tentativa para
+consultar a mesma execucao, sem criar automaticamente outro backup.
+
+O servidor encerra conexoes que nao concluem a primeira mensagem dentro do prazo
+de conexao (`request_read_timeout`). Esse prazo e cancelado ao receber a mensagem
+completa e nao limita a duracao do backup. A espera nativa por novos clientes roda
+fora do loop que processa timers e encerramento. Se a criacao do descritor de
+seguranca do pipe falhar, o servidor nao inicia com permissoes padrao.
+
 Veja [auto update](../install/auto_update_setup.md) e
 [testes de atualizacao](../install/testing_auto_update.md). Para investigacao,
 registre modo de execucao, versao, etapa e mensagem de erro; nao publique tokens,

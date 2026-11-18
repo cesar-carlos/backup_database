@@ -10,6 +10,75 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'initial message deadline does not interrupt an accepted operation',
+    () async {
+      final pipe =
+          r'\\.\pipe\BackupDatabaseAccepted_'
+          '${pid}_${DateTime.now().microsecondsSinceEpoch}';
+      final transport = WindowsNamedPipeTransport(
+        pipeName: pipe,
+        handshakeTimeout: const Duration(milliseconds: 300),
+      );
+      addTearDown(transport.stopServer);
+      expect(
+        await transport.startServer(
+          onConnection: (channel) async {
+            await Future<void>.delayed(const Duration(milliseconds: 700));
+            await channel.writeLine('done');
+          },
+        ),
+        isTrue,
+      );
+      final client = await WindowsNamedPipeTransport(pipeName: pipe)
+          .connect(timeout: const Duration(seconds: 2));
+      expect(client, isNotNull);
+      addTearDown(client!.close);
+      await client.writeLine('request');
+      expect(
+        await client.readLine(timeout: const Duration(seconds: 3)),
+        'done',
+      );
+    },
+    skip: !Platform.isWindows,
+  );
+  test(
+    'idle client expires while server is awaiting another connection',
+    () async {
+      final pipe =
+          r'\\.\pipe\BackupDatabaseIdleExpiry_'
+          '${pid}_${DateTime.now().microsecondsSinceEpoch}';
+      final transport = WindowsNamedPipeTransport(
+        pipeName: pipe,
+        handshakeTimeout: const Duration(milliseconds: 200),
+      );
+      var requests = 0;
+      addTearDown(transport.stopServer);
+      expect(
+        await transport.startServer(
+          onConnection: (_) async {
+            requests++;
+          },
+        ),
+        isTrue,
+      );
+      final client = await WindowsNamedPipeTransport(pipeName: pipe)
+          .connect(timeout: const Duration(seconds: 2));
+      expect(client, isNotNull);
+      addTearDown(client!.close);
+      final watch = Stopwatch()..start();
+      // No second client is needed to wake the server's accept loop/timers.
+      expect(
+        await client.readLine(timeout: const Duration(seconds: 3)),
+        isNull,
+      );
+      expect(watch.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(requests, 0);
+      await transport.stopServer();
+      expect(await transport.startServer(onConnection: (_) async {}), isTrue);
+    },
+    skip: !Platform.isWindows,
+  );
+  test(
     'shutdown releases a connected client that never sent a request',
     () async {
       final pipe =
