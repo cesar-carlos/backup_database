@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/constants/app_constants.dart';
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
@@ -26,8 +27,8 @@ class LogService {
       backupHistoryId: backupHistoryId,
       level: level,
       category: category,
-      message: message,
-      details: details,
+      message: redactFailureDetails(message),
+      details: details == null ? null : redactFailureDetails(details),
     );
 
     switch (level) {
@@ -133,10 +134,10 @@ class LogService {
         '[${DateFormat('yyyy-MM-dd HH:mm:ss').format(log.createdAt)}] '
         '[${log.level.name.toUpperCase().padRight(7)}] '
         '[${log.category.name.toUpperCase().padRight(10)}] '
-        '${log.message}',
+        '${redactFailureDetails(log.message)}',
       );
       if (log.details != null && log.details!.isNotEmpty) {
-        buffer.writeln('   Detalhes: ${log.details}');
+        buffer.writeln('   Detalhes: ${redactFailureDetails(log.details!)}');
       }
     }
 
@@ -154,8 +155,10 @@ class LogService {
               'backupHistoryId': log.backupHistoryId,
               'level': log.level.name,
               'category': log.category.name,
-              'message': log.message,
-              'details': log.details,
+              'message': redactFailureDetails(log.message),
+              'details': log.details == null
+                  ? null
+                  : redactFailureDetails(log.details!),
               'createdAt': log.createdAt.toIso8601String(),
             },
           )
@@ -185,7 +188,7 @@ class LogService {
   }
 
   String _escapeCsv(String value) {
-    return value.replaceAll('"', '""');
+    return redactFailureDetails(value).replaceAll('"', '""');
   }
 
   Future<rd.Result<int>> cleanOldLogs() async {

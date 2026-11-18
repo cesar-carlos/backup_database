@@ -3,6 +3,28 @@ import 'package:backup_database/infrastructure/protocol/message_types.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('redacts nested config and lists without modifying the request', () {
+    final original = <String, dynamic>{
+      'config': {'password': 'nested-secret', 'cryptKey': 'encryption-secret'},
+      'items': [
+        {'REFRESH_TOKEN': 'oauth-secret', 'host': 'localhost'},
+      ],
+    };
+    final result = SocketLoggerService.redactPayloadForLog(
+      MessageType.createDatabaseConfigRequest,
+      original,
+    );
+    expect(result['config'], {'password': '***', 'cryptKey': '***'});
+    expect(result['items'], [
+      {'REFRESH_TOKEN': '***', 'host': 'localhost'},
+    ]);
+    expect((original['config'] as Map)['password'], 'nested-secret');
+    final unknown = SocketLoggerService.redactPayloadForLog(
+      MessageType.heartbeat,
+      original,
+    );
+    expect(unknown, result);
+  });
   group(
     'SocketLoggerService.redactPayloadForLog (§audit-2026-05-28 wave 2)',
     () {
@@ -65,7 +87,7 @@ void main() {
           original,
         );
 
-        expect(identical(redacted, original), isTrue);
+        expect(redacted, original);
       });
 
       test('preserves keys that are NOT in the sensitive list', () {

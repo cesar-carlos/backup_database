@@ -55,6 +55,9 @@ app.*.map.json
 .env.local
 .env.server
 .env.*.local
+# Signing material generated outside the checkout; defense against accidental copies.
+signer.env
+license-rotation-*/
 
 # Testing scripts temporary files
 .env.backup

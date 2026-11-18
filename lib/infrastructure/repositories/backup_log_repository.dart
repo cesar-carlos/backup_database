@@ -1,3 +1,4 @@
+import 'package:backup_database/core/errors/failure_diagnostics.dart';
 import 'package:backup_database/core/logging/log_context.dart';
 import 'package:backup_database/domain/entities/backup_log.dart';
 import 'package:backup_database/domain/repositories/i_backup_log_repository.dart';
@@ -193,8 +194,10 @@ class BackupLogRepository implements IBackupLogRepository {
       backupHistoryId: data.backupHistoryId,
       level: LogLevel.fromString(data.level),
       category: LogCategory.values.firstWhere((e) => e.name == data.category),
-      message: data.message,
-      details: data.details,
+      message: redactFailureDetails(data.message),
+      details: data.details == null
+          ? null
+          : redactFailureDetails(data.details!),
       createdAt: data.createdAt,
     );
   }
@@ -205,8 +208,10 @@ class BackupLogRepository implements IBackupLogRepository {
       backupHistoryId: Value(log.backupHistoryId),
       level: Value(log.level.name),
       category: Value(log.category.name),
-      message: Value(log.message),
-      details: Value(log.details),
+      message: Value(redactFailureDetails(log.message)),
+      details: Value(
+        log.details == null ? null : redactFailureDetails(log.details!),
+      ),
       createdAt: Value(log.createdAt),
     );
   }

@@ -40,6 +40,43 @@ void main() {
   tearDown(() => database.close());
 
   test(
+    'repository strips secrets before persistence and when reading old logs',
+    () async {
+      await logs.create(
+        BackupLog(
+          level: LogLevel.error,
+          category: LogCategory.execution,
+          message: 'password=persist-secret',
+          details: 'access_token=token-secret',
+        ),
+      );
+      final stored = (await database.backupLogDao.getAll()).single;
+      expect(stored.message.contains('persist-secret'), isFalse);
+      expect(stored.details!.contains('token-secret'), isFalse);
+      await database.customStatement(
+        'UPDATE backup_logs_table SET message = ?, details = ?',
+        ['password=old-secret', 'refresh_token=old-token'],
+      );
+      final visible = (await logs.getAll()).getOrThrow().single;
+      expect(visible.message.contains('old-secret'), isFalse);
+      expect(visible.details!.contains('old-token'), isFalse);
+      final directory = await Directory.systemTemp.createTemp(
+        'redacted-export-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      for (final format in ExportFormat.values) {
+        final file = File('${directory.path}/logs.${format.name}');
+        (await LogService(
+          logs,
+        ).exportLogs(outputPath: file.path, format: format)).getOrThrow();
+        final content = await file.readAsString();
+        expect(content.contains('old-secret'), isFalse);
+        expect(content.contains('old-token'), isFalse);
+      }
+    },
+  );
+
+  test(
     'SQL log search treats percent and underscore as literal characters',
     () async {
       for (final message in [

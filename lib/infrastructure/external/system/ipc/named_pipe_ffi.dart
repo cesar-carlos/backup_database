@@ -449,12 +449,16 @@ class NamedPipeFfi {
     }
   }
 
+  static String? lastImageQueryFailure;
+
   static String? imagePathForPid(int pid) {
+    lastImageQueryFailure = null;
     if (!Platform.isWindows || pid <= 0) {
       return null;
     }
     final process = _openProcess(_processQueryLimitedInformation, 0, pid);
     if (!handleIsValid(process)) {
+      lastImageQueryFailure = 'OpenProcess win32=${_getLastError()}';
       return null;
     }
     const cap = 32768;
@@ -464,6 +468,8 @@ class NamedPipeFfi {
     try {
       final ok = _queryFullProcessImageName(process, 0, buffer, size);
       if (ok == 0) {
+        lastImageQueryFailure =
+            'QueryFullProcessImageNameW win32=${_getLastError()}';
         return null;
       }
       return buffer.toDartString();

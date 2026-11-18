@@ -2,11 +2,67 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/infrastructure/external/system/ipc/ipc_channel.dart';
+import 'package:backup_database/infrastructure/external/system/ipc/ipc_peer_guard.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/named_pipe_ffi.dart';
 import 'package:backup_database/infrastructure/external/system/ipc/windows_named_pipe_transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'security setup failure does not open a pipe and can be retried',
+    () async {
+      var fail = true;
+      final name = _uniquePipeName();
+      final transport = WindowsNamedPipeTransport(
+        pipeName: name,
+        prepareProcessQueryAccess: () =>
+            fail ? 'SetSecurityInfo win32=5' : null,
+      );
+      addTearDown(transport.stopServer);
+      expect(await transport.startServer(onConnection: (_) async {}), isFalse);
+      expect(transport.isServerRunning, isFalse);
+      expect(_canCreateFirstPipeInstance(name), isTrue);
+      expect(
+        await transport.connect(timeout: const Duration(seconds: 1)),
+        isNull,
+      );
+      expect(
+        transport.lastConnectionFailure,
+        contains('SetSecurityInfo win32=5'),
+      );
+      fail = false;
+      expect(await transport.startServer(onConnection: (_) async {}), isTrue);
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test('inaccessible peer sends no request and releases connection', () async {
+    final name = _uniquePipeName();
+    final server = _transport(name);
+    var requests = 0;
+    addTearDown(server.stopServer);
+    expect(
+      await server.startServer(
+        onConnection: (_) async {
+          requests++;
+        },
+      ),
+      isTrue,
+    );
+    final client = WindowsNamedPipeTransport(
+      pipeName: name,
+      peerGuard: IpcPeerGuard(
+        expectedImagePath: () => Platform.resolvedExecutable,
+        resolveImagePath: (_) => null,
+      ),
+    );
+    expect(await client.connect(timeout: const Duration(seconds: 2)), isNull);
+    expect(client.lastConnectionFailure, contains('process_image_unavailable'));
+    await server.stopServer();
+    expect(requests, 0);
+    expect(_canCreateFirstPipeInstance(name), isTrue);
+  }, skip: !Platform.isWindows);
+
   group('WindowsNamedPipeTransport.stopServer', () {
     test('returns without starting when the platform has no server', () async {
       final transport = WindowsNamedPipeTransport(

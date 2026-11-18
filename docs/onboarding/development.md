@@ -62,7 +62,7 @@ o manifesto de assets nativos e podem interferir entre si se rodarem juntos.
 
 ```powershell
 dart format --output=none --set-exit-if-changed lib test tools
-flutter analyze --no-fatal-infos
+flutter analyze
 dart run tools/generate_tokens.dart --check
 dart run tools/design_system_guard.dart --fail-on-findings --enforce-target-size
 py -3 scripts/scan_encoding.py
@@ -70,8 +70,8 @@ flutter test test/unit test/widget --reporter compact
 flutter build windows --release
 ```
 
-O `--no-fatal-infos` permite diagnosticos informativos; erros e warnings
-continuam exigindo correcao. Os testes do Widgetbook precisam ser executados
+O lint deve terminar sem erros, warnings ou diagnosticos informativos,
+como exigido pelo CI. Os testes do Widgetbook precisam ser executados
 separadamente: [comandos e revisao de goldens](../../widgetbook/README.md).
 
 Para FTP local, sem depender de credenciais de um servidor externo:
@@ -101,6 +101,11 @@ abertura, fechamento/minimizacao para bandeja, restauracao e recriacao do icone.
 O resultado esperado e `DESKTOP_SMOKE_OK`, seguido de encerramento automatico.
 
 ## Preflight de release
+
+Ao alterar logs, credenciais ou licenciamento, execute tambem as
+[regressoes de seguranca](../security/logging-and-secrets.md#validacao).
+Os testes de preparacao de chaves usam pares descartaveis em pastas temporarias;
+nao substituem a rotacao de producao.
 
 `scripts/release_preflight.ps1` oferece `Quick`, `Full` e `Installer`.
 O modo `Full` executa suites unitarias e de widgets e analisa o Widgetbook;
