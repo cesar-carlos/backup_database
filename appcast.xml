@@ -5,6 +5,26 @@
     <link>https://github.com/cesar-carlos/backup_database/releases</link>
     <description>Backup Database updates feed</description>
     <item>
+      <title>Version 3.6.16</title>
+      <pubDate>Fri, 20 Nov 2026 18:50:25 +0000</pubDate>
+      <description>## Correções e melhorias
+
+- Retomada de envios ao Dropbox e Google Drive após reinício, com checkpoints persistentes protegidos e validação de integridade antes de confirmar o sucesso.
+- Proteção contra envios concorrentes, cancelamentos, timeouts e gravações de checkpoints que terminam após o prazo da operação.
+- Recuperação segura das credenciais Google e Dropbox após falhas parciais, com melhorias na concorrência entre login, logout e renovação de tokens.
+- Correções no fluxo OAuth: cancelamento do login, callbacks atrasados e falhas na troca do código por tokens.
+- Maior robustez na retomada, finalização e verificação de integridade dos envios FTP e Dropbox, além de melhorias nos demais destinos.
+- Correções na comunicação entre interface e serviço Windows, incluindo reinício, respostas atrasadas e proteção contra backups duplicados.
+- Testes de regressão e documentação atualizados.
+
+A retomada de uma sessão parcial ocorre na próxima tentativa de envio e requer que o arquivo local original continue disponível.
+
+## Instalação e atualização
+
+Baixe `BackupDatabase-Setup-3.6.16.exe`. O arquivo `.sha256` permite conferir a integridade do instalador. O appcast é atualizado após a publicação para disponibilizar a versão no auto update.</description>
+      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v3.6.16/BackupDatabase-Setup-3.6.16.exe" sparkle:version="3.6.16" sparkle:os="windows" length="44521919" type="application/octet-stream" sha256="6da87621d0240c22dc6a61c35a1e18e0038ccc1c435d46e2066ec1d14f4af7c7" />
+    </item>
+    <item>
       <title>Version 3.6.15</title>
       <pubDate>Wed, 18 Nov 2026 12:26:44 +0000</pubDate>
       <description>## Correções
@@ -861,12 +881,6 @@ O workflow `update-appcast.yml` rodará automaticamente após esta release ser p
       <pubDate>Tue, 24 Mar 2026 19:21:04 +0000</pubDate>
       <description>Automatic update via GitHub Release.</description>
       <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.4.0/BackupDatabase-Setup-2.4.0.exe" sparkle:version="2.4.0" sparkle:os="windows" length="38904494" type="application/octet-stream" sha256="3dea0639ff3de39ff5c61d312c42f522b724e80276bf2689653a536aa0f5b09b" />
-    </item>
-    <item>
-      <title>Version 2.3.3</title>
-      <pubDate>Wed, 11 Mar 2026 13:41:53 +0000</pubDate>
-      <description>**Full Changelog**: https://github.com/cesar-carlos/backup_database/compare/v2.3.2...v2.3.3</description>
-      <enclosure url="https://github.com/cesar-carlos/backup_database/releases/download/v2.3.3/BackupDatabase-Setup-2.3.3.exe" sparkle:version="2.3.3" sparkle:os="windows" length="38823617" type="application/octet-stream" sha256="28e9244b83ed112c5f7d59f68d9732211c5bb00fae1be1e001a50a6a68920c06" />
     </item>
   </channel>
 </rss>
