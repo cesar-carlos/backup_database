@@ -10,6 +10,113 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
+    'timed out channel rejects reuse and restart accepts fresh requests',
+    () async {
+      final pipe =
+          r'\\.\pipe\BackupDatabaseLateReply_'
+          '${pid}_${DateTime.now().microsecondsSinceEpoch}';
+      final server = WindowsNamedPipeTransport(pipeName: pipe);
+      final release = Completer<void>();
+      final entered = Completer<void>();
+      final finished = Completer<void>();
+      addTearDown(server.stopServer);
+      expect(
+        await server.startServer(
+          onConnection: (channel) async {
+            entered.complete();
+            await release.future;
+            await channel.writeLine('old reply');
+            finished.complete();
+          },
+        ),
+        isTrue,
+      );
+      final client = (await server.connect(
+        timeout: const Duration(seconds: 2),
+      ))!;
+      addTearDown(client.close);
+      await client.writeLine('request');
+      await entered.future;
+      expect(
+        await client.readLine(timeout: const Duration(milliseconds: 50)),
+        isNull,
+      );
+      await expectLater(client.writeLine('retry'), throwsStateError);
+      await server.stopServer();
+      expect(
+        await server.startServer(
+          onConnection: (channel) async {
+            await channel.writeLine('new reply');
+          },
+        ),
+        isTrue,
+      );
+      release.complete();
+      await finished.future;
+      final fresh = (await server.connect(
+        timeout: const Duration(seconds: 2),
+      ))!;
+      addTearDown(fresh.close);
+      await fresh.writeLine('new request');
+      expect(
+        await fresh.readLine(timeout: const Duration(seconds: 2)),
+        'new reply',
+      );
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test(
+    'handler exception closes connection and server remains available',
+    () async {
+      final pipe =
+          r'\\.\pipe\BackupDatabaseHandlerFailure_'
+          '${pid}_${DateTime.now().microsecondsSinceEpoch}';
+      final server = WindowsNamedPipeTransport(pipeName: pipe);
+      addTearDown(server.stopServer);
+      var requests = 0;
+      expect(
+        await server.startServer(
+          onConnection: (channel) async {
+            if (++requests == 1) throw StateError('handler failure');
+            await channel.writeLine('recovered');
+          },
+        ),
+        isTrue,
+      );
+      for (var i = 0; i < 2; i++) {
+        final client = (await server.connect(
+          timeout: const Duration(seconds: 2),
+        ))!;
+        addTearDown(client.close);
+        await client.writeLine('request');
+        expect(
+          await client.readLine(timeout: const Duration(seconds: 2)),
+          i == 0 ? isNull : 'recovered',
+        );
+      }
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test(
+    'repeated idle shutdown releases the pending accept before restart',
+    () async {
+      final pipe =
+          r'\\.\pipe\BackupDatabaseAcceptStop_'
+          '${pid}_${DateTime.now().microsecondsSinceEpoch}';
+      final server = WindowsNamedPipeTransport(pipeName: pipe);
+      addTearDown(server.stopServer);
+      for (var i = 0; i < 12; i++) {
+        expect(await server.startServer(onConnection: (_) async {}), isTrue);
+        await server.stopServer().timeout(const Duration(seconds: 3));
+        expect(server.isServerRunning, isFalse);
+      }
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test(
     'initial message deadline does not interrupt an accepted operation',
     () async {
       final pipe =

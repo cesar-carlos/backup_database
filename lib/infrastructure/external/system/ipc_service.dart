@@ -23,6 +23,16 @@ class IpcService implements IIpcService {
 
   final IIpcTransport _transport;
   final Duration _writeTimeout;
+  Future<void> _lifecycle = Future<void>.value();
+
+  Future<T> _serializeLifecycle<T>(Future<T> Function() action) {
+    final result = _lifecycle.then((_) => action());
+    _lifecycle = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
 
   Future<void> _write(IIpcChannel channel, String message) =>
       channel.writeLine(message).timeout(_writeTimeout);
@@ -42,6 +52,18 @@ class IpcService implements IIpcService {
 
   @override
   Future<bool> startServer({
+    required String role,
+    Future<Object?> Function()? onShowWindow,
+    RunScheduleIpcHandler? onRunSchedule,
+  }) => _serializeLifecycle(
+    () => _startServer(
+      role: role,
+      onShowWindow: onShowWindow,
+      onRunSchedule: onRunSchedule,
+    ),
+  );
+
+  Future<bool> _startServer({
     required String role,
     Future<Object?> Function()? onShowWindow,
     RunScheduleIpcHandler? onRunSchedule,
@@ -400,8 +422,11 @@ class IpcService implements IIpcService {
   }
 
   @override
-  Future<void> stop() async {
+  Future<void> stop() => _serializeLifecycle(_stop);
+
+  Future<void> _stop() async {
     scheduler = null;
+    _onShowWindow = null;
     _onRunSchedule = null;
     try {
       await _transport.stopServer();

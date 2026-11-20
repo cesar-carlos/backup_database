@@ -35,6 +35,16 @@ class GoogleDriveAuthClient {
   GoogleDriveAuthClient(this._authService);
   final GoogleAuthService _authService;
   GoogleDriveClientSession? _cachedClientData;
+  Future<void>? _refreshInFlight;
+  int _refreshGeneration = 0;
+
+  Future<void> _refreshCredentials() async {
+    final result = await _authService.signInSilently(forceRefresh: true);
+    if (result.isError()) throw result.exceptionOrNull()!;
+    _cachedClientData = null;
+    _refreshGeneration++;
+    LoggerService.info('Token renovado com sucesso após erro 401');
+  }
 
   Future<rd.Result<GoogleDriveClientSession>> getAuthenticatedClient() async {
     try {
@@ -73,20 +83,16 @@ class GoogleDriveAuthClient {
     const maxAttempts = 2;
 
     while (attempts < maxAttempts) {
+      final generation = _refreshGeneration;
       try {
         return await operation();
       } on Object catch (e) {
         if (_isUnauthorizedError(e) && attempts < maxAttempts - 1) {
           LoggerService.warning('Erro 401 detectado, tentando renovar token');
-          _cachedClientData = null;
-
-          final refreshResult = await _authService.signInSilently(
-            forceRefresh: true,
-          );
-          if (refreshResult.isError()) {
-            throw refreshResult.exceptionOrNull()!;
-          } else {
-            LoggerService.info('Token renovado com sucesso após erro 401');
+          if (generation == _refreshGeneration) {
+            await (_refreshInFlight ??= _refreshCredentials().whenComplete(() {
+              _refreshInFlight = null;
+            }));
           }
 
           attempts++;
@@ -109,7 +115,7 @@ class GoogleDriveAuthClient {
   /// `HttpErrorHelpers.matchesUnauthorizedHeuristic`, compartilhada
   /// com `DropboxDestinationService`).
   static bool _isUnauthorizedError(Object e) {
-    if (e is drive.DetailedApiRequestError && e.status == 401) return true;
+    if (e is drive.DetailedApiRequestError) return e.status == 401;
     return HttpErrorHelpers.matchesUnauthorizedHeuristic(
       e.toString().toLowerCase(),
     );

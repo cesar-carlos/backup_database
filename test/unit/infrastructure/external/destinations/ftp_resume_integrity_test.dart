@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:backup_database/core/errors/failure_codes.dart';
+import 'package:backup_database/core/utils/upload_cancellation.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/infrastructure/external/destinations/ftp/ftp_integrity_verifier.dart';
 import 'package:backup_database/infrastructure/external/destinations/ftp/ftp_uploader.dart';
@@ -36,6 +37,33 @@ void main() {
     when(() => ftp.setTransferType(any())).thenAnswer((_) async {});
   });
   tearDown(() => temp.delete(recursive: true));
+
+  for (final remoteSize in [-1, 2, 4, 8]) {
+    test(
+      'cancel during SIZE stops upload for remote size $remoteSize',
+      () async {
+        var cancelled = false;
+        when(() => ftp.sizeFile('backup.part')).thenAnswer((_) async {
+          cancelled = true;
+          return remoteSize;
+        });
+        await expectLater(
+          FtpUploader().performUploadWithResume(
+            ftp: ftp,
+            sourceFile: source,
+            fileSize: 4,
+            remotePartName: 'backup.part',
+            supportsRestStream: true,
+            enableResumeFromConfig: true,
+            isCancelled: () => cancelled,
+          ),
+          throwsA(isA<UploadCancelledException>()),
+        );
+        verify(() => ftp.sizeFile('backup.part')).called(1);
+        verifyNoMoreInteractions(ftp);
+      },
+    );
+  }
 
   test('missing empty remote file is uploaded instead of skipped', () async {
     await source.writeAsBytes([]);
@@ -332,12 +360,15 @@ void main() {
       verify(() => clients[0].abort()).called(1);
       verifyNever(() => clients[0].deleteFile(any()));
       verifyNever(() => clients[0].rename(any(), any()));
-      final second = await service.upload(
-        sourceFilePath: source.path,
-        config: config,
-        runId: 'run',
-        destinationId: 'dest',
-      );
+      final second =
+          await FtpDestinationService(
+            clientFactory: (_) => clients[clientIndex++],
+          ).upload(
+            sourceFilePath: source.path,
+            config: config,
+            runId: 'run',
+            destinationId: 'dest',
+          );
       expect(second.isSuccess(), isTrue);
       verify(
         () => clients[1].uploadFileWithResume(
@@ -352,11 +383,81 @@ void main() {
     },
   );
 
-  for (final scenario in ['inconclusive', 'corrupt', 'rename', 'upload']) {
+  test('should recover lost rename response with a fresh service', () async {
+    final hash = await FtpIntegrityVerifier().computeSha256Streaming(source);
+    var committed = false;
+    final clients = [ftp, _Client()];
+    const config = FtpDestinationConfig(
+      host: 'test',
+      username: 'u',
+      password: 'p',
+      remotePath: '/',
+    );
+    for (final client in clients) {
+      when(() => client.connect()).thenAnswer((_) async => true);
+      when(() => client.disconnect())
+          .thenThrow(const SocketException('QUIT lost'));
+      when(() => client.setTransferType(any())).thenAnswer((_) async {});
+      when(() => client.sendCustomCommand(any())).thenAnswer(
+        (call) async => call.positionalArguments[0] == 'FEAT'
+            ? FTPReply(211, '211 REST STREAM')
+            : FTPReply(213, '213 $hash'),
+      );
+      when(() => client.sizeFile(any())).thenAnswer(
+        (call) async => call.positionalArguments[0] == 'backup.bak'
+            ? (committed ? 4 : -1)
+            : 4,
+      );
+      when(() => client.rename(any(), any())).thenAnswer((_) async {
+        committed = true;
+        throw const SocketException('RNTO response lost');
+      });
+    }
+    final first = await FtpDestinationService(clientFactory: (_) => clients[0])
+        .upload(
+          sourceFilePath: source.path,
+          config: config,
+          runId: 'run',
+          destinationId: 'dest',
+        );
+    expect(first.isError(), isTrue);
+    expect(committed, isTrue);
+    final second = await FtpDestinationService(clientFactory: (_) => clients[1])
+        .upload(
+          sourceFilePath: source.path,
+          config: config,
+          runId: 'run',
+          destinationId: 'dest',
+        );
+    expect(second.isSuccess(), isTrue);
+    verifyNever(() => clients[1].rename(any(), any()));
+    verifyNever(
+      () => clients[1].uploadFile(
+        any(),
+        sRemoteName: any(named: 'sRemoteName'),
+        onProgress: any(named: 'onProgress'),
+      ),
+    );
+    for (final client in clients) {
+      verifyNever(() => client.deleteFile(any()));
+    }
+  });
+
+  for (final scenario in [
+    'inconclusive',
+    'corrupt',
+    'rename',
+    'upload',
+    'quit',
+  ]) {
     test('partial preservation after $scenario failure', () async {
       final verifier = _Verifier();
       when(() => ftp.connect()).thenAnswer((_) async => true);
       when(() => ftp.disconnect()).thenAnswer((_) async => true);
+      if (scenario == 'quit') {
+        when(() => ftp.disconnect())
+            .thenThrow(const SocketException('QUIT lost'));
+      }
       when(() => ftp.sendCustomCommand('FEAT'))
           .thenAnswer((_) async => FTPReply(211, '211 REST STREAM'));
       when(() => ftp.sizeFile(any())).thenAnswer((_) async => -1);
@@ -368,7 +469,8 @@ void main() {
         ),
       ).thenAnswer((_) async => scenario != 'upload');
       when(() => ftp.deleteFile(any())).thenAnswer((_) async => true);
-      when(() => ftp.rename(any(), any())).thenAnswer((_) async => false);
+      when(() => ftp.rename(any(), any()))
+          .thenAnswer((_) async => scenario == 'quit');
       when(() => verifier.computeSha256Streaming(any()))
           .thenAnswer((_) async => null);
       when(
@@ -382,7 +484,7 @@ void main() {
         ),
       ).thenAnswer(
         (_) async => FtpIntegrityValidationResult(
-          isValid: scenario == 'rename',
+          isValid: scenario == 'rename' || scenario == 'quit',
           errorMessage: scenario,
           failureCode: scenario == 'inconclusive'
               ? FailureCodes.ftpIntegrityValidationInconclusive
@@ -404,13 +506,16 @@ void main() {
               remotePath: '/',
             ),
           );
-      expect(result.isError(), isTrue);
+      expect(result.isError(), scenario != 'quit');
       if (scenario == 'corrupt') {
         verify(() => ftp.deleteFile('backup.bak.run_dest.part')).called(1);
       } else {
         verifyNever(() => ftp.deleteFile(any()));
       }
-      if (scenario != 'rename') verifyNever(() => ftp.rename(any(), any()));
+      if (scenario != 'rename' && scenario != 'quit') {
+        verifyNever(() => ftp.rename(any(), any()));
+      }
+      if (scenario == 'quit') verify(() => ftp.abort()).called(1);
     });
   }
 }

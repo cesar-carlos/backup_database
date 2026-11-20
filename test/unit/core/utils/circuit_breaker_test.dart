@@ -1,11 +1,43 @@
 import 'dart:async';
 
 import 'package:backup_database/core/errors/failure.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/utils/circuit_breaker.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('CircuitBreaker', () {
+    for (final failure in <Object>[
+      const ValidationFailure(message: 'invalid configuration'),
+      const BackupFailure(
+        message: 'cancelled',
+        code: FailureCodes.uploadCancelled,
+      ),
+      const BackupFailure(
+        message: 'integrity mismatch',
+        code: FailureCodes.ftpIntegrityValidationFailed,
+      ),
+    ]) {
+      test(
+        'releases recovery slot after $failure without counting success',
+        () {
+          final breaker = CircuitBreaker(
+            key: 'recovery',
+            failureThreshold: 1,
+            openDuration: Duration.zero,
+          )..recordFailure(TimeoutException('offline'));
+          expect(breaker.tryAcquire(), isTrue);
+          expect(breaker.tryAcquire(), isFalse);
+          breaker.recordFailure(failure);
+          expect(breaker.state, CircuitState.halfOpen);
+          expect(breaker.tryAcquire(), isTrue);
+          expect(breaker.tryAcquire(), isFalse);
+          breaker.recordSuccess();
+          expect(breaker.state, CircuitState.closed);
+        },
+      );
+    }
+
     test('allows request when closed', () {
       final breaker = CircuitBreaker(key: 'dest-1');
       expect(breaker.state, CircuitState.closed);

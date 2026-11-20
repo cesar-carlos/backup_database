@@ -205,6 +205,12 @@ class WindowsNamedPipeTransport
     );
     try {
       await handler(channel);
+    } on Object catch (e, stack) {
+      LoggerService.error(
+        'event=ipc_connection_handler_failed pipe=$_pipeName',
+        e,
+        stack,
+      );
     } finally {
       await channel.close();
     }
@@ -365,19 +371,24 @@ class WindowsPipeClientChannel implements IIpcChannel {
       return null;
     }
     try {
+      final pipeHandle = handle;
       final line = await Isolate.run(
         () => NamedPipeFfi.readLine(
-          handle,
+          pipeHandle,
           maxBytes: SingleInstanceConfig.ipcMaxLineBytes,
         ),
       ).timeout(timeout);
-      if (line == null) {
+      if (_closed || line == null) {
+        await close();
         return null;
       }
       return IpcV1Codec.stripLine(line);
     } on TimeoutException {
+      // A late reply must never be consumed as the next request's response.
+      await close();
       return null;
     } on Object {
+      await close();
       return null;
     }
   }
@@ -467,9 +478,13 @@ Future<void> _namedPipeServerIsolateMainAsync(
   final cmd = ReceivePort();
   args.toMain.send({'t': 'cmd', 'p': cmd.sendPort});
   var running = true;
+  int? acceptingHandle;
   cmd.listen((Object? message) {
     if (message == 'stop') {
       running = false;
+      // Cancel the exact pending accept, even if wake arrived before stop.
+      final pending = acceptingHandle;
+      if (pending != null) NamedPipeFfi.disconnect(pending);
     }
   });
 
@@ -532,7 +547,16 @@ Future<void> _namedPipeServerIsolateMainAsync(
         announced = true;
         args.toMain.send(const {'t': 'listening'});
       }
-      final connected = await _acceptNativePipe(handle);
+      acceptingHandle = handle;
+      bool connected;
+      try {
+        connected = await _acceptNativePipe(handle);
+      } on Object {
+        NamedPipeFfi.disconnectAndClose(handle);
+        rethrow;
+      } finally {
+        acceptingHandle = null;
+      }
       await Future<void>.delayed(Duration.zero);
       if (!running) {
         NamedPipeFfi.disconnectAndClose(handle);

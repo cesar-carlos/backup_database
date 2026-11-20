@@ -69,6 +69,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   }) async {
+    CircuitBreaker? acquiredBreaker;
     try {
       if (isCancelled != null && isCancelled()) {
         return UploadCancellation.cancelledResult();
@@ -97,6 +98,12 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
         return rd.Failure(configResult.exceptionOrNull()!);
       }
       final configJson = configResult.getOrNull()!;
+
+      if (destination.type != DestinationType.local) {
+        final breakerFailure = _circuitBreakerGuard(destination);
+        if (breakerFailure != null) return breakerFailure;
+        acquiredBreaker = _circuitBreakerRegistry.getBreaker(destination.id);
+      }
 
       switch (destination.type) {
         case DestinationType.local:
@@ -149,6 +156,7 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
           );
       }
     } on Object catch (e) {
+      acquiredBreaker?.recordFailure(e);
       LoggerService.error('Erro ao enviar para ${destination.name}: $e', e);
       return rd.Failure(
         BackupFailure(
@@ -276,8 +284,6 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
-    final breakerFailure = _circuitBreakerGuard(destination);
-    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
     final config = FtpDestinationConfig.fromJson(configJson);
@@ -335,8 +341,6 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
-    final breakerFailure = _circuitBreakerGuard(destination);
-    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
     final config = GoogleDriveDestinationConfig.fromJson(configJson);
@@ -376,8 +380,6 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
-    final breakerFailure = _circuitBreakerGuard(destination);
-    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
     final config = DropboxDestinationConfig.fromJson(configJson);
@@ -417,8 +419,6 @@ class DestinationOrchestratorImpl implements IDestinationOrchestrator {
     String? backupId,
     UploadProgressCallback? onProgress,
   ) async {
-    final breakerFailure = _circuitBreakerGuard(destination);
-    if (breakerFailure != null) return breakerFailure;
     final breaker = _circuitBreakerRegistry.getBreaker(destination.id);
 
     final config = NextcloudDestinationConfig.fromJson(configJson);

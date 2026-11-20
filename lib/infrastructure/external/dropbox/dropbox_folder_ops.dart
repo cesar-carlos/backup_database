@@ -8,166 +8,82 @@ class DropboxFolderOps {
   DropboxFolderOps(this._authClient);
   final DropboxAuthClient _authClient;
 
-  Future<rd.Result<void>> getOrCreateFolder(String folderPath) =>
-      _getOrCreateFolder(folderPath, canRefresh: true);
-
-  Future<rd.Result<void>> _getOrCreateFolder(
-    String folderPath, {
-    required bool canRefresh,
-  }) async {
+  Future<rd.Result<void>> getOrCreateFolder(String folderPath) async {
     try {
-      final dioResult = await _authClient.getAuthenticatedDio();
-      if (dioResult.isError()) {
-        return rd.Failure(dioResult.exceptionOrNull()!);
-      }
-
-      final dio = dioResult.getOrNull()!;
-
-      try {
-        final response = await dio.post(
-          '/2/files/get_metadata',
-          data: {'path': folderPath},
-        );
-
-        final metadata = response.data as Map<String, dynamic>?;
-        final tag = metadata?['.tag'] as String?;
-
-        if (tag == 'folder') {
-          return const rd.Success(());
-        } else if (tag == 'file') {
-          return rd.Failure(
-            DropboxFailure(
-              message:
-                  'Caminho existe mas é um arquivo, não uma pasta: $folderPath',
-            ),
+      await _authClient.executeWithTokenRefresh(() async {
+        final dio = (await _authClient.getAuthenticatedDio()).getOrThrow();
+        Future<void> verifyFolder() async {
+          final response = await dio.post<dynamic>(
+            '/2/files/get_metadata',
+            data: {'path': folderPath},
           );
+          final metadata = response.data;
+          if (metadata is! Map || metadata['.tag'] != 'folder') {
+            throw const DropboxFailure(
+              message: 'O caminho Dropbox não foi confirmado como pasta.',
+            );
+          }
         }
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 404) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
 
-          if (errorTag != 'path_lookup/not_found') {
+        try {
+          await verifyFolder();
+          return;
+        } on DioException catch (error) {
+          final detail = _errorDetail(error);
+          final path = detail?['path'];
+          if (error.response?.statusCode != 409 ||
+              detail?['.tag'] != 'path' ||
+              path is! Map ||
+              path['.tag'] != 'not_found') {
             rethrow;
           }
-        } else if (e.response?.statusCode == 409) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path/conflict' ||
-              errorTag == 'path/conflict/folder') {
-            return const rd.Success(());
-          } else if (errorTag == 'path/conflict/file') {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Caminho existe mas é um arquivo, não uma pasta: $folderPath',
-              ),
-            );
-          } else {
-            return const rd.Success(());
-          }
-        } else if (e.response?.statusCode == 401) {
-          if (!canRefresh) {
-            return const rd.Failure(
-              DropboxFailure(
-                message: 'Dropbox recusou a autorização após renovar a sessão.',
-              ),
-            );
-          }
-          _authClient.invalidateCache();
-          final refreshResult = await _authClient.signInSilently(
-            forceRefresh: true,
-          );
-          if (refreshResult.isError()) {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Sessão expirada. Faça login novamente nas configurações.',
-                originalError: e,
-              ),
-            );
-          }
-          return await _getOrCreateFolder(folderPath, canRefresh: false);
-        } else {
-          return rd.Failure(
-            DropboxFailure(
-              message: 'Erro ao verificar pasta: ${e.response?.statusCode}',
-              originalError: e,
-            ),
-          );
         }
-      }
-
-      try {
-        await dio.post(
-          '/2/files/create_folder_v2',
-          data: {'path': folderPath, 'autorename': false},
-        );
-        return const rd.Success(());
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 409) {
-          final errorData = e.response?.data as Map<String, dynamic>?;
-          final error = errorData?['error'] as Map<String, dynamic>?;
-          final errorTag = error?['.tag'] as String?;
-
-          if (errorTag == 'path/conflict' ||
-              errorTag == 'path/conflict/folder' ||
-              errorTag == 'path/conflict/file') {
-            return const rd.Success(());
-          }
-        }
-
-        if (e.response?.statusCode == 401) {
-          if (!canRefresh) {
-            return const rd.Failure(
-              DropboxFailure(
-                message: 'Dropbox recusou a autorização após renovar a sessão.',
-              ),
-            );
-          }
-          _authClient.invalidateCache();
-          final refreshResult = await _authClient.signInSilently(
-            forceRefresh: true,
+        try {
+          final response = await dio.post<dynamic>(
+            '/2/files/create_folder_v2',
+            data: {'path': folderPath, 'autorename': false},
           );
-          if (refreshResult.isError()) {
-            return rd.Failure(
-              DropboxFailure(
-                message:
-                    'Sessão expirada. Faça login novamente nas configurações.',
-                originalError: e,
-              ),
-            );
+          final data = response.data;
+          final metadata = data is Map ? data['metadata'] : null;
+          if (metadata is! Map ||
+              metadata['id'] is! String ||
+              (metadata['id'] as String).isEmpty) {
+            await verifyFolder();
           }
-          return await _getOrCreateFolder(folderPath, canRefresh: false);
+        } on DioException catch (error) {
+          final detail = _errorDetail(error);
+          final path = detail?['path'];
+          final conflict = path is Map ? path['conflict'] : null;
+          if (error.response?.statusCode != 409 ||
+              detail?['.tag'] != 'path' ||
+              path is! Map ||
+              path['.tag'] != 'conflict' ||
+              conflict is! Map ||
+              conflict['.tag'] != 'folder') {
+            rethrow;
+          }
+          // Another process may have created the folder after our lookup.
+          await verifyFolder();
         }
-
-        return rd.Failure(
-          DropboxFailure(
-            message: 'Erro ao criar pasta: ${e.response?.statusCode}',
-            originalError: e,
-          ),
-        );
-      }
-    } on Object catch (e) {
-      if (e is DropboxFailure) {
-        return rd.Failure(e);
-      }
-
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('409') || errorStr.contains('conflict')) {
-        return const rd.Success(());
-      }
-
+      });
+      return const rd.Success(());
+    } on Object catch (error) {
       return rd.Failure(
-        DropboxFailure(
-          message: 'Erro inesperado ao criar pasta: $e',
-          originalError: e,
-        ),
+        error is DropboxFailure
+            ? error
+            : DropboxFailure(
+                message:
+                    'Não foi possível confirmar a pasta de destino Dropbox.',
+                originalError: error,
+              ),
       );
     }
+  }
+
+  static Map<dynamic, dynamic>? _errorDetail(DioException error) {
+    final data = error.response?.data;
+    final detail = data is Map ? data['error'] : null;
+    return detail is Map ? detail : null;
   }
 
   Future<void> deleteFileIfExists(String filePath) async {

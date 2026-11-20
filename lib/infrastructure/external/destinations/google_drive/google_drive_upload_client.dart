@@ -11,6 +11,7 @@ class GoogleDriveUploadClient extends http.BaseClient {
   final String _token;
   final Stopwatch _idle = Stopwatch()..start();
   bool _closed = false;
+  bool get isClosed => _closed;
 
   void touch() => _idle.reset();
 
@@ -48,9 +49,13 @@ class GoogleDriveUploadClient extends http.BaseClient {
     request.headers['Authorization'] = 'Bearer $_token';
     touch();
     final response = await _inner.send(request);
+    if (_closed) throw http.ClientException('Google Drive transport closed');
     touch();
     return http.StreamedResponse(
       response.stream.map((bytes) {
+        if (_closed) {
+          throw http.ClientException('Google Drive transport closed');
+        }
         touch();
         return bytes;
       }),

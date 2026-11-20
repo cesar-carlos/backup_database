@@ -175,7 +175,17 @@ class ServiceSchedulerProxy implements ISchedulerService {
     try {
       var payload = _attempts[scheduleId];
       if (payload == null) {
-        final status = await request('status', '');
+        final status = await Future.any([
+          request('status', ''),
+          interruption.future,
+        ]);
+        if (_suspended || lifecycle != _lifecycle) {
+          return const rd.Failure(
+            BackupFailure(
+              message: 'Interface encerrando. Nenhum backup foi solicitado.',
+            ),
+          );
+        }
         if (status['code'] == 'service_not_ready') {
           return const rd.Failure(
             BackupFailure(
@@ -195,13 +205,6 @@ class ServiceSchedulerProxy implements ISchedulerService {
           );
         }
         _supportsProgress = status['progressVersion'] == 1;
-        if (_suspended || lifecycle != _lifecycle) {
-          return const rd.Failure(
-            BackupFailure(
-              message: 'Interface encerrando. Nenhum backup foi solicitado.',
-            ),
-          );
-        }
         payload = jsonEncode({
           'scheduleId': scheduleId,
           'epoch': status['epoch'],
@@ -215,7 +218,15 @@ class ServiceSchedulerProxy implements ISchedulerService {
         request('execute', payload),
         interruption.future,
       ]);
-      if (response['ok'] is! bool) {
+      // Validate the entire receipt before discarding its idempotency key.
+      // A malformed error/flag must not turn the next click into a new backup.
+      if (response['ok'] is! bool ||
+          (response.containsKey('uncertain') &&
+              response['uncertain'] is! bool) ||
+          (response.containsKey('confirmed') &&
+              response['confirmed'] is! bool) ||
+          (response['error'] != null && response['error'] is! String) ||
+          (response['ok'] == true && response['uncertain'] == true)) {
         throw StateError('Resposta inválida do serviço');
       }
       if (response['uncertain'] != true &&

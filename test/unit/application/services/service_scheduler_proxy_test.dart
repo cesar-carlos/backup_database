@@ -44,6 +44,76 @@ void main() {
   });
   tearDown(() async => ipc.stop());
 
+  test('stop releases pending status and ignores its late success', () async {
+    final status = Completer<Map<String, dynamic>>();
+    final commands = <String>[];
+    final proxy = ServiceSchedulerProxy((command, _) {
+      commands.add(command);
+      return status.future;
+    });
+    final work = proxy.executeNow(id);
+    proxy.stop();
+    expect((await work.timeout(const Duration(seconds: 1))).isError(), isTrue);
+    expect(proxy.isExecutingBackup, isFalse);
+    status.complete({'ok': true, 'epoch': 'old-service'});
+    await Future<void>.delayed(Duration.zero);
+    expect(commands, ['status']);
+  });
+
+  test(
+    'late status error after stop is handled and next attempt can recover',
+    () async {
+      final status = Completer<Map<String, dynamic>>();
+      var first = true;
+      final commands = <String>[];
+      final proxy = ServiceSchedulerProxy((command, _) async {
+        commands.add(command);
+        if (first) {
+          first = false;
+          return status.future;
+        }
+        return command == 'status'
+            ? {'ok': true, 'epoch': 'new-service'}
+            : {'ok': true};
+      });
+      final work = proxy.executeNow(id);
+      proxy.stop();
+      expect(
+        (await work.timeout(const Duration(seconds: 1))).isError(),
+        isTrue,
+      );
+      status.completeError(StateError('old connection failed'));
+      await Future<void>.delayed(Duration.zero);
+      expect((await proxy.executeNow(id)).isSuccess(), isTrue);
+      expect(commands, ['status', 'status', 'execute']);
+    },
+  );
+
+  for (final reply in <Map<String, dynamic>>[
+    {'ok': false, 'confirmed': true, 'error': 123},
+    {'ok': true, 'uncertain': true},
+    {'ok': true, 'uncertain': 'true'},
+    {'ok': true, 'confirmed': 'true'},
+  ]) {
+    test('invalid receipt preserves attempt identity: $reply', () async {
+      final requests = <String>[];
+      final proxy = ServiceSchedulerProxy((command, payload) async {
+        if (command == 'status') return {'ok': true, 'epoch': 'service'};
+        requests.add(payload);
+        return requests.length == 1 ? reply : {'ok': true};
+      });
+      final first = await proxy.executeNow(id);
+      expect(first.isError(), isTrue);
+      expect(
+        (first.exceptionOrNull()! as BackupFailure).code,
+        'service_execution_unconfirmed',
+      );
+      expect((await proxy.executeNow(id)).isSuccess(), isTrue);
+      expect(requests.length, 2);
+      expect(requests[1], requests[0]);
+    });
+  }
+
   test(
     'synchronous replay sees a receipt before executor code is invoked',
     () async {

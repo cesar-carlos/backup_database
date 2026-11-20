@@ -102,8 +102,12 @@ void main() {
 
   test('login blocks renewal and cannot complete after logout', () async {
     final authorization = Completer<AccessTokenResponse?>();
+    var userInfoRequests = 0;
     final transport = MockClient(
-      (_) async => http.Response('{"email":"new@example.com"}', 200),
+      (_) async {
+        userInfoRequests++;
+        return http.Response('{"email":"new@example.com"}', 200);
+      },
     );
     addTearDown(transport.close);
     final service = GoogleAuthService(
@@ -127,6 +131,7 @@ void main() {
     expect((await login).isError(), isTrue);
     expect(service.isSignedIn, isFalse);
     expect(saved, isEmpty);
+    expect(userInfoRequests, 0);
   });
 
   test('rotated refresh token is persisted for restart', () async {
@@ -341,6 +346,50 @@ void main() {
     expect(results.every((result) => result.isSuccess()), isTrue);
     expect(requests, 1);
   });
+
+  test(
+    'committed credential survives reported write failure and restart',
+    () async {
+      when(
+        () => store.storeToken(
+          key: any(named: 'key'),
+          tokenData: any(named: 'tokenData'),
+        ),
+      ).thenAnswer((call) async {
+        saved = Map<String, dynamic>.of(
+          call.namedArguments[#tokenData] as Map<String, dynamic>,
+        );
+        return Failure(Exception('legacy cleanup failed after commit'));
+      });
+      final service = await create();
+      expect((await service.signInSilently()).getOrThrow().accessToken, 'new');
+      expect(
+        (await (await create()).signInSilently()).getOrThrow().accessToken,
+        'new',
+      );
+      expect(requests, 1);
+      expect(saved['refreshToken'], 'refresh');
+    },
+  );
+
+  test(
+    'unconfirmed write failure does not publish credentials or delete them',
+    () async {
+      final service = await create();
+      when(
+        () => store.storeToken(
+          key: any(named: 'key'),
+          tokenData: any(named: 'tokenData'),
+        ),
+      ).thenAnswer((_) async => Failure(Exception('write failed')));
+      when(() => store.getToken(key: any(named: 'key')))
+          .thenAnswer((_) async => Failure(Exception('read failed')));
+      expect((await service.signInSilently()).isError(), isTrue);
+      expect(service.accessToken, 'old');
+      expect(saved['refreshToken'], 'refresh');
+      verifyNever(() => store.deleteToken(key: any(named: 'key')));
+    },
+  );
 
   test('temporary failure preserves credentials and allows retry', () async {
     final service = await create();

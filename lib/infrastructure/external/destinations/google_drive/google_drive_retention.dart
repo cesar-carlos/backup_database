@@ -2,6 +2,7 @@ import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/entities/backup_destination.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_auth_client.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_file_listing.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_folder_ops.dart';
 import 'package:backup_database/infrastructure/external/destinations/protected_backup_file.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
@@ -34,7 +35,7 @@ class GoogleDriveRetention {
         Duration(days: config.retentionDays),
       );
 
-      final folders = await _authClient.executeWithTokenRefresh<drive.FileList>(
+      final folders = await _authClient.executeWithTokenRefresh<List<drive.File>>(
         () async {
           final clientResult = await _authClient.getAuthenticatedClient();
           if (clientResult.isError()) {
@@ -46,20 +47,27 @@ class GoogleDriveRetention {
               "'$mainFolderId' in parents and "
               "mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 
-          return driveApi.files.list(
-            q: query,
-            spaces: 'drive',
-            $fields: 'files(id, name, createdTime)',
+          return listAllGoogleDriveFiles(
+            driveApi,
+            query: query,
+            fields: 'id,name,createdTime',
           );
         },
       );
 
       var deletedCount = 0;
-      for (final folder in folders.files ?? const <drive.File>[]) {
+      Object? cleanupError;
+      for (final folder in folders) {
         try {
           final folderName = folder.name;
           if (folderName == null || folderName.isEmpty) continue;
-          final folderDate = DateFormat('yyyy-MM-dd').parse(folderName);
+          if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(folderName)) continue;
+          DateTime folderDate;
+          try {
+            folderDate = DateFormat('yyyy-MM-dd').parseStrict(folderName);
+          } on FormatException {
+            continue;
+          }
           if (folderDate.isBefore(cutoffDate)) {
             final folderId = folder.id;
             if (folderId == null) continue;
@@ -88,13 +96,26 @@ class GoogleDriveRetention {
             LoggerService.debug('Pasta deletada: $folderName');
           }
         } on Object catch (e) {
-          LoggerService.debug('Erro ao deletar pasta vazia: $e');
+          cleanupError = e;
+          LoggerService.warning(
+            'Falha na retenção Google Drive da pasta ${folder.id}',
+            e,
+          );
         }
       }
 
       LoggerService.info(
         '$deletedCount pastas antigas removidas do Google Drive',
       );
+      if (cleanupError != null) {
+        return rd.Failure(
+          GoogleDriveFailure(
+            message:
+                'Retenção Google Drive incompleta: $deletedCount pastas removidas; houve falhas ao verificar ou excluir outras pastas.',
+            originalError: cleanupError,
+          ),
+        );
+      }
       return rd.Success(deletedCount);
     } on Object catch (e, stackTrace) {
       LoggerService.error(
@@ -117,26 +138,27 @@ class GoogleDriveRetention {
   ) async {
     if (protectedShortIds.isEmpty) return false;
 
-    final fileList = await _authClient.executeWithTokenRefresh<drive.FileList>(
-      () async {
-        final clientResult = await _authClient.getAuthenticatedClient();
-        if (clientResult.isError()) {
-          throw clientResult.exceptionOrNull()!;
-        }
+    final fileList = await _authClient
+        .executeWithTokenRefresh<List<drive.File>>(
+          () async {
+            final clientResult = await _authClient.getAuthenticatedClient();
+            if (clientResult.isError()) {
+              throw clientResult.exceptionOrNull()!;
+            }
 
-        final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
-        final query = "'$folderId' in parents and trashed = false";
+            final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
+            final query = "'$folderId' in parents and trashed = false";
 
-        return driveApi.files.list(
-          q: query,
-          spaces: 'drive',
-          $fields: 'files(name)',
+            return listAllGoogleDriveFiles(
+              driveApi,
+              query: query,
+              fields: 'name',
+            );
+          },
         );
-      },
-    );
 
     return ProtectedBackupFile.anyMatches(
-      (fileList.files ?? const <drive.File>[]).map((file) => file.name),
+      fileList.map((file) => file.name),
       protectedShortIds,
     );
   }

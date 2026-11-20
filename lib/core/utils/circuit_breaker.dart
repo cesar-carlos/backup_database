@@ -104,6 +104,11 @@ class CircuitBreaker {
   }
 
   void recordFailure(Object failure) {
+    // Every completed probe must release its slot, including cancellation and
+    // validation failures which must not affect the network failure counter.
+    if (_state == CircuitState.halfOpen && _halfOpenInFlight > 0) {
+      _halfOpenInFlight--;
+    }
     if (!isRetryableFailure(failure)) {
       return;
     }
@@ -121,7 +126,6 @@ class CircuitBreaker {
         // breaker neste estado). Agora apenas ignoramos.
         break;
       case CircuitState.halfOpen:
-        if (_halfOpenInFlight > 0) _halfOpenInFlight--;
         _transitionToOpen();
     }
   }

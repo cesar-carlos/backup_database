@@ -134,7 +134,7 @@ class FtpDestinationService implements IFtpService {
       UploadCancellation.throwIfCancelled(isCancelled);
       if (alreadyUploaded) {
         cancellationWatcher?.cancel();
-        await ftp.disconnect();
+        await _disconnectCompletedUpload(ftp);
         ftpConnected = false;
         ftp = null;
         UploadCancellation.throwIfCancelled(isCancelled);
@@ -223,7 +223,7 @@ class FtpDestinationService implements IFtpService {
       }
 
       cancellationWatcher?.cancel();
-      await ftp.disconnect();
+      await _disconnectCompletedUpload(ftp);
       ftpConnected = false;
       ftp = null;
       UploadCancellation.throwIfCancelled(isCancelled);
@@ -280,6 +280,18 @@ class FtpDestinationService implements IFtpService {
           LoggerService.debug('Erro ao encerrar conexão FTP: $e');
         }
       }
+    }
+  }
+
+  Future<void> _disconnectCompletedUpload(FTPConnect ftp) async {
+    try {
+      await ftp.disconnect();
+    } on Object catch (error) {
+      LoggerService.warning(
+        'FTP: arquivo confirmado, mas a desconexão falhou: $error',
+      );
+    } finally {
+      ftp.abort();
     }
   }
 

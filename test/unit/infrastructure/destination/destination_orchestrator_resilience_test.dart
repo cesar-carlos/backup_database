@@ -174,6 +174,82 @@ void main() {
   });
 
   group('DestinationOrchestrator resilience - circuit breaker', () {
+    for (final type in DestinationType.values.where(
+      (type) => type != DestinationType.local,
+    )) {
+      test('invalid $type configuration releases recovery probe', () async {
+        final registry = CircuitBreakerRegistry(
+          failureThreshold: 1,
+          openDuration: Duration.zero,
+        );
+        final subject = DestinationOrchestratorImpl(
+          localDestinationService: localDestinationService,
+          sendToFtp: SendToFtp(ftpService),
+          sendToGoogleDrive: SendToGoogleDrive(googleDriveDestinationService),
+          sendToDropbox: SendToDropbox(dropboxDestinationService),
+          sendToNextcloud: SendToNextcloud(nextcloudDestinationService),
+          licensePolicyService: licensePolicyService,
+          circuitBreakerRegistry: registry,
+        );
+        final destination = BackupDestination(
+          id: 'invalid-config',
+          name: 'Invalid',
+          type: type,
+          config: '{"folderPath":123}',
+        );
+        final breaker = registry.getBreaker(destination.id)
+          ..recordFailure(TimeoutException('offline'));
+
+        for (var attempt = 0; attempt < 2; attempt++) {
+          final result = await subject.uploadToDestination(
+            sourceFilePath: '/tmp/backup.bak',
+            destination: destination,
+          );
+          expect(result.isError(), isTrue);
+          expect(
+            (result.exceptionOrNull()! as BackupFailure).code,
+            isNot(FailureCodes.circuitBreakerOpen),
+          );
+          expect(breaker.allowsRequest, isTrue);
+        }
+      });
+    }
+
+    test('unexpected FTP exception releases recovery probe', () async {
+      final registry = CircuitBreakerRegistry(
+        failureThreshold: 1,
+        openDuration: Duration.zero,
+      );
+      final subject = DestinationOrchestratorImpl(
+        localDestinationService: localDestinationService,
+        sendToFtp: SendToFtp(ftpService),
+        sendToGoogleDrive: SendToGoogleDrive(googleDriveDestinationService),
+        sendToDropbox: SendToDropbox(dropboxDestinationService),
+        sendToNextcloud: SendToNextcloud(nextcloudDestinationService),
+        licensePolicyService: licensePolicyService,
+        circuitBreakerRegistry: registry,
+      );
+      when(
+        () => ftpService.upload(
+          sourceFilePath: any(named: 'sourceFilePath'),
+          config: any(named: 'config'),
+          customFileName: any(named: 'customFileName'),
+          onProgress: any(named: 'onProgress'),
+          isCancelled: any(named: 'isCancelled'),
+          runId: any(named: 'runId'),
+          destinationId: any(named: 'destinationId'),
+        ),
+      ).thenThrow(StateError('unexpected upload error'));
+      final breaker = registry.getBreaker(ftpDestination.id)
+        ..recordFailure(TimeoutException('offline'));
+      final result = await subject.uploadToDestination(
+        sourceFilePath: '/tmp/backup.bak',
+        destination: ftpDestinationSingleAttempt,
+      );
+      expect(result.isError(), isTrue);
+      expect(breaker.allowsRequest, isTrue);
+    });
+
     test(
       'returns circuitBreakerOpen when circuit is open after failures',
       () async {

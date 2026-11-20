@@ -64,7 +64,93 @@ class _BlockedWriteChannel implements IIpcChannel {
   }
 }
 
+class _GatedLifecycleTransport extends InMemoryIpcTransport {
+  Completer<void>? startGate;
+  Completer<void>? stopGate;
+  final startEntered = Completer<void>();
+  final stopEntered = Completer<void>();
+  int starts = 0;
+
+  @override
+  Future<bool> startServer({
+    required Future<void> Function(IIpcChannel channel) onConnection,
+  }) async {
+    starts++;
+    if (!startEntered.isCompleted) startEntered.complete();
+    await startGate?.future;
+    return super.startServer(onConnection: onConnection);
+  }
+
+  @override
+  Future<void> stopServer() async {
+    if (!stopEntered.isCompleted) stopEntered.complete();
+    await stopGate?.future;
+    await super.stopServer();
+  }
+}
+
 void main() {
+  test('start during stop waits and creates a reachable new server', () async {
+    final transport = _GatedLifecycleTransport();
+    final ipc = IpcService(transport: transport);
+    addTearDown(ipc.stop);
+    await ipc.startServer(role: 'service');
+    transport.stopGate = Completer<void>();
+    final stop = ipc.stop();
+    await transport.stopEntered.future;
+    final restart = ipc.startServer(role: 'service');
+    transport.stopGate!.complete();
+    await stop;
+    expect(await restart, isTrue);
+    expect(ipc.isRunning, isTrue);
+    expect(await ipc.checkServerRunning(), isTrue);
+    expect(transport.starts, 2);
+  });
+
+  test('concurrent starts preserve the first activation callback', () async {
+    final transport = _GatedLifecycleTransport()..startGate = Completer<void>();
+    final ipc = IpcService(transport: transport);
+    addTearDown(ipc.stop);
+    var firstCalls = 0;
+    var secondCalls = 0;
+    final first = ipc.startServer(
+      role: 'ui',
+      onShowWindow: () async {
+        firstCalls++;
+        return true;
+      },
+    );
+    await transport.startEntered.future;
+    final second = ipc.startServer(
+      role: 'ui',
+      onShowWindow: () async {
+        secondCalls++;
+        return true;
+      },
+    );
+    transport.startGate!.complete();
+    expect(await first, isTrue);
+    expect(await second, isTrue);
+    await ipc.notifyExistingInstance();
+    expect(firstCalls, 1);
+    expect(secondCalls, 0);
+    expect(transport.starts, 1);
+  });
+
+  test('failed start does not poison lifecycle queue', () async {
+    final transport = _GatedLifecycleTransport()..startGate = Completer<void>();
+    final ipc = IpcService(transport: transport);
+    addTearDown(ipc.stop);
+    final first = ipc.startServer(role: 'service');
+    final failure = expectLater(first, throwsStateError);
+    await transport.startEntered.future;
+    transport.startGate!.completeError(StateError('spawn failed'));
+    await failure;
+    transport.startGate = null;
+    expect(await ipc.startServer(role: 'service'), isTrue);
+    expect(await ipc.checkServerRunning(), isTrue);
+  });
+
   test('write timeout closes channel and remains uncertain even after late completion', () async {
     final channel = _BlockedWriteChannel();
     final service = IpcService(

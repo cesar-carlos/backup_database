@@ -118,12 +118,50 @@ completa e nao limita a duracao do backup. A espera nativa por novos clientes ro
 fora do loop que processa timers e encerramento. Se a criacao do descritor de
 seguranca do pipe falhar, o servidor nao inicia com permissoes padrao.
 
+Uma leitura que expira invalida e fecha o canal: uma resposta atrasada nao pode
+ser usada por uma nova solicitacao. No encerramento, o servidor cancela a espera
+nativa pendente antes de liberar o pipe para reinicio. Excecoes do manipulador
+sao registradas como `ipc_connection_handler_failed`, encerram a conexao afetada
+e permitem atender novos clientes. A perda da conexao nao cancela o backup nem
+autoriza a interface a executa-lo localmente.
+
+Fechar o acompanhamento tambem interrompe a espera pelo status inicial. Uma
+resposta tardia dessa consulta nao dispara o backup. Respostas de execucao com
+campos invalidos ou sucesso marcado como incerto preservam a identificacao da
+tentativa: repetir a solicitacao consulta a mesma execucao no servico.
+
+As operacoes de iniciar e parar o IPC sao serializadas tambem na camada do
+servico. Uma abertura durante a parada aguarda o encerramento e cria um novo
+servidor; aberturas simultaneas preservam os callbacks e a geracao da primeira.
+
 Veja [auto update](../install/auto_update_setup.md) e
 [testes de atualizacao](../install/testing_auto_update.md). Para investigacao,
 registre modo de execucao, versao, etapa e mensagem de erro; nao publique tokens,
 senhas ou o conteudo completo do `.env`.
 
 Os logs FTP ocultam comandos de autenticacao e ecos das credenciais conhecidas.
+Depois de falhas transitorias, a protecao de disponibilidade dos destinos
+FTP, Google Drive, Dropbox e Nextcloud permite uma tentativa de recuperacao por
+vez. Cancelamento, falha de integridade, configuracao invalida ou excecao durante
+essa tentativa liberam a reserva; nao deixam o destino bloqueado indefinidamente.
+Erros nao transitorios nao contam como sucesso nem como falha de conectividade.
+
+No Dropbox, uma repeticao apos perda da resposta usa o mesmo caminho com
+`mode=overwrite` e `autorename=false`, tanto no envio simples quanto no commit
+da sessao em partes. O arquivo anterior nao e apagado antes do envio. Uma nova
+tentativa de upload resumivel recupera a sessao persistida e consulta o offset
+confirmado pelo servidor. Dropbox e Google Drive preservam checkpoints
+criptografados, vinculados a conta, destino e conteudo, com bloqueio entre
+processos. Sessoes expiradas reiniciam com seguranca; a confirmacao exige tamanho
+e hash. Gravações pendentes mantem o bloqueio mesmo apos timeout, e callbacks
+de tentativas encerradas nao podem alterar o checkpoint. A retomada ocorre na
+proxima tentativa, desde que o arquivo de origem ainda esteja disponivel.
+Os argumentos dos uploads sao codificados como JSON ASCII para aceitar nomes
+com aspas e caracteres Unicode. Cancelamento interrompe a leitura do envio
+simples e impede o finish se detectado antes do commit; um commit ja enviado
+pode ter sido concluido remotamente mesmo que sua resposta se perca.
+No FTP, cancelamento durante SIZE impede iniciar ou retomar o envio seguinte.
+
 Logs de comunicacao ocultam campos sensiveis em mapas e listas aninhados.
 Consulte [seguranca dos logs](../security/logging-and-secrets.md) para os limites,
 exportacao de registros antigos e cuidados antes de enviar um diagnostico.

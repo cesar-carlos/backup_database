@@ -26,20 +26,28 @@ class FileHashUtils {
   }
 
   static Future<String> computeDropboxContentHash(File file) async {
-    final raf = await file.open();
     final blockDigests = BytesBuilder(copy: false);
-
-    try {
-      while (true) {
-        final chunk = await raf.read(_dropboxHashBlockSizeBytes);
-        if (chunk.isEmpty) {
-          break;
+    final block = Uint8List(_dropboxHashBlockSizeBytes);
+    var filled = 0;
+    await for (final chunk in file.openRead()) {
+      var offset = 0;
+      while (offset < chunk.length) {
+        final available = _dropboxHashBlockSizeBytes - filled;
+        final remaining = chunk.length - offset;
+        final count = remaining < available ? remaining : available;
+        block.setRange(filled, filled + count, chunk, offset);
+        filled += count;
+        offset += count;
+        if (filled == _dropboxHashBlockSizeBytes) {
+          blockDigests.add(sha256.convert(block).bytes);
+          filled = 0;
         }
-        final blockDigest = sha256.convert(chunk);
-        blockDigests.add(blockDigest.bytes);
       }
-    } finally {
-      await raf.close();
+    }
+    if (filled > 0) {
+      blockDigests.add(
+        sha256.convert(Uint8List.sublistView(block, 0, filled)).bytes,
+      );
     }
 
     final finalDigest = sha256.convert(blockDigests.takeBytes());

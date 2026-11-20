@@ -17,7 +17,10 @@ import 'package:backup_database/domain/services/upload_progress_callback.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_auth_client.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_errors.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_folder_ops.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_persistent_upload.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_upload_client.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_upload_recovery.dart';
+import 'package:backup_database/infrastructure/external/upload_session_store.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -31,28 +34,58 @@ class GoogleDriveUploader {
     http.Client Function()? clientFactory,
     this.idleTimeout = const Duration(minutes: 2),
     this.retryDelay = AppConstants.retryDelay,
-  }) : _clientFactory = clientFactory ?? http.Client.new;
+    UploadSessionStore? sessionStore,
+  }) : _clientFactory = clientFactory ?? http.Client.new,
+       _sessionStore = sessionStore ?? UploadSessionStore();
+  final UploadSessionStore _sessionStore;
   final http.Client Function() _clientFactory;
   final Duration idleTimeout;
   final Duration retryDelay;
+  static const _cancellationPollInterval = Duration(milliseconds: 100);
 
   Future<T> _withClient<T>(
     Future<T> Function(drive.DriveApi, GoogleDriveUploadClient) action,
     bool Function()? isCancelled,
-  ) => _authClient.executeWithTokenRefresh(() async {
-    UploadCancellation.throwIfCancelled(isCancelled);
-    final session = (await _authClient.getAuthenticatedClient()).getOrThrow();
-    UploadCancellation.throwIfCancelled(isCancelled);
-    final client = GoogleDriveUploadClient(
-      _clientFactory(),
-      session.accessToken,
-    );
-    return client.run(
-      () => action(drive.DriveApi(client), client),
-      idleTimeout: idleTimeout,
-      isCancelled: isCancelled,
-    );
-  });
+  ) async {
+    var interrupted = false;
+    GoogleDriveUploadClient? activeClient;
+    bool cancellationRequested() =>
+        interrupted || (isCancelled?.call() ?? false);
+    final cancellation = Completer<T>();
+    final timer = isCancelled == null
+        ? null
+        : Timer.periodic(
+            _cancellationPollInterval,
+            (_) {
+              if (cancellationRequested() && !cancellation.isCompleted) {
+                interrupted = true;
+                activeClient?.close();
+                cancellation.completeError(const UploadCancelledException());
+              }
+            },
+          );
+    try {
+      final operation = _authClient.executeWithTokenRefresh(() async {
+        UploadCancellation.throwIfCancelled(cancellationRequested);
+        final session = (await _authClient.getAuthenticatedClient())
+            .getOrThrow();
+        UploadCancellation.throwIfCancelled(cancellationRequested);
+        final client = GoogleDriveUploadClient(
+          _clientFactory(),
+          session.accessToken,
+        );
+        activeClient = client;
+        return client.run(
+          () => action(drive.DriveApi(client), client),
+          idleTimeout: idleTimeout,
+          isCancelled: cancellationRequested,
+        );
+      });
+      return await Future.any([operation, cancellation.future]);
+    } finally {
+      timer?.cancel();
+    }
+  }
 
   final GoogleDriveAuthClient _authClient;
   final GoogleDriveFolderOps _folderOps;
@@ -88,7 +121,8 @@ class GoogleDriveUploader {
       );
       UploadCancellation.throwIfCancelled(isCancelled);
 
-      final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final dateFolder = DateFormat('yyyy-MM-dd')
+          .format(await sourceFile.lastModified());
       final dateFolderId = await _withClient(
         (api, _) => _folderOps.getOrCreateFolder(
           dateFolder,
@@ -113,15 +147,42 @@ class GoogleDriveUploader {
         );
       }
 
-      final fileId = await _withClient((api, _) async {
-        final ids = await api.files.generateIds(count: 1, space: 'drive');
-        if (ids.ids == null || ids.ids!.length != 1) {
-          throw const GoogleDriveFailure(
-            message: 'Google Drive não retornou ID para o envio.',
-          );
-        }
-        return ids.ids!.single;
-      }, isCancelled);
+      final completed = useResumableUpload
+          ? null
+          : await _withClient(
+              (api, _) => findCompletedGoogleDriveUpload(
+                api,
+                parentId: dateFolderId,
+                fileName: fileName,
+                fileSize: fileSize,
+                md5: localMd5,
+              ),
+              isCancelled,
+            );
+      UploadCancellation.throwIfCancelled(isCancelled);
+      if (completed != null) {
+        stopwatch.stop();
+        return rd.Success(
+          GoogleDriveUploadResult(
+            fileId: completed.id!,
+            fileName: fileName,
+            fileSize: fileSize,
+            duration: stopwatch.elapsed,
+          ),
+        );
+      }
+
+      final fileId = useResumableUpload
+          ? ''
+          : await _withClient((api, _) async {
+              final ids = await api.files.generateIds(count: 1, space: 'drive');
+              if (ids.ids == null || ids.ids!.length != 1) {
+                throw const GoogleDriveFailure(
+                  message: 'Google Drive não retornou ID para o envio.',
+                );
+              }
+              return ids.ids!.single;
+            }, isCancelled);
       Exception? lastError;
       for (var attempt = 1; attempt <= maxRetries; attempt++) {
         UploadCancellation.throwIfCancelled(isCancelled);
@@ -129,6 +190,28 @@ class GoogleDriveUploader {
           LoggerService.debug('Tentativa $attempt de $maxRetries');
 
           final result = await _withClient((driveApi, client) async {
+            if (useResumableUpload) {
+              final about = await driveApi.about.get(
+                $fields: 'user(permissionId)',
+              );
+              final accountId = about.user?.permissionId;
+              if (accountId == null || accountId.isEmpty) {
+                throw StateError('Conta Google Drive não identificada.');
+              }
+              return GoogleDrivePersistentUpload(_sessionStore).upload(
+                client: client,
+                api: driveApi,
+                file: sourceFile,
+                accountId: accountId,
+                parentId: dateFolderId,
+                name: fileName,
+                size: fileSize,
+                md5: localMd5,
+                isCancelled: () =>
+                    client.isClosed || (isCancelled?.call() ?? false),
+                onProgress: onProgress,
+              );
+            }
             final driveFile = drive.File()
               ..id = fileId
               ..name = fileName

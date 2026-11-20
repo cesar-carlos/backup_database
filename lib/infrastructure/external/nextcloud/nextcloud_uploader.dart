@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:backup_database/core/constants/destination_retry_constants.dart';
 import 'package:backup_database/core/encryption/encryption_service.dart';
+import 'package:backup_database/core/errors/failure_codes.dart';
 import 'package:backup_database/core/errors/nextcloud_failure.dart';
 import 'package:backup_database/core/utils/backup_artifact_utils.dart';
 import 'package:backup_database/core/utils/file_hash_utils.dart';
@@ -38,6 +39,7 @@ class NextcloudUploader {
     bool Function()? isCancelled,
   }) async {
     final stopwatch = Stopwatch()..start();
+    Dio? activeDio;
 
     try {
       LoggerService.info('Enviando para Nextcloud: ${config.serverUrl}');
@@ -52,6 +54,7 @@ class NextcloudUploader {
       final password = EncryptionService.decrypt(config.appPassword);
 
       final dio = _httpClient.create(config: config, password: password);
+      activeDio = dio;
 
       final baseFolderPath = NextcloudWebdavUtils.buildBaseFolderPath(
         remotePath: config.remotePath,
@@ -144,14 +147,17 @@ class NextcloudUploader {
             );
             if (integrityResult.isError()) {
               final failure = integrityResult.exceptionOrNull()!;
-              try {
-                await dio.deleteUri(uploadUrl);
-              } on Object catch (deleteError, s) {
-                LoggerService.warning(
-                  'Erro ao deletar arquivo inválido no Nextcloud',
-                  deleteError,
-                  s,
-                );
+              if (failure is NextcloudFailure &&
+                  failure.code == FailureCodes.integrityValidationFailed) {
+                try {
+                  await dio.deleteUri(uploadUrl);
+                } on Object catch (deleteError, s) {
+                  LoggerService.warning(
+                    'Erro ao deletar arquivo inválido no Nextcloud',
+                    deleteError,
+                    s,
+                  );
+                }
               }
               throw failure;
             }
@@ -220,6 +226,8 @@ class NextcloudUploader {
           originalError: e,
         ),
       );
+    } finally {
+      activeDio?.close(force: true);
     }
   }
 }

@@ -68,10 +68,27 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   String? _currentEmail;
   TConfig? _oauthConfig;
   Future<void>? _initializeFuture;
+  Future<void> _configurationTail = Future<void>.value();
+  int _configurationOperations = 0;
+  int _sessionRevision = 0;
+  bool _loginPending = false;
+
+  Future<T> _serializeConfiguration<T>(Future<T> Function() action) {
+    _configurationOperations++;
+    final result = _configurationTail.then((_) => action()).whenComplete(() {
+      _configurationOperations--;
+    });
+    _configurationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
 
   bool get isInitialized => _isInitialized;
   bool get isConfigured => _isConfigured;
-  String? get currentEmail => _currentEmail ?? currentUserEmailFromService;
+  String? get currentEmail =>
+      isSignedIn ? currentUserEmailFromService ?? _currentEmail : null;
   TConfig? get oauthConfig => _oauthConfig;
 
   // ===========================================================================
@@ -142,15 +159,18 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
     if (_isInitialized) return;
     final inFlight = _initializeFuture;
     if (inFlight != null) return inFlight;
-    return _initializeFuture = _doInitialize().whenComplete(() {
-      _initializeFuture = null;
-    });
+    return _initializeFuture = _serializeConfiguration(_doInitialize)
+        .whenComplete(() {
+          _initializeFuture = null;
+        });
   }
 
   Future<void> _doInitialize() async {
     await runAsync<void>(
       genericErrorMessage: 'Erro ao inicializar',
       action: () async {
+        _isConfigured = false;
+        _currentEmail = null;
         await _loadOAuthConfig();
         final config = _oauthConfig;
         if (config != null) {
@@ -181,20 +201,35 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   Future<bool> configureOAuth({
     required String clientId,
     String? clientSecret,
+  }) {
+    _sessionRevision++;
+    return _serializeConfiguration(
+      () => _configureOAuth(clientId: clientId, clientSecret: clientSecret),
+    );
+  }
+
+  Future<bool> _configureOAuth({
+    required String clientId,
+    String? clientSecret,
   }) async {
     final ok = await runAsync<bool>(
       genericErrorMessage: 'Erro ao configurar OAuth',
       action: () async {
-        _oauthConfig = buildConfig(
+        final config = buildConfig(
           clientId: clientId,
           clientSecret: clientSecret,
         );
-        await _saveOAuthConfig();
+        await _saveOAuthConfig(config);
+        _oauthConfig = config;
+        _isConfigured = false;
+        _isInitialized = false;
+        _currentEmail = null;
         await _initializeService(
           clientId: clientId,
           clientSecret: clientSecret,
         );
         _isConfigured = true;
+        _isInitialized = true;
         LoggerService.info('Configuração OAuth $serviceLabel salva');
         return true;
       },
@@ -205,16 +240,26 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   /// Login interativo. Protege a janela contra fechamento durante o
   /// fluxo OAuth (o webview pode disparar `windowClose` inesperados).
   Future<bool> signIn() async {
+    if (_loginPending || _configurationOperations > 0) return false;
     if (!_isConfigured) {
       setErrorManual('Configure as credenciais OAuth primeiro.');
       return false;
     }
 
+    final revision = _sessionRevision;
+    _loginPending = true;
     final releaseCloseGuard = WindowCloseGuard.acquire();
     try {
       final ok = await runAsync<bool>(
         action: () async {
-          final result = await _signInService();
+          final rd.Result<TAuthResult> result;
+          try {
+            result = await _signInService();
+          } on Object {
+            if (revision != _sessionRevision) return false;
+            rethrow;
+          }
+          if (revision != _sessionRevision) return false;
           return result.fold(
             (authResult) {
               _currentEmail = emailOf(authResult);
@@ -229,11 +274,17 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
       );
       return ok ?? false;
     } finally {
+      _loginPending = false;
       releaseCloseGuard();
     }
   }
 
-  Future<void> signOut() async {
+  Future<void> signOut() {
+    _sessionRevision++;
+    return _serializeConfiguration(_signOut);
+  }
+
+  Future<void> _signOut() async {
     await runAsync<void>(
       genericErrorMessage: 'Erro ao fazer logout',
       action: () async {
@@ -244,12 +295,38 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
     );
   }
 
-  Future<bool> removeOAuthConfig() async {
+  Future<bool> removeOAuthConfig() {
+    _sessionRevision++;
+    return _serializeConfiguration(_removeOAuthConfig);
+  }
+
+  Future<bool> _removeOAuthConfig() async {
     final ok = await runAsync<bool>(
       genericErrorMessage: 'Erro ao remover configuração',
       action: () async {
         await _signOutService();
-        await removePersistedConfig();
+        _currentEmail = null;
+        try {
+          await removePersistedConfig();
+        } on Object {
+          _isInitialized = false;
+          Map<String, dynamic>? persisted;
+          try {
+            persisted = await loadPersistedConfig();
+            if (persisted != null) {
+              final restored = configFromJson(persisted);
+              final previous = _oauthConfig;
+              if (previous == null ||
+                  !mapEquals(configToJson(restored), configToJson(previous))) {
+                _isConfigured = false;
+              }
+            }
+          } on Object {
+            _isConfigured = false;
+            rethrow;
+          }
+          if (persisted != null) rethrow;
+        }
         _oauthConfig = null;
         _isConfigured = false;
         _currentEmail = null;
@@ -263,7 +340,10 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
   Future<void> _loadOAuthConfig() async {
     try {
       final json = await loadPersistedConfig();
-      if (json == null) return;
+      if (json == null) {
+        _oauthConfig = null;
+        return;
+      }
       _oauthConfig = configFromJson(json);
       LoggerService.debug('Configuração OAuth $serviceLabel carregada');
     } on Object catch (e, s) {
@@ -278,16 +358,30 @@ abstract class OAuthProviderBase<TConfig, TAuthResult extends Object>
         e,
         s,
       );
+      rethrow;
     }
   }
 
-  Future<void> _saveOAuthConfig() async {
-    final config = _oauthConfig;
-    if (config == null) return;
-
+  Future<void> _saveOAuthConfig(TConfig config) async {
     try {
       await savePersistedConfig(configToJson(config));
     } on Object catch (e) {
+      _isInitialized = false;
+      Map<String, dynamic>? persisted;
+      try {
+        persisted = await loadPersistedConfig();
+        if (persisted != null) {
+          persisted = configToJson(configFromJson(persisted));
+        }
+      } on Object {
+        _isConfigured = false;
+        rethrow;
+      }
+      if (mapEquals(persisted, configToJson(config))) return;
+      final previous = _oauthConfig;
+      if (previous == null || !mapEquals(persisted, configToJson(previous))) {
+        _isConfigured = false;
+      }
       LoggerService.error(
         'Erro ao salvar configuração OAuth $serviceLabel',
         e,

@@ -1,6 +1,7 @@
 import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_auth_client.dart';
+import 'package:backup_database/infrastructure/external/destinations/google_drive/google_drive_file_listing.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:result_dart/result_dart.dart' as rd;
 
@@ -13,7 +14,7 @@ class GoogleDriveFolderOps {
     String parentId, {
     drive.DriveApi? api,
   }) async {
-    return _authClient.executeWithTokenRefresh(() async {
+    Future<String> operation() async {
       var driveApi = api;
       if (driveApi == null) {
         final clientResult = await _authClient.getAuthenticatedClient();
@@ -27,13 +28,14 @@ class GoogleDriveFolderOps {
           "name = '${_escape(folderName)}' and '${_escape(parentId)}' in parents and "
           "mimeType = 'application/vnd.google-apps.folder' and trashed = false";
 
-      final existing = await driveApi.files.list(
-        q: query,
-        spaces: 'drive',
+      final existing = await listAllGoogleDriveFiles(
+        driveApi,
+        query: query,
+        fields: 'id',
       );
 
-      if (existing.files != null && existing.files!.isNotEmpty) {
-        return existing.files!.first.id!;
+      if (existing.isNotEmpty) {
+        return existing.first.id!;
       }
 
       final folder = drive.File()
@@ -43,7 +45,13 @@ class GoogleDriveFolderOps {
 
       final created = await driveApi.files.create(folder);
       return created.id!;
-    });
+    }
+
+    // An injected API belongs to the caller's token-refresh scope. Retrying
+    // here would reuse its expired token even after refreshing credentials.
+    return api == null
+        ? _authClient.executeWithTokenRefresh(operation)
+        : operation();
   }
 
   static String _escape(String value) =>
@@ -62,15 +70,15 @@ class GoogleDriveFolderOps {
         final driveApi = drive.DriveApi(clientResult.getOrNull()!.client);
         final query = "'$folderId' in parents and trashed = false";
 
-        return driveApi.files.list(
-          q: query,
-          spaces: 'drive',
+        return listAllGoogleDriveFiles(
+          driveApi,
+          query: query,
           orderBy: 'modifiedTime desc',
-          $fields: 'files(id, name, size, modifiedTime, mimeType)',
+          fields: 'id,name,size,modifiedTime,mimeType',
         );
       });
 
-      return rd.Success(result.files ?? []);
+      return rd.Success(result);
     } on Object catch (e, stackTrace) {
       LoggerService.error('Erro ao listar backups Google Drive', e, stackTrace);
       return rd.Failure(

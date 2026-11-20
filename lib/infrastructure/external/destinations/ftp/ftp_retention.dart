@@ -7,22 +7,33 @@ import 'package:ftpconnect/ftpconnect.dart';
 import 'package:result_dart/result_dart.dart' as rd;
 
 class FtpRetention {
+  FtpRetention({
+    this._clientFactory,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
+
+  final FTPConnect Function(FtpDestinationConfig)? _clientFactory;
+  final DateTime Function() _clock;
+
   Future<rd.Result<int>> cleanOldBackups({
     required FtpDestinationConfig config,
   }) async {
+    FTPConnect? ftp;
     try {
       LoggerService.info('Limpando backups antigos no FTP: ${config.host}');
 
-      final ftp = FTPConnect(
-        config.host,
-        port: config.port,
-        user: config.username,
-        pass: config.password,
-        timeout: config.effectiveUploadTimeoutSeconds,
-        securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
-        allowInvalidCertificates: config.allowInvalidCertificates,
-        showLog: config.enableVerboseLog || kDebugMode,
-      );
+      ftp =
+          _clientFactory?.call(config) ??
+          FTPConnect(
+            config.host,
+            port: config.port,
+            user: config.username,
+            pass: config.password,
+            timeout: config.effectiveUploadTimeoutSeconds,
+            securityType: config.useFtps ? SecurityType.ftps : SecurityType.ftp,
+            allowInvalidCertificates: config.allowInvalidCertificates,
+            showLog: config.enableVerboseLog || kDebugMode,
+          );
 
       final connected = await ftp.connect();
       if (!connected) {
@@ -33,17 +44,20 @@ class FtpRetention {
 
       if (config.remotePath.isNotEmpty) {
         try {
-          await ftp.changeDirectory(config.remotePath);
+          if (!await ftp.changeDirectory(config.remotePath)) {
+            throw const FtpFailure(
+              message: 'Diretório FTP de retenção inacessível.',
+            );
+          }
         } on Object catch (e) {
           LoggerService.debug(
-            'Diretório remoto não existe, sem backups para limpar: ${config.remotePath} — $e',
+            'Não foi possível acessar o diretório FTP de retenção: ${config.remotePath} — $e',
           );
-          await ftp.disconnect();
-          return const rd.Success(0);
+          rethrow;
         }
       }
 
-      final cutoffDate = DateTime.now().subtract(
+      final cutoffDate = _clock().subtract(
         Duration(days: config.retentionDays),
       );
 
@@ -54,6 +68,11 @@ class FtpRetention {
         if (item.type == FTPEntryType.file) {
           try {
             final fileName = item.name;
+            if (fileName.toLowerCase().endsWith('.part')) {
+              // A restarted upload may have an old backup date but fresh data.
+              final modified = item.modifyTime;
+              if (modified == null || !modified.isBefore(cutoffDate)) continue;
+            }
 
             if (SybaseBackupPathSuffix.isPathProtected(
               fileName,
@@ -70,23 +89,30 @@ class FtpRetention {
 
             if (match != null) {
               final dateStr = match.group(1)!;
-              final fileDate = DateTime.parse(dateStr);
+              final fileDate = DateTime.tryParse(dateStr);
+              if (fileDate == null ||
+                  fileDate.toIso8601String().substring(0, 10) != dateStr) {
+                continue;
+              }
 
               if (fileDate.isBefore(cutoffDate)) {
-                await ftp.deleteFile(fileName);
+                if (!await ftp.deleteFile(fileName)) {
+                  throw const FtpFailure(
+                    message: 'FTP recusou a exclusão na retenção.',
+                  );
+                }
                 deletedCount++;
                 LoggerService.debug('Arquivo FTP removido: $fileName');
               }
             }
           } on Object catch (e) {
             LoggerService.debug(
-              'Não foi possível extrair data do arquivo ${item.name}: $e',
+              'Não foi possível processar a retenção do arquivo ${item.name}: $e',
             );
           }
         }
       }
 
-      await ftp.disconnect();
       LoggerService.info('$deletedCount arquivos antigos removidos do FTP');
       return rd.Success(deletedCount);
     } on Object catch (e, stackTrace) {
@@ -94,6 +120,8 @@ class FtpRetention {
       return rd.Failure(
         FtpFailure(message: 'Erro ao limpar backups FTP: $e', originalError: e),
       );
+    } finally {
+      ftp?.abort();
     }
   }
 }

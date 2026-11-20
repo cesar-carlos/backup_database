@@ -17,6 +17,7 @@ import 'package:backup_database/infrastructure/external/dropbox/dropbox_folder_o
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_resumable_uploader.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_retention.dart';
 import 'package:backup_database/infrastructure/external/dropbox/dropbox_simple_uploader.dart';
+import 'package:backup_database/infrastructure/external/dropbox/dropbox_upload_recovery.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
@@ -25,7 +26,7 @@ import 'package:result_dart/result_dart.dart' as rd;
 class DropboxDestinationService implements IDropboxDestinationService {
   factory DropboxDestinationService(DropboxAuthService authService) {
     final authClient = DropboxAuthClient(authService);
-    return DropboxDestinationService._(
+    return DropboxDestinationService.withDependencies(
       authClient,
       DropboxFolderOps(authClient),
       const DropboxSimpleUploader(),
@@ -34,7 +35,8 @@ class DropboxDestinationService implements IDropboxDestinationService {
     );
   }
 
-  DropboxDestinationService._(
+  @visibleForTesting
+  DropboxDestinationService.withDependencies(
     this._authClient,
     this._folderOps,
     this._simpleUploader,
@@ -81,7 +83,8 @@ class DropboxDestinationService implements IDropboxDestinationService {
       }
       UploadCancellation.throwIfCancelled(isCancelled);
 
-      final dateFolder = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final dateFolder = DateFormat('yyyy-MM-dd')
+          .format(await sourceFile.lastModified());
       final dateFolderPath = '$mainFolderPath/$dateFolder';
       final dateFolderResult = await _folderOps.getOrCreateFolder(
         dateFolderPath,
@@ -99,8 +102,6 @@ class DropboxDestinationService implements IDropboxDestinationService {
       UploadCancellation.throwIfCancelled(isCancelled);
       final filePath = '$dateFolderPath/$fileName';
 
-      await _folderOps.deleteFileIfExists(filePath);
-
       final useResumableUpload =
           fileSize >= AppConstants.dropboxSimpleUploadLimit;
 
@@ -116,12 +117,37 @@ class DropboxDestinationService implements IDropboxDestinationService {
 
             final dio = dioResult.getOrNull()!;
 
+            final completed = useResumableUpload
+                ? null
+                : await const DropboxUploadRecovery().findCompletedUpload(
+                    dio: dio,
+                    filePath: filePath,
+                    fileSize: fileSize,
+                    contentHash: localContentHash,
+                    isCancelled: isCancelled,
+                  );
+            if (completed != null) return completed;
+
+            String? accountId;
+            if (useResumableUpload) {
+              final account = await dio.post<dynamic>(
+                '/2/users/get_current_account',
+              );
+              accountId = (account.data as Map)['account_id'] as String?;
+              if (accountId == null || accountId.isEmpty) {
+                throw StateError('Conta Dropbox não identificada.');
+              }
+              UploadCancellation.throwIfCancelled(isCancelled);
+            }
+
             final uploadResult = useResumableUpload
                 ? await _resumableUploader.upload(
                     dio: dio,
                     sourceFile: sourceFile,
                     filePath: filePath,
                     fileSize: fileSize,
+                    accountId: accountId,
+                    contentHash: localContentHash,
                     onProgress: onProgress,
                     isCancelled: isCancelled,
                   )
@@ -212,6 +238,9 @@ class DropboxDestinationService implements IDropboxDestinationService {
           LoggerService.info('Upload Dropbox cancelado pelo usuário');
           return UploadCancellation.cancelledResult();
         } on Object catch (e) {
+          if (UploadCancellation.isCancellation(e)) {
+            return UploadCancellation.cancelledResult();
+          }
           lastError = e is Exception ? e : Exception(e.toString());
           LoggerService.warning('Dropbox: tentativa $attempt falhou: $e');
 

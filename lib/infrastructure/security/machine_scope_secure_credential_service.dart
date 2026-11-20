@@ -16,44 +16,44 @@ import 'package:result_dart/result_dart.dart' as rd;
 class MachineScopeSecureCredentialService implements ISecureCredentialService {
   MachineScopeSecureCredentialService({
     FlutterSecureStorage? legacyStorage,
+    this.secretsDirectory,
   }) : _legacy = legacyStorage ?? const FlutterSecureStorage();
 
   static const String _blobFileSuffix = '.bdsecret';
 
   final FlutterSecureStorage _legacy;
+  final Directory? secretsDirectory;
 
   bool get _useMachineFiles => Platform.isWindows;
 
   Future<File> _blobFileForKey(String key) async {
-    final dir = await resolveMachineSecretsDirectory();
+    final dir = secretsDirectory ?? await resolveMachineSecretsDirectory();
     final name = '${sha256.convert(utf8.encode(key))}$_blobFileSuffix';
     return File(p.join(dir.path, name));
   }
 
   Future<void> _ensureSecretsDir() async {
-    final dir = await resolveMachineSecretsDirectory();
+    final dir = secretsDirectory ?? await resolveMachineSecretsDirectory();
     await dir.create(recursive: true);
   }
 
   Future<String?> _readMachineValue(String key) async {
-    final file = await _blobFileForKey(key);
+    var file = await _blobFileForKey(key);
     if (!await file.exists()) {
-      return null;
+      file = File('${file.path}.bak');
+      if (!await file.exists()) return null;
     }
     try {
       final cipher = await file.readAsBytes();
       final plain = unprotectWithDpapiLocalMachine(cipher);
       final decoded = decodeCredentialMachineBlob(plain);
       if (decoded.key != key) {
-        LoggerService.warning(
-          'Machine credential file key mismatch; ignoring corrupt entry',
-        );
-        return null;
+        throw const FormatException('Machine credential key mismatch');
       }
       return decoded.value;
     } on Object catch (e, s) {
       LoggerService.error('Failed to read machine-scope credential blob', e, s);
-      return null;
+      rethrow;
     }
   }
 
@@ -104,6 +104,8 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
 
   Future<void> _deleteMachineFile(String key) async {
     final file = await _blobFileForKey(key);
+    final backup = File('${file.path}.bak');
+    if (await backup.exists()) await backup.delete();
     if (await file.exists()) {
       await file.delete();
     }
@@ -195,10 +197,10 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
     required String key,
   }) async {
     try {
+      await _legacy.delete(key: key);
       if (_useMachineFiles) {
         await _deleteMachineFile(key);
       }
-      await _legacy.delete(key: key);
       return const rd.Success(unit);
     } on Object catch (e, s) {
       LoggerService.error('Failed to delete password for key: $key', e, s);
@@ -247,6 +249,10 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
         if (jsonToken == null) {
           final legacy = await _legacy.read(key: key);
           if (legacy != null) {
+            final decoded = jsonDecode(legacy);
+            if (decoded is! Map<String, dynamic>) {
+              throw const FormatException('Formato de credenciais inválido.');
+            }
             await _migrateLegacyStringToMachine(key: key, value: legacy);
             jsonToken = legacy;
           }
@@ -279,10 +285,10 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
     required String key,
   }) async {
     try {
+      await _legacy.delete(key: key);
       if (_useMachineFiles) {
         await _deleteMachineFile(key);
       }
-      await _legacy.delete(key: key);
       return const rd.Success(unit);
     } on Object catch (e, s) {
       LoggerService.error('Failed to delete token for key: $key', e, s);
@@ -302,7 +308,7 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
     try {
       if (_useMachineFiles) {
         final file = await _blobFileForKey(key);
-        if (await file.exists()) {
+        if (await file.exists() || await File('${file.path}.bak').exists()) {
           return const rd.Success(true);
         }
       }
@@ -323,7 +329,7 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
     if (!_useMachineFiles) {
       return {};
     }
-    final dir = await resolveMachineSecretsDirectory();
+    final dir = secretsDirectory ?? await resolveMachineSecretsDirectory();
     if (!await dir.exists()) {
       return {};
     }
@@ -332,20 +338,34 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
       if (entity is! File) {
         continue;
       }
-      if (!entity.path.toLowerCase().endsWith(_blobFileSuffix)) {
+      final isBackup = entity.path.toLowerCase().endsWith(
+        '$_blobFileSuffix.bak',
+      );
+      if (!entity.path.toLowerCase().endsWith(_blobFileSuffix) && !isBackup) {
+        continue;
+      }
+      if (isBackup &&
+          await File(entity.path.substring(0, entity.path.length - 4))
+              .exists()) {
         continue;
       }
       try {
         final cipher = await entity.readAsBytes();
         final plain = unprotectWithDpapiLocalMachine(cipher);
         final decoded = decodeCredentialMachineBlob(plain);
+        final expected = await _blobFileForKey(decoded.key);
+        if (entity.path != expected.path &&
+            entity.path != '${expected.path}.bak') {
+          throw const FormatException('Machine credential key mismatch');
+        }
         out[decoded.key] = decoded.value;
       } on Object catch (e, s) {
-        LoggerService.debug(
-          'Skip unreadable machine credential file ${entity.path}: $e',
+        LoggerService.error(
+          'Failed to read machine credential file ${entity.path}',
           e,
           s,
         );
+        rethrow;
       }
     }
     return out;
@@ -354,18 +374,22 @@ class MachineScopeSecureCredentialService implements ISecureCredentialService {
   @override
   Future<rd.Result<Unit>> deleteAll() async {
     try {
+      await _legacy.deleteAll();
       if (_useMachineFiles) {
-        final dir = await resolveMachineSecretsDirectory();
+        final dir = secretsDirectory ?? await resolveMachineSecretsDirectory();
         if (await dir.exists()) {
-          await for (final entity in dir.list(followLinks: false)) {
-            if (entity is File &&
-                entity.path.toLowerCase().endsWith(_blobFileSuffix)) {
-              await entity.delete();
+          final files = (await dir.list(followLinks: false).toList())
+              .whereType<File>()
+              .toList();
+          // Remove recovery copies first so an interrupted deletion cannot
+          // replace a current credential with an older backup.
+          for (final suffix in ['$_blobFileSuffix.bak', _blobFileSuffix]) {
+            for (final file in files) {
+              if (file.path.toLowerCase().endsWith(suffix)) await file.delete();
             }
           }
         }
       }
-      await _legacy.deleteAll();
       return const rd.Success(unit);
     } on Object catch (e, s) {
       LoggerService.error('Failed to delete all credentials', e, s);

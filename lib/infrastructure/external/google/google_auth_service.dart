@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,11 +7,14 @@ import 'package:backup_database/core/errors/google_drive_failure.dart';
 import 'package:backup_database/core/utils/logger_service.dart';
 import 'package:backup_database/domain/services/i_secure_credential_service.dart';
 import 'package:backup_database/infrastructure/external/google/google_oauth_config_store.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_loopback_callback.dart';
+import 'package:backup_database/infrastructure/external/oauth/oauth_session_lock.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:oauth2_client/access_token_response.dart';
 import 'package:oauth2_client/google_oauth2_client.dart';
 import 'package:result_dart/result_dart.dart' as rd;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 class GoogleAuthResult {
   const GoogleAuthResult({
@@ -49,8 +53,18 @@ class GoogleAuthService {
     this.httpClient,
     this.requestTimeout = const Duration(seconds: 30),
     this.authorize,
+    this.launchBrowser,
     this.configurationStore,
-  });
+    OAuthSessionLock? sessionLock,
+  }) : _sessionLock =
+           sessionLock ?? OAuthSessionLock(fileName: 'google-session.lock');
+
+  final OAuthSessionLock _sessionLock;
+  final Future<bool> Function(Uri)? launchBrowser;
+  OAuthLoopbackCallback? _browserCallback;
+  Completer<void>? _browserCleanup;
+  Future<void>? _logoutInFlight;
+  Map<String, dynamic>? _tokenSnapshot;
 
   final http.Client? httpClient;
   final GoogleOAuthConfigStore? configurationStore;
@@ -63,6 +77,7 @@ class GoogleAuthService {
   int _generation = 0;
 
   Future<T> _withStorage<T>(Future<T> Function() action) {
+    if (configurationStore != null) return _sessionLock.run(action);
     final result = _storageTail.then((_) => action());
     _storageTail = result.then<void>(
       (_) {},
@@ -78,6 +93,8 @@ class GoogleAuthService {
   }
 
   void _invalidate() {
+    _browserCallback?.cancel();
+    _tokenSnapshot = null;
     _generation++;
     _loginPending = false;
     _refreshInFlight = null;
@@ -144,14 +161,26 @@ class GoogleAuthService {
     _loginPending = true;
     _refreshInFlight = null;
     try {
+      await _logoutInFlight;
+      await _browserCleanup?.future;
+      _checkGeneration(generation);
+      final expectedToken = configurationStore == null
+          ? null
+          : await _withStorage(() async {
+              _checkGeneration(generation);
+              return _readSharedToken();
+            });
+      _checkGeneration(generation);
       LoggerService.info(
         'Iniciando autenticação Google OAuth2 (navegador externo)',
       );
 
       // Usar fluxo manual com navegador externo para evitar problemas com webview
       final tokenResponse = await (authorize ?? _getTokenWithExternalBrowser)();
+      _checkGeneration(generation);
 
-      if (tokenResponse == null || tokenResponse.accessToken == null) {
+      if (tokenResponse == null ||
+          tokenResponse.accessToken?.isNotEmpty != true) {
         return const rd.Failure(
           GoogleDriveFailure(
             message: 'Falha ao obter token de acesso do Google.',
@@ -172,7 +201,13 @@ class GoogleAuthService {
           'Autorize novamente o acesso.',
         );
       }
-      await _saveCredentials(tokenResponse, email, generation);
+      await _saveCredentials(
+        tokenResponse,
+        email,
+        generation,
+        expectedToken: expectedToken,
+        replaceSession: true,
+      );
       _checkGeneration(generation);
       _cachedAccessToken = tokenResponse.accessToken;
       _cachedRefreshToken = tokenResponse.refreshToken;
@@ -201,6 +236,13 @@ class GoogleAuthService {
 
   Future<AccessTokenResponse?> _getTokenWithExternalBrowser() async {
     HttpServer? server;
+    final generation = _generation;
+    final callback = OAuthLoopbackCallback(
+      redirectUri: Uri.parse(AppConstants.oauthRedirectUri),
+    );
+    _browserCallback = callback;
+    final cleanup = Completer<void>();
+    _browserCleanup = cleanup;
 
     try {
       // Criar servidor HTTP local para receber o callback
@@ -218,65 +260,63 @@ class GoogleAuthService {
         clientId: _clientId!,
         redirectUri: AppConstants.oauthRedirectUri,
         scopes: AppConstants.googleDriveScopes,
-        customParams: {'access_type': 'offline', 'prompt': 'consent'},
+        customParams: {
+          'access_type': 'offline',
+          'prompt': 'consent',
+          'state': callback.state,
+          'code_challenge': callback.codeChallenge,
+          'code_challenge_method': 'S256',
+        },
       );
 
       LoggerService.debug('Abrindo navegador para autenticação');
 
       // Abrir navegador externo
       final uri = Uri.parse(authUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Não foi possível abrir o navegador');
+      if (!await callback.waitFor((launchBrowser ?? launchOAuthBrowser)(uri))) {
+        throw StateError('Não foi possível abrir o navegador');
       }
 
       // Aguardar callback com timeout
-      final request = await server.first.timeout(
-        const Duration(minutes: 5),
-        onTimeout: () {
-          throw Exception('Tempo limite de autenticação excedido');
-        },
+      final code = await callback.receive(
+        server,
+        responseHtml: _getSuccessHtml,
       );
 
-      // Extrair código de autorização
-      final code = request.uri.queryParameters['code'];
-      final error = request.uri.queryParameters['error'];
-
-      // Responder ao navegador
-      request.response
-        ..statusCode = 200
-        ..headers.contentType = ContentType.html
-        ..write(_getSuccessHtml(error == null));
-      await request.response.close();
-
-      if (error != null) {
-        throw Exception('Erro de autenticação: $error');
-      }
-
-      if (code == null) {
-        throw Exception('Código de autorização não recebido');
-      }
-
-      LoggerService.debug('Código de autorização recebido, trocando por token');
-
-      // Trocar código por token usando HTTP direto
-      final tokenResponse = await _exchangeCodeForToken(code);
+      _checkGeneration(generation);
+      final tokenResponse = await callback.waitFor(
+        _exchangeCodeForToken(
+          code,
+          callback.codeVerifier,
+        ),
+      );
 
       return tokenResponse;
     } finally {
-      await server?.close();
+      try {
+        await server?.close(force: true);
+      } finally {
+        if (identical(_browserCallback, callback)) {
+          _browserCallback = null;
+          _browserCleanup = null;
+        }
+        cleanup.complete();
+      }
       LoggerService.debug('Servidor OAuth encerrado');
     }
   }
 
-  Future<AccessTokenResponse?> _exchangeCodeForToken(String code) async {
+  Future<AccessTokenResponse?> _exchangeCodeForToken(
+    String code,
+    String codeVerifier,
+  ) async {
     try {
       final response = await (httpClient?.post ?? http.post)(
         Uri.parse('https://oauth2.googleapis.com/token'),
         headers: {'Content-Type': 'application/x-www-form-urlencoded'},
         body: {
           'code': code,
+          'code_verifier': codeVerifier,
           'client_id': _clientId!,
           'client_secret': _clientSecret ?? '',
           'redirect_uri': AppConstants.oauthRedirectUri,
@@ -375,7 +415,7 @@ class GoogleAuthService {
 
     try {
       if (_cachedAccessToken != null && _cachedEmail != null) {
-        if (forceRefresh || _isTokenExpired()) {
+        if (forceRefresh || _cachedAccessToken!.isEmpty || _isTokenExpired()) {
           LoggerService.debug('Token expirado, tentando refresh');
           final generation = _generation;
           return await (_refreshInFlight ??= _refreshToken(generation)
@@ -444,6 +484,9 @@ class GoogleAuthService {
   }
 
   Future<rd.Result<GoogleAuthResult>> _refreshToken(int generation) async {
+    final expectedToken = _tokenSnapshot == null
+        ? null
+        : Map<String, dynamic>.of(_tokenSnapshot!);
     if (_cachedRefreshToken == null || _cachedRefreshToken!.isEmpty) {
       return const rd.Failure(
         GoogleDriveFailure(message: 'Não há refresh token disponível.'),
@@ -493,7 +536,12 @@ class GoogleAuthService {
       if (tokenResponse.refreshToken?.isNotEmpty != true) {
         tokenResponse.refreshToken = _cachedRefreshToken;
       }
-      await _saveCredentials(tokenResponse, _cachedEmail!, generation);
+      await _saveCredentials(
+        tokenResponse,
+        _cachedEmail!,
+        generation,
+        expectedToken: expectedToken,
+      );
       _checkGeneration(generation);
       _cachedAccessToken = tokenResponse.accessToken;
       _cachedRefreshToken = tokenResponse.refreshToken;
@@ -520,8 +568,24 @@ class GoogleAuthService {
     }
   }
 
-  Future<void> signOut() async {
+  Future<void> signOut() {
+    final pending = _logoutInFlight;
+    if (pending != null) {
+      _invalidate();
+      return pending;
+    }
+    late final Future<void> operation;
+    operation = _signOut().whenComplete(() {
+      if (identical(_logoutInFlight, operation)) _logoutInFlight = null;
+    });
+    return _logoutInFlight = operation;
+  }
+
+  Future<void> _signOut() async {
+    final browserCleanup = _browserCleanup?.future;
+    _browserCallback?.cancel();
     _invalidate();
+    await browserCleanup;
     await _withStorage(_clearStoredCredentials);
 
     LoggerService.info('Desconectado do Google');
@@ -578,10 +642,35 @@ class GoogleAuthService {
   Future<void> _saveCredentials(
     AccessTokenResponse tokenResponse,
     String email,
-    int generation,
-  ) => _withStorage(() async {
+    int generation, {
+    Map<String, dynamic>? expectedToken,
+    bool replaceSession = false,
+  }) => _withStorage(() async {
     _checkGeneration(generation);
+    if (expectedToken != null) {
+      final current = configurationStore == null
+          ? (await _secureCredentialService.getToken(key: _tokenKey))
+                .getOrThrow()
+          : await _readSharedToken();
+      _checkGeneration(generation);
+      final sameSession =
+          replaceSession &&
+          expectedToken['sessionId'] is String &&
+          (expectedToken['sessionId'] as String).isNotEmpty &&
+          current['sessionId'] == expectedToken['sessionId'] &&
+          current['clientId'] == expectedToken['clientId'] &&
+          current['signedOut'] == expectedToken['signedOut'];
+      if (!sameSession && !mapEquals(current, expectedToken)) {
+        _invalidate();
+        throw StateError(
+          'A sessão Google foi alterada por outro processo. Tente novamente.',
+        );
+      }
+    }
     final credentials = {
+      'sessionId': replaceSession
+          ? const Uuid().v4()
+          : expectedToken?['sessionId'] ?? const Uuid().v4(),
       'accessToken': tokenResponse.accessToken,
       'refreshToken': tokenResponse.refreshToken,
       'expirationDate': tokenResponse.expirationDate?.toIso8601String(),
@@ -595,13 +684,33 @@ class GoogleAuthService {
     );
 
     if (result.isError()) {
-      final error = result.exceptionOrNull();
-      LoggerService.error('Failed to save Google credentials: $error');
-      throw Exception('Falha ao salvar credenciais Google');
+      // Storage can commit the machine credential and then fail while
+      // removing a legacy copy. Reconcile before discarding a rotated token.
+      final persisted = await _secureCredentialService.getToken(key: _tokenKey);
+      _checkGeneration(generation);
+      if (persisted.isError() ||
+          !mapEquals(persisted.getOrNull(), credentials)) {
+        throw StateError(
+          'Falha ao confirmar a gravação das credenciais Google.',
+        );
+      }
+      LoggerService.warning(
+        'Gravação Google confirmada após erro do armazenamento.',
+      );
     }
 
+    _checkGeneration(generation);
     LoggerService.debug('Credenciais Google salvas');
+    _tokenSnapshot = Map<String, dynamic>.of(credentials);
   });
+
+  Future<Map<String, dynamic>> _readSharedToken() async {
+    final exists = (await _secureCredentialService.containsKey(key: _tokenKey))
+        .getOrThrow();
+    if (!exists) return <String, dynamic>{};
+    return (await _secureCredentialService.getToken(key: _tokenKey))
+        .getOrThrow();
+  }
 
   Future<void> _loadStoredCredentials(
     int generation, {
@@ -616,6 +725,23 @@ class GoogleAuthService {
     }
 
     final credentials = result.getOrElse((_) => <String, dynamic>{});
+    if (credentials.containsKey('signedOut')) {
+      _cachedAccessToken = null;
+      _cachedRefreshToken = null;
+      _cachedEmail = null;
+      _tokenExpiration = null;
+      _tokenSnapshot = null;
+      final sessionId = credentials['sessionId'];
+      if (credentials['signedOut'] != true ||
+          sessionId is! String ||
+          sessionId.isEmpty) {
+        throw const FormatException(
+          'Marcador de encerramento Google inválido.',
+        );
+      }
+      _tokenSnapshot = Map<String, dynamic>.of(credentials);
+      return;
+    }
     if (credentials['clientId'] != null &&
         credentials['clientId'] != _clientId) {
       _cachedAccessToken = null;
@@ -625,20 +751,49 @@ class GoogleAuthService {
       return;
     }
 
-    _cachedAccessToken = credentials['accessToken'] as String?;
-    _cachedRefreshToken = credentials['refreshToken'] as String?;
-    _cachedEmail = credentials['email'] as String?;
+    final accessToken = credentials['accessToken'] as String?;
+    final refreshToken = credentials['refreshToken'] as String?;
+    final email = credentials['email'] as String?;
+    final expiration = credentials['expirationDate'] as String?;
+    final expirationDate = expiration == null
+        ? null
+        : DateTime.tryParse(expiration);
 
-    if (credentials['expirationDate'] != null) {
-      _tokenExpiration = DateTime.tryParse(
-        credentials['expirationDate'] as String,
-      );
-    }
+    _cachedAccessToken = accessToken;
+    _cachedRefreshToken = refreshToken;
+    _cachedEmail = email;
+    _tokenExpiration = expirationDate;
+    _tokenSnapshot = Map<String, dynamic>.of(credentials);
 
     LoggerService.debug('Credenciais Google carregadas: $_cachedEmail');
   }
 
   Future<void> _clearStoredCredentials() async {
+    if (configurationStore != null) {
+      // Keep a secret-free revision so logout also invalidates a browser login
+      // that started when no credentials existed in another process.
+      final signedOut = <String, dynamic>{
+        'sessionId': const Uuid().v4(),
+        'signedOut': true,
+      };
+      final result = await _secureCredentialService.storeToken(
+        key: _tokenKey,
+        tokenData: signedOut,
+      );
+      if (result.isError()) {
+        final persisted = await _secureCredentialService.getToken(
+          key: _tokenKey,
+        );
+        if (persisted.isError() ||
+            !mapEquals(persisted.getOrNull(), signedOut)) {
+          throw StateError(
+            'Falha ao persistir o encerramento da sessão Google. Tente novamente.',
+          );
+        }
+      }
+      LoggerService.debug('Encerramento da sessão Google persistido');
+      return;
+    }
     final result = await _secureCredentialService.deleteToken(key: _tokenKey);
     if (result.isError()) {
       throw StateError(

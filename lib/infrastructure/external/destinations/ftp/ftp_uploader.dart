@@ -80,6 +80,7 @@ class FtpUploader {
     }
 
     final remoteSize = await ftp.sizeFile(remotePartName);
+    UploadCancellation.throwIfCancelled(isCancelled);
 
     const globalResumeEnabled = AppConstants.ftpResumableUpload;
     final resumeEnabled = globalResumeEnabled && enableResumeFromConfig;
@@ -149,6 +150,7 @@ class FtpUploader {
           );
           await safeDeletePart(ftp, remotePartName);
         }
+        UploadCancellation.throwIfCancelled(isCancelled);
         final uploaded = await ftp.uploadFile(
           sourceFile,
           sRemoteName: remotePartName,
