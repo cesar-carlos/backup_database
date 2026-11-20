@@ -129,6 +129,10 @@ void main() {
       store,
       storageKey: 'dropbox_oauth_config',
       label: 'Dropbox',
+      sessionLock: OAuthSessionLock(
+        directory: lockDirectory,
+        fileName: 'dropbox-config.lock',
+      ),
     ),
   );
 

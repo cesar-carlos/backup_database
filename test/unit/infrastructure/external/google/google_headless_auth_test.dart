@@ -69,7 +69,13 @@ void main() {
           values.remove(call.namedArguments[#key]);
           return const Success(unit);
         });
-    config = GoogleOAuthConfigStore(credentials);
+    config = GoogleOAuthConfigStore(
+      credentials,
+      sessionLock: OAuthSessionLock(
+        directory: lockDirectory,
+        fileName: 'google-config.lock',
+      ),
+    );
     renewals = 0;
     client = MockClient((request) async {
       renewals++;
