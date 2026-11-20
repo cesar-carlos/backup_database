@@ -1,5 +1,5 @@
 name: backup_database
-version: 3.6.15
+version: 3.6.16
 publish_to: none
 
 environment:

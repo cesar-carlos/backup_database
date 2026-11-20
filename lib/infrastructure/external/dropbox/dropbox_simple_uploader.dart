@@ -53,7 +53,9 @@ class DropboxSimpleUploader {
           },
         ),
       );
-      if (cancellation.token.isCancelled) throw const UploadCancelledException();
+      if (cancellation.token.isCancelled) {
+        throw const UploadCancelledException();
+      }
       UploadCancellation.throwIfCancelled(isCancelled);
       return response.data as Map<String, dynamic>;
     } finally {
